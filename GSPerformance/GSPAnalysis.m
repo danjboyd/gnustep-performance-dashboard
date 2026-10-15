@@ -116,9 +116,9 @@ base_symbol(NSString *name)
   GSPTime interval = (GSPTime)(process.wallIntervalMicroseconds
                                ? process.wallIntervalMicroseconds : 10000) * 1000;
   GSPTime gap = interval * 4;
-  GSPTime runStart = 0, runLast = 0;
-  NSUInteger runSamples = 0;
-  NSMutableDictionary *runStacks = nil;
+  __block GSPTime runStart = 0, runLast = 0;
+  __block NSUInteger runSamples = 0;
+  __block NSMutableDictionary *runStacks = nil;
 
   void (^close)(void) = ^{
     if (runSamples == 0)
@@ -154,6 +154,8 @@ base_symbol(NSString *name)
       BOOL idle = [self isIdleStack: s[i].stack];
       if (idle)
         _runLoop = YES;
+      else if (!_runLoop)
+        continue;   /* launch: the run loop has not waited for events yet */
       if (idle || (runSamples && s[i].time - runLast > gap))
         {
           close();

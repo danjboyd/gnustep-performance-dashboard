@@ -1,0 +1,27 @@
+{
+  ApplicationName = "Instruments";
+  ApplicationDescription = "Performance analysis for GNUstep applications";
+  ApplicationRelease = "0.1.0";
+  FullVersionID = "0.1.0";
+  CFBundleIdentifier = "org.gnustep.Instruments";
+  NSExecutable = "Instruments";
+  NSIcon = "Instruments.png";
+  NSRole = "Viewer";
+  NSTypes = (
+    {
+      NSName = "GNUstep Instruments Trace";
+      NSHumanReadableName = "Instruments Trace";
+      NSUnixExtensions = ( "gstrace" );
+      NSIcon = "Instruments.png";
+      NSRole = "Viewer";
+    }
+  );
+  CFBundleDocumentTypes = (
+    {
+      CFBundleTypeName = "Instruments Trace";
+      CFBundleTypeExtensions = ( "gstrace" );
+      CFBundleTypeRole = "Viewer";
+      LSTypeIsPackage = YES;
+    }
+  );
+}

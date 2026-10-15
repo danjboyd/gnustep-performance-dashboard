@@ -128,8 +128,31 @@
   BOOL hideSystem = (_options & GSPCallTreeHideSystemLibraries) != 0;
   BOOL anyUser = NO;
 
+  /* Time spent inside the recording agent (and whatever it called) is
+     charged to the frame that called the interposed function.  */
+  NSUInteger firstApp = 0;
+  for (NSUInteger i = 0; i < n && i < 48; i++)
+    if ([[sym symbolForFrame: f[i] index: i].imageName hasPrefix: @"libgsperf-agent"])
+      firstApp = i + 1;
+  if (firstApp >= n)
+    {
+      /* Only agent frames (its stack could not be walked further): show
+         the time as recording overhead rather than as agent internals.  */
+      static GSPSymbol *overhead;
+      if (overhead == nil)
+        {
+          overhead = [GSPSymbol new];
+          overhead.name = @"<Recording Overhead>";
+          overhead.imagePath = @"libgsperf-agent.so";
+          overhead.isSystem = YES;
+        }
+      frames = [NSArray arrayWithObject: overhead];
+      [cache setObject: frames forKey: key];
+      return frames;
+    }
+
   /* leaf first in storage; build root first */
-  for (NSUInteger i = n; i-- > 0;)
+  for (NSUInteger i = n; i-- > firstApp;)
     {
       GSPSymbol *s = [sym symbolForFrame: f[i] index: i];
       if (!s.isSystem)

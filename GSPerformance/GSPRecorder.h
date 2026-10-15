@@ -57,6 +57,12 @@
 /* Path of the installed privileged helper, nil if not installed. */
 + (NSString *) installedHelperPath;
 + (NSString *) helperInstallLocation;   /* /usr/local/libexec/gstrace-helper */
+/* The helper shipped next to gstrace / inside the app (not root-owned). */
++ (NSString *) bundledHelperPath;
+/* kernel.perf_event_paranoid, or 3 if unreadable. */
++ (int) perfEventParanoid;
+/* YES when attaching can run without pkexec (paranoid <= 2). */
++ (BOOL) canAttachWithoutPrivileges;
 /* Explains why launching `path` with the agent cannot work (setuid and
    setcap binaries ignore LD_PRELOAD), or nil. */
 + (NSString *) preloadProblemForExecutable: (NSString *)path;

@@ -129,6 +129,52 @@ make_error(NSInteger code, NSString *message)
   return @"/usr/local/libexec/gstrace-helper";
 }
 
++ (int) perfEventParanoid
+{
+  NSString *s = [NSString stringWithContentsOfFile: @"/proc/sys/kernel/perf_event_paranoid"];
+  return s ? [s intValue] : 3;
+}
+
++ (BOOL) canAttachWithoutPrivileges
+{
+  return [self perfEventParanoid] <= 2;
+}
+
++ (NSString *) bundledHelperPath
+{
+  NSFileManager *fm = [NSFileManager defaultManager];
+  NSMutableArray *candidates = [NSMutableArray array];
+  NSString *exe = [[NSBundle mainBundle] executablePath];
+  NSString *dir = [exe stringByDeletingLastPathComponent];
+  Dl_info info;
+
+  [candidates addObject: [[[NSBundle mainBundle] resourcePath]
+    stringByAppendingPathComponent: @"gstrace-helper"]];
+  [candidates addObject: [dir stringByAppendingPathComponent: @"gstrace-helper"]];
+  [candidates addObject: [dir stringByAppendingPathComponent:
+    @"../../gstrace-helper/gstrace-helper"]];
+  [candidates addObject: [dir stringByAppendingPathComponent:
+    @"../../../Tools/gstrace-helper/gstrace-helper"]];
+  [candidates addObject: [dir stringByAppendingPathComponent:
+    @"../../../../Tools/gstrace-helper/gstrace-helper"]];
+  if (dladdr((void *)GSPAgentEnvironmentForInstruments, &info) && info.dli_fname)
+    {
+      NSString *lib = [[NSString stringWithUTF8String: info.dli_fname]
+                        stringByDeletingLastPathComponent];
+      [candidates addObject: [lib stringByAppendingPathComponent:
+        @"../../Tools/gstrace-helper/gstrace-helper"]];
+      [candidates addObject: [lib stringByAppendingPathComponent:
+        @"../libexec/gnustep-instruments/gstrace-helper"]];
+    }
+  for (NSString *c in candidates)
+    {
+      NSString *p = [c stringByStandardizingPath];
+      if ([fm isExecutableFileAtPath: p])
+        return p;
+    }
+  return nil;
+}
+
 + (NSString *) installedHelperPath
 {
   NSString *p = [self helperInstallLocation];
@@ -397,11 +443,17 @@ free_c_strings(char **list)
 
 - (BOOL) attach: (NSError **)error
 {
-  NSString *helper = [GSPRecorder installedHelperPath];
+  /* With perf_event_paranoid <= 2 the helper can sample our own processes
+     without privileges; otherwise the root-owned copy runs via pkexec.  */
+  BOOL direct = [GSPRecorder canAttachWithoutPrivileges]
+    || getenv("GSP_HELPER_DIRECT") != NULL;
+  NSString *helper = direct
+    ? ([GSPRecorder bundledHelperPath] ?: [GSPRecorder installedHelperPath])
+    : [GSPRecorder installedHelperPath];
   if (helper == nil)
     {
       if (error)
-        *error = make_error(5, @"The profiling helper is not installed. Use \"Install Profiling Helper…\" (or `gstrace install-helper`) first, or lower kernel.perf_event_paranoid to 1 and run `gstrace record --attach` without the helper.");
+        *error = make_error(5, @"The profiling helper is not installed. Use \"Install Profiling Helper…\" (or `gstrace install-helper`) first, or set kernel.perf_event_paranoid to 2 or lower to attach without it.");
       return NO;
     }
   NSMutableArray *args = [NSMutableArray arrayWithObjects: helper, @"record",
@@ -413,9 +465,6 @@ free_c_strings(char **list)
       [args addObject: @"--duration"];
       [args addObject: [NSString stringWithFormat: @"%.3f", _options.timeLimit]];
     }
-  /* Without privileges the helper still works when perf_event_paranoid
-     allows it; otherwise go through pkexec.  */
-  BOOL direct = getenv("GSP_HELPER_DIRECT") != NULL;
   if (!direct)
     [args insertObject: @"pkexec" atIndex: 0];
   char **cargv = calloc([args count] + 1, sizeof(char *));
