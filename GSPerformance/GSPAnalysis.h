@@ -133,5 +133,18 @@ typedef struct GSPAllocationRecord
 + (BOOL) isPointOfInterest: (GSPSignpost *)signpost;
 @end
 
+/* ------------------------------------------------------------------ */
+/* Zombies                                                             */
+
+@interface GSPHistoryEvent : NSObject
+@property (nonatomic) GSPTime time;
+@property (nonatomic, copy) NSString *kind;   /* Malloc, Retain, Release, Autorelease, Free, Zombie */
+@property (nonatomic) uint32_t stack;
+@end
+
+/* Malloc/retain/release/free history of the object a zombie event names,
+   up to and including the zombie message, oldest first. */
+NSArray *GSPZombieHistory(GSPProcess *process, GSPZombieEvent *zombie);
+
 /* Formatting helpers shared by the CLI and the app. */
 NSString *GSPFormatDuration(double seconds);

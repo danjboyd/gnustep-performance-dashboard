@@ -27,7 +27,10 @@ typedef struct elf_sym
   BOOL hasSymtab;
   NSData *buildID;
   NSString *debugLink;
+  uint64_t *funcStarts;      /* from .eh_frame_hdr, sorted */
+  NSUInteger funcCount;
 }
+- (BOOL) functionStart: (uint64_t)vaddr into: (uint64_t *)start;
 + (GSPELFFile *) fileAtPath: (NSString *)path;
 - (const elf_sym *) symbolFor: (uint64_t)vaddr;
 - (NSString *) nameOf: (const elf_sym *)s;
@@ -48,9 +51,77 @@ compare_elf_syms(const void *a, const void *b)
 - (void) dealloc
 {
   free(syms);
+  free(funcStarts);
 }
 
 static NSMutableDictionary *elfCache;
+
+static int
+cmp_u64(const void *a, const void *b)
+{
+  uint64_t x = *(const uint64_t *)a, y = *(const uint64_t *)b;
+  return (x > y) - (x < y);
+}
+
+/* .eh_frame_hdr's binary search table lists the start of every function
+   with unwind info, stripped or not.  Only the common encoding
+   (DW_EH_PE_datarel | DW_EH_PE_sdata4) is handled.  */
+- (void) loadFunctionStarts: (const uint8_t *)b length: (NSUInteger)len
+                   sections: (const Elf64_Shdr *)sh count: (int)shnum
+                   shstrtab: (const Elf64_Shdr *)shstr
+{
+  for (int i = 0; i < shnum && shstr; i++)
+    {
+      if (shstr->sh_offset + sh[i].sh_name >= len
+          || strcmp((const char *)b + shstr->sh_offset + sh[i].sh_name, ".eh_frame_hdr") != 0
+          || sh[i].sh_offset + sh[i].sh_size > len || sh[i].sh_size < 12)
+        continue;
+      const uint8_t *h = b + sh[i].sh_offset;
+      uint8_t version = h[0], ptrEnc = h[1], countEnc = h[2], tableEnc = h[3];
+      if (version != 1 || countEnc != 0x03 || tableEnc != 0x3b)
+        return;
+      size_t pos = 4;
+      if ((ptrEnc & 0x0f) == 0x0b || (ptrEnc & 0x0f) == 0x03)
+        pos += 4;
+      else if ((ptrEnc & 0x0f) == 0x0c || (ptrEnc & 0x0f) == 0x04)
+        pos += 8;
+      else
+        return;
+      if (pos + 4 > sh[i].sh_size)
+        return;
+      uint32_t fdeCount;
+      memcpy(&fdeCount, h + pos, 4);
+      pos += 4;
+      if (pos + (size_t)fdeCount * 8 > sh[i].sh_size)
+        return;
+      funcStarts = malloc((fdeCount + 1) * sizeof(uint64_t));
+      for (uint32_t k = 0; k < fdeCount; k++)
+        {
+          int32_t rel;
+          memcpy(&rel, h + pos + (size_t)k * 8, 4);
+          funcStarts[funcCount++] = (uint64_t)((int64_t)sh[i].sh_addr + rel);
+        }
+      qsort(funcStarts, funcCount, sizeof(uint64_t), cmp_u64);
+      return;
+    }
+}
+
+- (BOOL) functionStart: (uint64_t)vaddr into: (uint64_t *)start
+{
+  if (funcCount == 0 || vaddr < funcStarts[0])
+    return NO;
+  NSUInteger lo = 0, hi = funcCount;
+  while (hi - lo > 1)
+    {
+      NSUInteger mid = (lo + hi) / 2;
+      if (funcStarts[mid] <= vaddr)
+        lo = mid;
+      else
+        hi = mid;
+    }
+  *start = funcStarts[lo];
+  return YES;
+}
 
 - (BOOL) loadData: (NSData *)data
 {
@@ -140,6 +211,7 @@ static NSMutableDictionary *elfCache;
     }
   if (count > 1)
     qsort(syms, count, sizeof(elf_sym), compare_elf_syms);
+  [self loadFunctionStarts: b length: len sections: sh count: eh->e_shnum shstrtab: shstr];
   return YES;
 }
 
@@ -457,15 +529,19 @@ static char *(*cxa_demangle)(const char *, char *, size_t *, int *);
     {
       const elf_sym *es = NULL;
       GSPELFFile *elf = nil;
+      uint64_t fstart = 0;
+      BOOL haveFunc = NO;
       if (image != nil)
         {
           elf = [GSPELFFile fileAtPath: image.path];
           es = [elf symbolFor: address - image.base];
           if (es)
             start = es->start + image.base;
+          haveFunc = [elf functionStart: address - image.base into: &fstart];
         }
       if (_impNames == nil || [_process.methodNames count] != _methodCountSeen)
         [self buildMethodIndex];
+      NSUInteger impIndex = NSNotFound;
       if (_impCount > 0 && address >= _imps[0])
         {
           NSUInteger lo = 0, hi = _impCount;
@@ -477,17 +553,48 @@ static char *(*cxa_demangle)(const char *, char *, size_t *, int *);
               else
                 hi = mid;
             }
-          uint64_t imp = _imps[lo];
-          BOOL sameImage = image == nil || (imp >= image.start && imp < image.end);
-          if (sameImage && address - imp < (1u << 20)
-              && (es == NULL || imp >= start))
+          impIndex = lo;
+        }
+      if (haveFunc)
+        {
+          /* Exact function boundaries: a method or symbol name applies
+             only if it starts this function.  */
+          uint64_t fabs_ = fstart + image.base;
+          if (impIndex != NSNotFound && _imps[impIndex] == fabs_)
             {
-              name = [_impNames objectAtIndex: lo];
-              start = imp;
+              name = [_impNames objectAtIndex: impIndex];
+              start = fabs_;
+            }
+          else if (es != NULL && (es->start + image.base == fabs_
+                                  || (es->size && address - image.base < es->start + es->size
+                                      && es->start + image.base > fabs_)))
+            name = [GSPSymbolicator demangle: [elf nameOf: es]];
+          else if (es != NULL && es->size == 0 && es->start + image.base >= fabs_)
+            name = [GSPSymbolicator demangle: [elf nameOf: es]];
+          else
+            {
+              name = [NSString stringWithFormat: @"%@+0x%llx", image.name,
+                               (unsigned long long)fstart];
+              start = fabs_;
+              sym.isUnknown = YES;
             }
         }
-      if (name == nil && es != NULL)
-        name = [GSPSymbolicator demangle: [elf nameOf: es]];
+      else
+        {
+          if (impIndex != NSNotFound)
+            {
+              uint64_t imp = _imps[impIndex];
+              BOOL sameImage = image == nil || (imp >= image.start && imp < image.end);
+              if (sameImage && address - imp < (1u << 20)
+                  && (es == NULL || imp >= start))
+                {
+                  name = [_impNames objectAtIndex: impIndex];
+                  start = imp;
+                }
+            }
+          if (name == nil && es != NULL)
+            name = [GSPSymbolicator demangle: [elf nameOf: es]];
+        }
     }
 
   if (name == nil)

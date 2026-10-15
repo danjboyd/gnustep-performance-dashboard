@@ -237,7 +237,14 @@ under(NSString *value, NSString *root)
 
 + (NSDictionary *) targetEnvironmentWithAdditions: (NSDictionary *)additions
 {
-  NSMutableDictionary *env = [[[NSProcessInfo processInfo] environment] mutableCopy];
+  return [self targetEnvironmentFrom: [[NSProcessInfo processInfo] environment]
+                           additions: additions];
+}
+
++ (NSDictionary *) targetEnvironmentFrom: (NSDictionary *)environment
+                               additions: (NSDictionary *)additions
+{
+  NSMutableDictionary *env = [environment mutableCopy];
   NSString *appdir = [env objectForKey: @"APPDIR"];
 
   if (appdir != nil)

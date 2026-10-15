@@ -700,3 +700,58 @@ leak_name(GSPLeak *leak)
 }
 
 @end
+
+/* ------------------------------------------------------------------ */
+/* Zombies                                                             */
+
+@implementation GSPHistoryEvent
+@end
+
+NSArray *
+GSPZombieHistory(GSPProcess *p, GSPZombieEvent *z)
+{
+  NSMutableArray *events = [NSMutableArray array];
+  /* libobjc2 objects start 8 bytes into their malloc block */
+  uint64_t block = z.address - sizeof(intptr_t);
+  GSPTime lastMalloc = 0;
+
+  for (NSUInteger i = 0; i < p.allocationEventCount; i++)
+    {
+      const GSPAllocationEvent *e = &p.allocationEvents[i];
+      if (e->time > z.time || (e->address != block && e->address != z.address))
+        continue;
+      if (!e->isFree)
+        {
+          /* a newer allocation at the same address starts a new history */
+          [events removeAllObjects];
+          lastMalloc = e->time;
+        }
+      GSPHistoryEvent *h = [GSPHistoryEvent new];
+      h.time = e->time;
+      h.kind = e->isFree ? @"Free" : @"Malloc";
+      h.stack = e->stack;
+      [events addObject: h];
+    }
+  for (NSUInteger i = 0; i < p.refCountEventCount; i++)
+    {
+      const GSPRefCountEvent *r = &p.refCountEvents[i];
+      if (r->address != z.address || r->time > z.time || r->time < lastMalloc)
+        continue;
+      GSPHistoryEvent *h = [GSPHistoryEvent new];
+      h.time = r->time;
+      h.kind = r->kind == GSP_RC_RETAIN ? @"Retain"
+        : (r->kind == GSP_RC_RELEASE ? @"Release" : @"Autorelease");
+      h.stack = r->stack;
+      [events addObject: h];
+    }
+  GSPHistoryEvent *last = [GSPHistoryEvent new];
+  last.time = z.time;
+  last.kind = @"Zombie";
+  last.stack = z.stack;
+  [events addObject: last];
+  [events sortUsingComparator: ^NSComparisonResult(GSPHistoryEvent *a, GSPHistoryEvent *b) {
+    return a.time < b.time ? NSOrderedAscending
+      : (a.time > b.time ? NSOrderedDescending : NSOrderedSame);
+  }];
+  return events;
+}

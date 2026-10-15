@@ -643,26 +643,18 @@ report_zombies(GSPTrace *t, GSPProcess *p, report_opts *o)
            [t relativeTime: z.time], z.selector ?: @"?", z.className ?: @"object",
            (unsigned long long)z.address]);
       out(stack_text(p, z.stack, @"    ", o->lines));
-      /* retain/release history */
-      NSUInteger shown = 0;
-      for (NSUInteger i = 0; i < p.refCountEventCount; i++)
+      out(@"  History:\n");
+      for (GSPHistoryEvent *h in GSPZombieHistory(p, z))
         {
-          const GSPRefCountEvent *r = &p.refCountEvents[i];
-          if (r->address != z.address || r->time > z.time)
-            continue;
-          if (shown++ == 0)
-            out(@"  Retain/release history:\n");
-          NSString *kind = r->kind == GSP_RC_RETAIN ? @"retain"
-            : (r->kind == GSP_RC_RELEASE ? @"release" : @"autorelease");
           NSString *who = @"";
-          for (GSPSymbol *sym in [p.symbolicator symbolsForStack: r->stack])
+          for (GSPSymbol *sym in [p.symbolicator symbolsForStack: h.stack])
             if (!sym.isSystem)
               {
                 who = sym.name;
                 break;
               }
-          out([NSString stringWithFormat: @"    %.4fs %-11@ %@\n", [t relativeTime: r->time],
-               kind, who]);
+          out([NSString stringWithFormat: @"    %.4fs %-11@ %@\n", [t relativeTime: h.time],
+               h.kind, who]);
         }
     }
   return 0;

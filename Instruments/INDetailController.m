@@ -751,18 +751,11 @@ col(NSString *ident, NSString *title, CGFloat width)
       r.stack = z.stack;
       r.start = r.end = z.time;
       NSMutableString *d = [NSMutableString stringWithFormat:
-        @"An Objective-C message (-%@) was sent to a deallocated %@ at 0x%llx.\n\nRetain/release history:\n",
+        @"An Objective-C message (-%@) was sent to a deallocated %@ at 0x%llx.\n\nHistory:\n",
         z.selector ?: @"?", z.className ?: @"object", (unsigned long long)z.address];
-      for (NSUInteger i = 0; i < p.refCountEventCount; i++)
-        {
-          const GSPRefCountEvent *e = &p.refCountEvents[i];
-          if (e->address != z.address || e->time > z.time)
-            continue;
-          NSString *who = responsible_frame(p, e->stack);
-          [d appendFormat: @"%.4f s  %@  %@\n", [_renderer.trace relativeTime: e->time],
-           e->kind == GSP_RC_RETAIN ? @"retain" : (e->kind == GSP_RC_RELEASE ? @"release" : @"autorelease"),
-           who];
-        }
+      for (GSPHistoryEvent *h in GSPZombieHistory(p, z))
+        [d appendFormat: @"%.4f s  %-11@ %@\n", [_renderer.trace relativeTime: h.time],
+         h.kind, responsible_frame(p, h.stack)];
       r.detail = d;
       [_rows addObject: r];
     }

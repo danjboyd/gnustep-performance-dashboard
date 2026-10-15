@@ -69,6 +69,8 @@
 /* The environment a target gets: the recorder's own, minus anything an
    AppImage runtime injected, plus `additions`. */
 + (NSDictionary *) targetEnvironmentWithAdditions: (NSDictionary *)additions;
++ (NSDictionary *) targetEnvironmentFrom: (NSDictionary *)environment
+                               additions: (NSDictionary *)additions;
 + (NSString *) defaultTracePathForExecutable: (NSString *)path
                                     template: (NSString *)templateName;
 

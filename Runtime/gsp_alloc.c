@@ -170,8 +170,9 @@ gsp_alloc_tag(void *address, uint32_t class_name)
 void
 gsp_alloc_init(void)
 {
-  if (!gsp_cfg.leaks)
-    live_state = 0;
+  /* Decide now: the lazy check reads GSP_OUTPUT, which the constructor
+     removes from the environment afterwards.  */
+  live_state = gsp_cfg.leaks ? 1 : 0;
 }
 
 /* ------------------------------------------------------------------ */
