@@ -416,7 +416,7 @@ make_button(NSString *title, NSRect frame, id target, SEL action)
     [_status setStringValue: @"The profiling helper is installed; you will be asked for a password when recording starts. Kernel stacks are included."];
   else
     [_status setStringValue: [NSString stringWithFormat:
-      @"kernel.perf_event_paranoid is %d and the profiling helper is not installed. Use "Install Profiling Helper…" in the Instruments menu first.",
+      @"kernel.perf_event_paranoid is %d and the profiling helper is not installed. Use Install Profiling Helper… in the Instruments menu first.",
       paranoid]];
   [c addSubview: _status];
 
