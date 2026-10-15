@@ -18,15 +18,12 @@ export_error(NSString *message)
 static NSArray *
 symbol_names(GSPProcess *p, uint32_t stack, BOOL rootFirst)
 {
-  NSUInteger n;
-  const uint64_t *f = [p.stacks framesForStack: stack count: &n];
-  NSMutableArray *names = [NSMutableArray arrayWithCapacity: n];
-  GSPSymbolicator *sym = p.symbolicator;
-  for (NSUInteger i = 0; i < n; i++)
-    {
-      NSUInteger idx = rootFirst ? n - 1 - i : i;
-      [names addObject: [sym symbolForFrame: f[idx] index: idx].name];
-    }
+  NSArray *syms = [p.symbolicator symbolsForStack: stack];
+  NSMutableArray *names = [NSMutableArray arrayWithCapacity: [syms count]];
+  if (syms == nil)
+    return [NSArray arrayWithObject: @"<Recording Overhead>"];
+  for (GSPSymbol *s in rootFirst ? [[syms reverseObjectEnumerator] allObjects] : syms)
+    [names addObject: s.name];
   return names;
 }
 

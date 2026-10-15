@@ -98,6 +98,18 @@ gsp_unmap(void *p, size_t size)
   munmap(p, size);
 }
 
+int
+gsp_agent_mappings(uintptr_t (*out)[2], int max)
+{
+  int n = atomic_load(&mapping_count), k = 0;
+  for (int i = 0; i < n && k < max; i++, k++)
+    {
+      out[k][0] = mappings[i].lo;
+      out[k][1] = mappings[i].hi;
+    }
+  return k;
+}
+
 bool
 gsp_is_agent_memory(uintptr_t lo, uintptr_t hi)
 {
@@ -244,6 +256,7 @@ scrub_environment(void)
         unsetenv("LD_PRELOAD");
     }
   unsetenv("GSP_OUTPUT");
+  unsetenv("GSP_RECORDER_PID");
 }
 
 /* ------------------------------------------------------------------ */
@@ -912,6 +925,27 @@ stop_and_wait(void)
   pthread_timedjoin_np(writer_thread, NULL, &deadline);
 }
 
+/* exit() runs atexit handlers (GNUstep releases many globals there)
+   before ours, which would make everything those globals referenced look
+   leaked.  Finish the recording first.  Returning from main reaches
+   exit() inside libc without going through this symbol; then the atexit
+   handler below finishes instead.  */
+GSP_EXPORT void
+exit(int status)
+{
+  typedef void (*exit_fn)(int) __attribute__((noreturn));
+  static exit_fn real_exit;
+  if (real_exit == NULL)
+    real_exit = (exit_fn)dlsym(RTLD_NEXT, "exit");
+  if (atomic_load(&writer_running) && !gsp_is_internal)
+    {
+      gsp_in_agent++;
+      stop_and_wait();
+      gsp_in_agent--;
+    }
+  real_exit(status);
+}
+
 static void
 at_exit_handler(void)
 {
@@ -980,9 +1014,24 @@ gsp_init(void)
   gsp_signpost_init();
   if (gsp_cfg.output[0] == '\0')
     {
+      gsp_alloc_stop_live();
       gsp_in_agent--;
       return;
     }
+  /* GNUstep caches the environment before this constructor runs, so
+     processes it launches (gdnc, gpbs, NSTask children) inherit the agent
+     even though LD_PRELOAD is scrubbed below.  When the recorder says who
+     it is, only its direct child records unless children are followed.  */
+  {
+    const char *rec = getenv("GSP_RECORDER_PID");
+    if (rec != NULL && *rec && !env_flag("GSP_FOLLOW_CHILDREN", false)
+        && (pid_t)strtol(rec, NULL, 10) != getppid())
+      {
+        gsp_alloc_stop_live();
+        gsp_in_agent--;
+        return;
+      }
+  }
   scrub_environment();
   traced_pid = getpid();
   gsp_real_pthread_create = dlsym(RTLD_NEXT, "pthread_create");

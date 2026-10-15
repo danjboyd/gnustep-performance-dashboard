@@ -388,6 +388,7 @@ free_c_strings(char **list)
      _options.instrumentIdentifiers, _options.sampleIntervalMicroseconds,
      _options.leakIntervalSeconds)];
   [add setObject: _tracePath forKey: @"GSP_OUTPUT"];
+  [add setObject: [NSString stringWithFormat: @"%d", getpid()] forKey: @"GSP_RECORDER_PID"];
   if (_options.followChildren)
     [add setObject: @"1" forKey: @"GSP_FOLLOW_CHILDREN"];
   NSDictionary *base = [GSPRecorder targetEnvironmentWithAdditions: add];

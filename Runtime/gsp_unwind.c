@@ -157,15 +157,21 @@ gsp_unwind_here(gsp_thread *t, uint64_t *frames, unsigned max)
       for (i = 0; i < n; i++)
         raw[i] = (void *)(uintptr_t)tmp[i];
     }
-  /* The walk starts inside libunwind or the agent; skip through the last
-     agent frame near the top (the interposed entry point).  */
+  /* The walk starts inside libunwind, then the agent (unwinder, hook,
+     interposed malloc).  Skip exactly that leading run: agent frames
+     further down (e.g. the objc_alloc_init interposer) are real callers.  */
   int first = 0;
-  for (i = 0; i < n && i < 16; i++)
+#define IN_AGENT(pc) ((uintptr_t)(pc) >= gsp_agent_text_lo && (uintptr_t)(pc) < gsp_agent_text_hi)
+  while (first < n && first < 8 && !IN_AGENT(raw[first]))
+    first++;
+  if (first < n && IN_AGENT(raw[first]))
     {
-      uintptr_t pc = (uintptr_t)raw[i];
-      if (pc >= gsp_agent_text_lo && pc < gsp_agent_text_hi)
-        first = i + 1;
+      while (first < n && IN_AGENT(raw[first]))
+        first++;
     }
+  else
+    first = 0;
+#undef IN_AGENT
   for (i = first; i < n && out < max; i++)
     frames[out++] = (uintptr_t)raw[i];
   return out;

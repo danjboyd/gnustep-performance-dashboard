@@ -32,6 +32,16 @@
 - (GSPSymbol *) symbolForFrame: (uint64_t)address index: (NSUInteger)index;
 - (GSPSymbol *) symbolForAddress: (uint64_t)address;
 
+/* The symbols of a stack, leaf first, as views should show them: the
+   recording agent's own frames are removed (a leading run is the agent at
+   work; frames further down are its transparent interposers).  Returns an
+   empty array for an empty stack and nil when only agent frames remain
+   (time spent recording).  Cached. */
+- (NSArray *) symbolsForStack: (uint32_t)stack;
+/* Like -symbolsForStack: but the frame addresses (NSNumber), aligned with
+   it and already adjusted to point at the call (use index 0 with them). */
+- (NSArray *) addressesForStack: (uint32_t)stack;
+
 /* "file.m:42" via addr2line, or nil.  Slow; cached. */
 - (NSString *) sourceLocationForFrame: (uint64_t)address index: (NSUInteger)index;
 

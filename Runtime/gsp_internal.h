@@ -171,6 +171,8 @@ GSP_HIDDEN void *gsp_map(size_t size);       /* zeroed, page aligned */
 GSP_HIDDEN void gsp_unmap(void *p, size_t size);
 GSP_HIDDEN void *gsp_arena_alloc(size_t size); /* never freed */
 GSP_HIDDEN bool gsp_is_agent_memory(uintptr_t lo, uintptr_t hi);
+/* Copies the agent's own mmap ranges (rings, tables); returns the count. */
+GSP_HIDDEN int gsp_agent_mappings(uintptr_t (*out)[2], int max);
 
 /* ---- unwinding ---- */
 

@@ -291,6 +291,8 @@ free(void *p)
 {
   if (p && should_track())
     record_free(p);
+  else if (p && gsp_in_agent && live_enabled())
+    forget_block(p);   /* keep the live table sound for frees inside the agent */
   __libc_free(p);
 }
 
@@ -302,7 +304,11 @@ realloc(void *old, size_t size)
   if (old == NULL)
     return malloc(size);
   if (!should_track())
-    return __libc_realloc(old, size);
+    {
+      if (gsp_in_agent && live_enabled())
+        forget_block(old);
+      return __libc_realloc(old, size);
+    }
   if (size == 0)
     {
       free(old);

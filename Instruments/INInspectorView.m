@@ -111,12 +111,12 @@
   [_lines removeAllObjects];
   if (stack != 0 && process != nil)
     {
-      NSUInteger n;
-      const uint64_t *f = [process.stacks framesForStack: stack count: &n];
-      for (NSUInteger i = 0; i < n; i++)
+      NSArray *syms = [process.symbolicator symbolsForStack: stack];
+      NSArray *addrs = [process.symbolicator addressesForStack: stack];
+      for (NSUInteger i = 0; i < [syms count]; i++)
         {
-          [_symbols addObject: [process.symbolicator symbolForFrame: f[i] index: i]];
-          [_addresses addObject: [NSNumber numberWithUnsignedLongLong: f[i]]];
+          [_symbols addObject: [syms objectAtIndex: i]];
+          [_addresses addObject: [addrs objectAtIndex: i]];
           [_lines addObject: [NSNull null]];
         }
       if ([_sourceLines state] == NSOnState)
@@ -130,7 +130,7 @@
   for (NSUInteger i = 0; i < [_addresses count]; i++)
     {
       NSString *loc = [_process.symbolicator sourceLocationForFrame:
-        [[_addresses objectAtIndex: i] unsignedLongLongValue] index: i];
+        [[_addresses objectAtIndex: i] unsignedLongLongValue] index: 0];
       [_lines replaceObjectAtIndex: i withObject: loc ? (id)loc : (id)[NSNull null]];
     }
 }

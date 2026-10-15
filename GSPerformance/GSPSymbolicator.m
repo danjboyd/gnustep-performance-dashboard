@@ -286,6 +286,8 @@ hex_string(NSData *d)
   NSUInteger _impCount;
   NSArray *_impNames;
   NSDictionary *_embedded;         /* NSString hex -> name */
+  NSMutableDictionary *_stackSymbols;   /* NSNumber stack -> NSArray or NSNull */
+  NSMutableDictionary *_stackAddresses;
   NSUInteger _methodCountSeen;
 }
 
@@ -325,6 +327,8 @@ static char *(*cxa_demangle)(const char *, char *, size_t *, int *);
 - (void) invalidate
 {
   [_cache removeAllObjects];
+  [_stackSymbols removeAllObjects];
+  [_stackAddresses removeAllObjects];
   free(_imps);
   _imps = NULL;
   _impCount = 0;
@@ -499,6 +503,83 @@ static char *(*cxa_demangle)(const char *, char *, size_t *, int *);
   sym.start = start;
   [_cache setObject: sym forKey: key];
   return sym;
+}
+
+static BOOL
+is_agent(GSPSymbol *s)
+{
+  return [[s imageName] hasPrefix: @"libgsperf-agent"];
+}
+
+- (void) computeStack: (uint32_t)stack
+{
+  NSNumber *key = [NSNumber numberWithUnsignedInt: stack];
+  NSUInteger n;
+  const uint64_t *f = [_process.stacks framesForStack: stack count: &n];
+  NSMutableArray *syms = [NSMutableArray arrayWithCapacity: n];
+  NSMutableArray *addrs = [NSMutableArray arrayWithCapacity: n];
+  NSUInteger i = 0;
+  BOOL sawAgent = NO;
+
+  if (_stackSymbols == nil)
+    {
+      _stackSymbols = [NSMutableDictionary dictionary];
+      _stackAddresses = [NSMutableDictionary dictionary];
+    }
+  /* Leading run: a sample taken while the agent was working starts with a
+     few libunwind/libc frames and then the agent itself.  Agent frames any
+     deeper are interposers (objc_alloc_init...) inside real call paths.  */
+  NSUInteger lead = 0;
+  for (NSUInteger k = 0; k < n && k < 6; k++)
+    if (is_agent([self symbolForFrame: f[k] index: k]))
+      {
+        lead = k + 1;
+        sawAgent = YES;
+        while (lead < n && is_agent([self symbolForFrame: f[lead] index: lead]))
+          lead++;
+        break;
+      }
+  for (i = sawAgent ? lead : 0; i < n; i++)
+    {
+      GSPSymbol *s = [self symbolForFrame: f[i] index: i];
+      if (is_agent(s))
+        continue;   /* interposer trampoline */
+      [syms addObject: s];
+      /* return addresses point after the call; report the call itself */
+      [addrs addObject: [NSNumber numberWithUnsignedLongLong: i > 0 ? f[i] - 1 : f[i]]];
+    }
+  if (sawAgent && [syms count] == 0)
+    {
+      [_stackSymbols setObject: [NSNull null] forKey: key];
+      [_stackAddresses setObject: [NSNull null] forKey: key];
+      return;
+    }
+  [_stackSymbols setObject: syms forKey: key];
+  [_stackAddresses setObject: addrs forKey: key];
+}
+
+- (NSArray *) symbolsForStack: (uint32_t)stack
+{
+  NSNumber *key = [NSNumber numberWithUnsignedInt: stack];
+  id v = [_stackSymbols objectForKey: key];
+  if (v == nil)
+    {
+      [self computeStack: stack];
+      v = [_stackSymbols objectForKey: key];
+    }
+  return v == [NSNull null] ? nil : v;
+}
+
+- (NSArray *) addressesForStack: (uint32_t)stack
+{
+  NSNumber *key = [NSNumber numberWithUnsignedInt: stack];
+  id v = [_stackAddresses objectForKey: key];
+  if (v == nil)
+    {
+      [self computeStack: stack];
+      v = [_stackAddresses objectForKey: key];
+    }
+  return v == [NSNull null] ? nil : v;
 }
 
 - (GSPSymbol *) symbolForFrame: (uint64_t)address index: (NSUInteger)index

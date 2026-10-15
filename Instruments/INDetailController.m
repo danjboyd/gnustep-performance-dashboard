@@ -36,6 +36,18 @@
 @interface INDetailController () <NSOutlineViewDataSource, NSOutlineViewDelegate>
 @end
 
+/* The frame Instruments calls "responsible": the first one outside system
+   libraries, or the leaf if all are system frames.  */
+static NSString *
+responsible_frame(GSPProcess *p, uint32_t stack)
+{
+  NSArray *syms = [p.symbolicator symbolsForStack: stack];
+  for (GSPSymbol *s in syms)
+    if (!s.isSystem)
+      return s.name;
+  return [syms count] ? [[syms objectAtIndex: 0] name] : @"";
+}
+
 @implementation INDetailController
 {
   NSView *_view;
@@ -471,18 +483,7 @@ col(NSString *ident, NSString *title, CGFloat width)
         continue;
       INRow *r = [INRow new];
       GSPProcess *p = _renderer.process;
-      NSUInteger n;
-      const uint64_t *f = [p.stacks framesForStack: hang.representativeStack count: &n];
-      NSString *where = @"";
-      for (NSUInteger i = 0; i < n; i++)
-        {
-          GSPSymbol *s = [p.symbolicator symbolForFrame: f[i] index: i];
-          if (!s.isSystem)
-            {
-              where = s.name;
-              break;
-            }
-        }
+      NSString *where = responsible_frame(p, hang.representativeStack);
       [r set: @"start" text: [INTimelineView formatTime: [_renderer.trace relativeTime: hang.startTime]]
         sort: [NSNumber numberWithUnsignedLongLong: hang.startTime]];
       [r set: @"duration" text: GSPFormatDuration(hang.duration)
@@ -638,18 +639,7 @@ col(NSString *ident, NSString *title, CGFloat width)
     const GSPAllocationRecord *rec = &a.records[i];
     INRow *r = [INRow new];
     BOOL live = rec->freeTime == 0 || (_end && rec->freeTime > _end);
-    NSUInteger n;
-    const uint64_t *f = [p.stacks framesForStack: rec->stack count: &n];
-    NSString *caller = @"";
-    for (NSUInteger k = 0; k < n; k++)
-      {
-        GSPSymbol *s = [p.symbolicator symbolForFrame: f[k] index: k];
-        if (!s.isSystem)
-          {
-            caller = s.name;
-            break;
-          }
-      }
+    NSString *caller = responsible_frame(p, rec->stack);
     [r set: @"address" text: [NSString stringWithFormat: @"0x%llx", (unsigned long long)rec->address]
       sort: [NSNumber numberWithUnsignedLongLong: rec->address]];
     [r set: @"category" text: [a.categoryNames objectAtIndex: rec->category] sort: nil];
@@ -685,18 +675,7 @@ col(NSString *ident, NSString *title, CGFloat width)
     {
       GSPLeak *first = [g.leaks objectAtIndex: 0];
       INRow *r = [INRow new];
-      NSUInteger n;
-      const uint64_t *f = [p.stacks framesForStack: first.stack count: &n];
-      NSString *caller = @"";
-      for (NSUInteger k = 0; k < n; k++)
-        {
-          GSPSymbol *s = [p.symbolicator symbolForFrame: f[k] index: k];
-          if (!s.isSystem)
-            {
-              caller = s.name;
-              break;
-            }
-        }
+      NSString *caller = responsible_frame(p, first.stack);
       [r set: @"object" text: g.name sort: nil];
       [r set: @"count" text: [NSString stringWithFormat: @"%llu", (unsigned long long)g.count]
         sort: [NSNumber numberWithUnsignedLongLong: g.count]];
@@ -779,18 +758,7 @@ col(NSString *ident, NSString *title, CGFloat width)
           const GSPRefCountEvent *e = &p.refCountEvents[i];
           if (e->address != z.address || e->time > z.time)
             continue;
-          NSUInteger n;
-          const uint64_t *f = [p.stacks framesForStack: e->stack count: &n];
-          NSString *who = @"";
-          for (NSUInteger k = 0; k < n; k++)
-            {
-              GSPSymbol *s = [p.symbolicator symbolForFrame: f[k] index: k];
-              if (!s.isSystem)
-                {
-                  who = s.name;
-                  break;
-                }
-            }
+          NSString *who = responsible_frame(p, e->stack);
           [d appendFormat: @"%.4f s  %@  %@\n", [_renderer.trace relativeTime: e->time],
            e->kind == GSP_RC_RETAIN ? @"retain" : (e->kind == GSP_RC_RELEASE ? @"release" : @"autorelease"),
            who];

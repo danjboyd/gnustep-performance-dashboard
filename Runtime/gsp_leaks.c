@@ -26,6 +26,7 @@
 #include <unistd.h>
 #include <asm/prctl.h>
 #include <sys/syscall.h>
+#include <sys/uio.h>
 
 static sem_t suspend_ack;
 static uint64_t explain_size;
@@ -136,7 +137,8 @@ typedef struct region
   bool readable, writable;
   bool special;   /* [vvar], [vsyscall], device memory... */
   bool stack;     /* [stack] */
-  bool has_block; /* contains a live malloc block: a heap, skip as root */
+  bool heap;      /* [heap]: glibc's main arena */
+  bool has_block; /* contains a live malloc block */
 } region;
 
 typedef struct regions
@@ -144,6 +146,8 @@ typedef struct regions
   region *items;
   size_t count, cap;
   size_t bytes;
+  char *text;          /* kept mapped until the scan ends: unmapping it   */
+  size_t text_bytes;   /* would punch a hole in a region we just recorded */
 } regions;
 
 static bool
@@ -217,13 +221,16 @@ read_maps(regions *rs)
         r.special = true;
       if (strcmp(p, "[stack]") == 0)
         r.stack = true;
+      if (strcmp(p, "[heap]") == 0)
+        r.heap = true;
       if (r.hi > r.lo)
         rs->items[rs->count++] = r;
       if (end == NULL)
         break;
       line = end + 1;
     }
-  gsp_unmap(text, cap);
+  rs->text = text;
+  rs->text_bytes = cap;
   return true;
 }
 
@@ -396,13 +403,12 @@ explain(uintptr_t at, uint64_t v, mblock *m)
     }
 }
 
-static void
-scan_words(scan_state *s, uintptr_t lo, uintptr_t hi)
+static inline void
+scan_buffer(scan_state *s, const uint64_t *words, size_t n, uintptr_t base)
 {
-  lo = (lo + 7) & ~(uintptr_t)7;
-  for (uintptr_t p = lo; p + 8 <= hi; p += 8)
+  for (size_t i = 0; i < n; i++)
     {
-      uint64_t v = *(volatile uint64_t *)p;
+      uint64_t v = words[i];
       if (v < 4096)
         continue;
       mblock *m = block_for(s, v);
@@ -410,10 +416,71 @@ scan_words(scan_state *s, uintptr_t lo, uintptr_t hi)
         {
           m->marked = 1;
           if (explain_size && m->size == explain_size)
-            explain(p, v, m);
+            explain(base + i * 8, v, m);
           push_work(s, (uint32_t)(m - s->blocks));
         }
     }
+}
+
+/* Memory is copied with process_vm_readv, which fails cleanly on pages
+   that are unmapped or protected: other (unregistered) threads keep
+   running during the scan and may unmap memory under us.  */
+static void
+scan_words(scan_state *s, uintptr_t lo, uintptr_t hi)
+{
+  static uint64_t buf[8192];
+  pid_t self = getpid();
+
+  lo = (lo + 7) & ~(uintptr_t)7;
+  while (lo + 8 <= hi)
+    {
+      size_t len = hi - lo;
+      if (len > sizeof(buf))
+        len = sizeof(buf);
+      len &= ~(size_t)7;
+      struct iovec local = { buf, len };
+      struct iovec remote = { (void *)lo, len };
+      ssize_t got = process_vm_readv(self, &local, 1, &remote, 1, 0);
+      if (got <= 0)
+        {
+          /* skip to the next page */
+          uintptr_t next = (lo + 4096) & ~(uintptr_t)4095;
+          lo = next > lo ? next : lo + 4096;
+          continue;
+        }
+      scan_buffer(s, buf, (size_t)got / 8, lo);
+      lo += (uintptr_t)got & ~(uintptr_t)7;
+      if ((size_t)got < len)
+        lo = (lo + 4096) & ~(uintptr_t)4095;
+    }
+}
+
+/* Scan [lo, hi) except the live blocks inside it.  */
+static void
+scan_between_blocks(scan_state *s, uintptr_t lo, uintptr_t hi)
+{
+  size_t a = 0, b = s->count;
+  while (a < b)
+    {
+      size_t mid = (a + b) / 2;
+      if (s->blocks[mid].address < lo)
+        a = mid + 1;
+      else
+        b = mid;
+    }
+  uintptr_t cur = lo;
+  for (size_t i = a; i < s->count && s->blocks[i].address < hi; i++)
+    {
+      /* mmap'd chunks have a 16-byte header before the block */
+      uintptr_t bs = (uintptr_t)s->blocks[i].address - 16;
+      uintptr_t be = (uintptr_t)(s->blocks[i].address + s->blocks[i].size);
+      if (bs > cur)
+        scan_words(s, cur, bs);
+      if (be > cur)
+        cur = be;
+    }
+  if (cur < hi)
+    scan_words(s, cur, hi);
 }
 
 /* Scan [lo, hi) clipped to readable mappings.  */
@@ -443,6 +510,39 @@ scan_checked(scan_state *s, uintptr_t lo, uintptr_t hi)
     }
 }
 
+static region *find_region(regions *rs, uintptr_t p);
+
+/* Some libraries link blocks by self-relative offsets instead of pointers;
+   fontconfig's FcPattern keeps its element array at (pattern + elts_offset),
+   and every GNUstep GUI app uses fontconfig through the backend.  A word in
+   a block's header that, added to the block's start, lands exactly on the
+   start of another live block is treated as a reference.  */
+static void
+scan_relative_header(scan_state *s, const mblock *m)
+{
+  uint64_t words[4];
+  size_t n = m->size < sizeof(words) ? (size_t)m->size / 8 : 4;
+  struct iovec local = { words, n * 8 };
+  struct iovec remote = { (void *)(uintptr_t)m->address, n * 8 };
+
+  if (n == 0 || process_vm_readv(getpid(), &local, 1, &remote, 1, 0) != (ssize_t)(n * 8))
+    return;
+  for (size_t i = 0; i < n; i++)
+    {
+      int64_t off = (int64_t)words[i];
+      if (off == 0 || (off & 7) || off > (1 << 20) || off < -(1 << 20)
+          || (uint64_t)off < m->size)
+        continue;
+      uint64_t target = m->address + (uint64_t)off;
+      mblock *t = block_for(s, target);
+      if (t && t->address == target && !t->marked)
+        {
+          t->marked = 1;
+          push_work(s, (uint32_t)(t - s->blocks));
+        }
+    }
+}
+
 static void
 drain_work(scan_state *s)
 {
@@ -456,7 +556,14 @@ drain_work(scan_state *s)
                    (unsigned long)m->address, (unsigned long)m->size);
           explain_root = desc;
         }
+      /* A stale entry must never crash the target: only read blocks that
+         lie inside a readable mapping.  */
+      region *r = find_region(&s->maps, (uintptr_t)m->address);
+      if (r == NULL || !r->readable || r->special
+          || (uintptr_t)(m->address + m->size) > r->hi)
+        continue;
       scan_words(s, (uintptr_t)m->address, (uintptr_t)(m->address + m->size));
+      scan_relative_header(s, m);
     }
 }
 
@@ -518,26 +625,94 @@ gsp_leaks_snapshot(void)
         r->has_block = true;
     }
 
-  /* Roots 1: writable mappings that are not heaps, thread stacks or the
-     agent's own memory.  */
-  for (size_t i = 0; i < s.maps.count; i++)
-    {
-      region *r = &s.maps.items[i];
-      if (!r->readable || !r->writable || r->special || r->has_block
-          || r->stack || gsp_is_agent_memory(r->lo, r->hi)
-          || (r->lo < gsp_writer_stack_hi && r->hi > gsp_writer_stack_lo)
-          || is_thread_stack(r->lo, r->hi))
-        continue;
-      if (explain_size)
-        {
-          static char rd[96];
-          snprintf(rd, sizeof(rd), "mapping %#lx-%#lx", (unsigned long)r->lo,
-                   (unsigned long)r->hi);
-          explain_root = rd;
-        }
-      scan_words(&s, r->lo, r->hi);
-      drain_work(&s);
-    }
+  /* Roots 1: writable mappings other than malloc heaps.  glibc's main
+     heap is [heap]; its other arenas are anonymous mappings aligned to
+     HEAP_MAX_SIZE (64 MiB).  The kernel merges neighbouring anonymous
+     mappings, so a region may mix a library's .bss with the agent's own
+     buffers, thread stacks or large mmap'd blocks: those ranges are cut
+     out and the rest is scanned.  Blocks are scanned only when reached.  */
+  {
+    static uintptr_t cuts[GSP_MAX_THREADS + 16400][2];
+    int ncuts = gsp_agent_mappings(cuts, 16384);
+    int nthreads = atomic_load(&gsp_thread_count);
+    for (int i = 0; i < nthreads; i++)
+      {
+        gsp_thread *t = gsp_threads[i];
+        if (t && atomic_load(&t->state) == GSP_SLOT_ACTIVE && t->stack_hi)
+          {
+            cuts[ncuts][0] = t->stack_lo;
+            cuts[ncuts][1] = t->stack_hi;
+            ncuts++;
+          }
+      }
+    if (gsp_writer_stack_hi)
+      {
+        cuts[ncuts][0] = gsp_writer_stack_lo;
+        cuts[ncuts][1] = gsp_writer_stack_hi;
+        ncuts++;
+      }
+    /* sort cuts by start (insertion sort: few hundred entries) */
+    for (int i = 1; i < ncuts; i++)
+      {
+        uintptr_t a = cuts[i][0], b = cuts[i][1];
+        int j = i - 1;
+        while (j >= 0 && cuts[j][0] > a)
+          {
+            cuts[j + 1][0] = cuts[j][0];
+            cuts[j + 1][1] = cuts[j][1];
+            j--;
+          }
+        cuts[j + 1][0] = a;
+        cuts[j + 1][1] = b;
+      }
+
+    for (size_t i = 0; i < s.maps.count; i++)
+      {
+        region *r = &s.maps.items[i];
+        bool arena = r->has_block && (r->lo & ((64u << 20) - 1)) == 0;
+        bool skip = !r->readable || !r->writable || r->special || r->heap
+          || arena || r->stack;
+        if (explain_size)
+          {
+            char line[200];
+            int ln = snprintf(line, sizeof(line),
+              "gsperf region %#lx-%#lx r%d w%d special%d heap%d arena%d stack%d blocks%d -> %s\n",
+              (unsigned long)r->lo, (unsigned long)r->hi, r->readable, r->writable,
+              r->special, r->heap, arena, r->stack, r->has_block, skip ? "skip" : "scan");
+            ssize_t ig = write(2, line, (size_t)ln);
+            (void)ig;
+            static char rd[96];
+            snprintf(rd, sizeof(rd), "mapping %#lx-%#lx", (unsigned long)r->lo,
+                     (unsigned long)r->hi);
+            explain_root = rd;
+          }
+        if (skip)
+          continue;
+        uintptr_t cur = r->lo;
+        for (int c = 0; c < ncuts && cur < r->hi; c++)
+          {
+            if (cuts[c][1] <= cur || cuts[c][0] >= r->hi)
+              continue;
+            if (cuts[c][0] > cur)
+              {
+                if (r->has_block)
+                  scan_between_blocks(&s, cur, cuts[c][0]);
+                else
+                  scan_words(&s, cur, cuts[c][0]);
+              }
+            if (cuts[c][1] > cur)
+              cur = cuts[c][1];
+          }
+        if (cur < r->hi)
+          {
+            if (r->has_block)
+              scan_between_blocks(&s, cur, r->hi);
+            else
+              scan_words(&s, cur, r->hi);
+          }
+        drain_work(&s);
+      }
+  }
 
   /* Roots 2: threads.  */
   int n = atomic_load(&gsp_thread_count);
@@ -623,4 +798,6 @@ cleanup:
     gsp_unmap(s.work, s.work_bytes);
   if (s.maps.items)
     gsp_unmap(s.maps.items, s.maps.bytes);
+  if (s.maps.text)
+    gsp_unmap(s.maps.text, s.maps.text_bytes);
 }

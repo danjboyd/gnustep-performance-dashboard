@@ -38,7 +38,15 @@
   NSArray *have = _trace.instrumentIdentifiers;
   NSMutableArray *tracks = [NSMutableArray array];
 
+  /* the template's order first, then anything else in a fixed order */
+  NSMutableArray *ordered = [NSMutableArray array];
+  for (NSString *ident in have)
+    if ([order containsObject: ident] && ![ordered containsObject: ident])
+      [ordered addObject: ident];
   for (NSString *ident in order)
+    if (![ordered containsObject: ident])
+      [ordered addObject: ident];
+  for (NSString *ident in ordered)
     {
       BOOL present = [have containsObject: ident];
       /* traces without Info.plist instrument lists: infer from data */

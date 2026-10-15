@@ -326,17 +326,18 @@ static NSString *
 stack_text(GSPProcess *p, uint32_t stack, NSString *indent, BOOL lines)
 {
   NSMutableString *s = [NSMutableString string];
-  NSUInteger n;
-  const uint64_t *f = [p.stacks framesForStack: stack count: &n];
-  for (NSUInteger i = 0; i < n; i++)
+  NSArray *syms = [p.symbolicator symbolsForStack: stack];
+  NSArray *addrs = [p.symbolicator addressesForStack: stack];
+  for (NSUInteger i = 0; i < [syms count]; i++)
     {
-      GSPSymbol *sym = [p.symbolicator symbolForFrame: f[i] index: i];
-      NSString *loc = lines ? [p.symbolicator sourceLocationForFrame: f[i] index: i] : nil;
+      GSPSymbol *sym = [syms objectAtIndex: i];
+      NSString *loc = lines ? [p.symbolicator sourceLocationForFrame:
+        [[addrs objectAtIndex: i] unsignedLongLongValue] index: 0] : nil;
       [s appendFormat: @"%@%@  (%@)%@\n", indent, sym.name, sym.imageName ?: @"?",
         loc ? [NSString stringWithFormat: @"  %@", loc] : @""];
     }
-  if (n == 0)
-    [s appendFormat: @"%@<no stack>\n", indent];
+  if ([syms count] == 0)
+    [s appendFormat: @"%@%@\n", indent, syms ? @"<no stack>" : @"<recording overhead>"];
   return s;
 }
 
@@ -653,10 +654,15 @@ report_zombies(GSPTrace *t, GSPProcess *p, report_opts *o)
             out(@"  Retain/release history:\n");
           NSString *kind = r->kind == GSP_RC_RETAIN ? @"retain"
             : (r->kind == GSP_RC_RELEASE ? @"release" : @"autorelease");
-          NSUInteger n;
-          const uint64_t *f = [p.stacks framesForStack: r->stack count: &n];
+          NSString *who = @"";
+          for (GSPSymbol *sym in [p.symbolicator symbolsForStack: r->stack])
+            if (!sym.isSystem)
+              {
+                who = sym.name;
+                break;
+              }
           out([NSString stringWithFormat: @"    %.4fs %-11@ %@\n", [t relativeTime: r->time],
-               kind, n ? [p.symbolicator symbolForFrame: f[0] index: 0].name : @""]);
+               kind, who]);
         }
     }
   return 0;
