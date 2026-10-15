@@ -18,6 +18,7 @@
 #include "gsp_internal.h"
 
 #include <errno.h>
+#include <stdio.h>
 #include <fcntl.h>
 #include <semaphore.h>
 #include <stdlib.h>
@@ -27,6 +28,7 @@
 #include <sys/syscall.h>
 
 static sem_t suspend_ack;
+static uint64_t explain_size;
 static atomic_int world_stopped;
 static uint32_t snapshot_ordinal;
 
@@ -70,6 +72,8 @@ gsp_leaks_init(void)
 
   if (!gsp_cfg.leaks)
     return;
+  if (getenv("GSP_LEAK_EXPLAIN"))
+    explain_size = strtoull(getenv("GSP_LEAK_EXPLAIN"), NULL, 10);
   sem_init(&suspend_ack, 0, 0);
   memset(&sa, 0, sizeof(sa));
   sa.sa_sigaction = suspend_handler;
@@ -332,6 +336,25 @@ block_for(scan_state *s, uint64_t p)
   return NULL;
 }
 
+/* glibc's bins and stale free-chunk headers point at the header of the
+   chunk that follows a block, which overlaps the block's last 8 usable
+   bytes (address + usable - 8).  Treating that as an interior pointer
+   would keep the block alive, so ignore exactly that address.  */
+static inline bool
+is_malloc_metadata(const mblock *m, uint64_t v)
+{
+#ifdef __GLIBC__
+  uint64_t chunk = (m->size + 8 + 15) & ~(uint64_t)15;
+  if (chunk < 32)
+    chunk = 32;
+  return v == m->address + chunk - 16;
+#else
+  (void)m;
+  (void)v;
+  return false;
+#endif
+}
+
 static void
 push_work(scan_state *s, uint32_t index)
 {
@@ -354,6 +377,25 @@ push_work(scan_state *s, uint32_t index)
   s->work[s->work_count++] = index;
 }
 
+/* GSP_LEAK_EXPLAIN=<size>: report (to stderr) where blocks of that size
+   were first found reachable from.  A diagnostic for false negatives.  */
+static const char *explain_root = "";
+
+static void
+explain(uintptr_t at, uint64_t v, mblock *m)
+{
+  char buf[256];
+  int n = snprintf(buf, sizeof(buf),
+                   "gsperf leaks: block %#lx (%lu bytes) reachable via %#lx=%#lx from %s\n",
+                   (unsigned long)m->address, (unsigned long)m->size,
+                   (unsigned long)at, (unsigned long)v, explain_root);
+  if (n > 0)
+    {
+      ssize_t ignored = write(2, buf, (size_t)n);
+      (void)ignored;
+    }
+}
+
 static void
 scan_words(scan_state *s, uintptr_t lo, uintptr_t hi)
 {
@@ -364,9 +406,11 @@ scan_words(scan_state *s, uintptr_t lo, uintptr_t hi)
       if (v < 4096)
         continue;
       mblock *m = block_for(s, v);
-      if (m && !m->marked)
+      if (m && !m->marked && !is_malloc_metadata(m, v))
         {
           m->marked = 1;
+          if (explain_size && m->size == explain_size)
+            explain(p, v, m);
           push_work(s, (uint32_t)(m - s->blocks));
         }
     }
@@ -402,9 +446,16 @@ scan_checked(scan_state *s, uintptr_t lo, uintptr_t hi)
 static void
 drain_work(scan_state *s)
 {
+  static char desc[96];
   while (s->work_count > 0)
     {
       mblock *m = &s->blocks[s->work[--s->work_count]];
+      if (explain_size)
+        {
+          snprintf(desc, sizeof(desc), "block %#lx (%lu bytes)",
+                   (unsigned long)m->address, (unsigned long)m->size);
+          explain_root = desc;
+        }
       scan_words(s, (uintptr_t)m->address, (uintptr_t)(m->address + m->size));
     }
 }
@@ -435,6 +486,19 @@ gsp_leaks_snapshot(void)
   gsp_live_lock();
   stop_world();
 
+  if (explain_size)
+    {
+      int mfd = open("/proc/self/maps", O_RDONLY | O_CLOEXEC);
+      char mb[4096];
+      ssize_t mn;
+      while (mfd >= 0 && (mn = read(mfd, mb, sizeof(mb))) > 0)
+        {
+          ssize_t ignored = write(2, mb, (size_t)mn);
+          (void)ignored;
+        }
+      if (mfd >= 0)
+        close(mfd);
+    }
   s.bytes = (gsp_live_count() + 1) * sizeof(mblock);
   s.blocks = gsp_map(s.bytes);
   if (s.blocks == NULL || !read_maps(&s.maps))
@@ -464,6 +528,13 @@ gsp_leaks_snapshot(void)
           || (r->lo < gsp_writer_stack_hi && r->hi > gsp_writer_stack_lo)
           || is_thread_stack(r->lo, r->hi))
         continue;
+      if (explain_size)
+        {
+          static char rd[96];
+          snprintf(rd, sizeof(rd), "mapping %#lx-%#lx", (unsigned long)r->lo,
+                   (unsigned long)r->hi);
+          explain_root = rd;
+        }
       scan_words(&s, r->lo, r->hi);
       drain_work(&s);
     }
@@ -475,6 +546,13 @@ gsp_leaks_snapshot(void)
       gsp_thread *t = gsp_threads[i];
       if (t == NULL || atomic_load(&t->state) != GSP_SLOT_ACTIVE)
         continue;
+      if (explain_size)
+        {
+          static char td[96];
+          snprintf(td, sizeof(td), "thread %d (sp %#lx, fs %#lx)", (int)t->tid,
+                   (unsigned long)t->saved_sp, (unsigned long)t->saved_fs);
+          explain_root = td;
+        }
       if (atomic_load(&t->suspended))
         {
           scan_words(&s, (uintptr_t)t->saved_regs,

@@ -191,6 +191,7 @@ GSP_HIDDEN bool gsp_images_changed(void);   /* writer only */
 GSP_HIDDEN bool gsp_loader_busy(void);      /* async-signal-safe */
 GSP_HIDDEN void gsp_alloc_init(void);
 GSP_HIDDEN void gsp_alloc_tag(void *address, uint32_t class_name);
+GSP_HIDDEN void gsp_alloc_stop_live(void);
 GSP_HIDDEN void gsp_objc_poll(void);         /* writer: install hooks once */
 GSP_HIDDEN void gsp_objc_dump_methods(void); /* writer: method table */
 GSP_HIDDEN void gsp_leaks_init(void);

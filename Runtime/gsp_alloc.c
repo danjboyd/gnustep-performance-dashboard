@@ -9,6 +9,7 @@
 #include "gsp_internal.h"
 
 #include <errno.h>
+#include <stdlib.h>
 #include <string.h>
 
 extern void *__libc_malloc(size_t);
@@ -23,6 +24,8 @@ extern void *__libc_pvalloc(size_t);
 /* live block table: linear probing, backward-shift deletion           */
 
 static pthread_mutex_t live_mutex = PTHREAD_MUTEX_INITIALIZER;
+static int live_state = -1;
+static inline bool live_enabled(void);
 static gsp_block *live_slots;
 static uint64_t live_cap;   /* power of two */
 static uint64_t live_used;
@@ -64,7 +67,7 @@ live_insert(uint64_t addr, uint64_t size, uint32_t stack)
 {
   uint64_t i;
 
-  if ((live_used + 1) * 10 > live_cap * 7 && !live_grow())
+  if ((live_used + 1) * 10 >= live_cap * 7 && !live_grow())
     return;
   i = hash_addr(addr) & (live_cap - 1);
   while (live_slots[i].address && live_slots[i].address != addr)
@@ -152,10 +155,13 @@ gsp_live_count(void)
 void
 gsp_alloc_tag(void *address, uint32_t class_name)
 {
-  if (!gsp_cfg.leaks || address == NULL)
+  if (!live_enabled() || address == NULL)
     return;
   pthread_mutex_lock(&live_mutex);
+  /* libobjc2 allocates objects with a refcount word in front of them.  */
   gsp_block *b = live_find((uint64_t)(uintptr_t)address);
+  if (b == NULL)
+    b = live_find((uint64_t)(uintptr_t)address - sizeof(intptr_t));
   if (b)
     b->class_name = class_name;
   pthread_mutex_unlock(&live_mutex);
@@ -164,35 +170,58 @@ gsp_alloc_tag(void *address, uint32_t class_name)
 void
 gsp_alloc_init(void)
 {
-  if (gsp_cfg.leaks)
-    {
-      pthread_mutex_lock(&live_mutex);
-      live_grow();
-      pthread_mutex_unlock(&live_mutex);
-    }
+  if (!gsp_cfg.leaks)
+    live_state = 0;
 }
 
 /* ------------------------------------------------------------------ */
 /* recording                                                           */
 
+/* Live-block tracking for leak detection starts at the very first
+   allocation, before the agent's constructor runs: blocks allocated by
+   earlier constructors (libobjc's tables, for instance) must be known, or
+   everything they point to would look leaked.  -1 = not yet decided.  */
+
 static inline bool
-should_record(void)
+live_enabled(void)
 {
-  return atomic_load_explicit(&gsp_alloc_on, memory_order_relaxed)
-    && !gsp_in_agent;
+  if (__builtin_expect(live_state < 0, 0))
+    {
+      const char *out = getenv("GSP_OUTPUT");
+      const char *leaks = getenv("GSP_LEAKS");
+      live_state = out && *out && leaks && leaks[0] == '1';
+    }
+  return live_state > 0;
+}
+
+void
+gsp_alloc_stop_live(void)
+{
+  live_state = 0;
+}
+
+static inline bool
+should_track(void)
+{
+  return !gsp_in_agent
+    && (atomic_load_explicit(&gsp_alloc_on, memory_order_relaxed) || live_enabled());
 }
 
 static void
 record_alloc(void *p, size_t size, void *old)
 {
-  gsp_thread *t;
+  gsp_thread *t = NULL;
   uint32_t stack = 0;
+  bool rec = atomic_load_explicit(&gsp_alloc_on, memory_order_relaxed);
 
   gsp_in_agent++;
-  t = gsp_thread_current();
-  if (t)
-    stack = gsp_current_stack_id(t);
-  if (gsp_cfg.leaks)
+  if (rec)
+    {
+      t = gsp_thread_current();
+      if (t)
+        stack = gsp_current_stack_id(t);
+    }
+  if (live_enabled())
     {
       pthread_mutex_lock(&live_mutex);
       live_insert((uint64_t)(uintptr_t)p, size, stack);
@@ -211,7 +240,7 @@ record_alloc(void *p, size_t size, void *old)
 static void
 forget_block(void *p)
 {
-  if (gsp_cfg.leaks)
+  if (live_enabled())
     {
       pthread_mutex_lock(&live_mutex);
       live_remove((uint64_t)(uintptr_t)p);
@@ -226,8 +255,8 @@ record_free(void *p)
 
   gsp_in_agent++;
   forget_block(p);
-  t = gsp_thread_current();
-  if (t)
+  if (atomic_load_explicit(&gsp_alloc_on, memory_order_relaxed)
+      && (t = gsp_thread_current()) != NULL)
     {
       gsp_free_payload f = { (uint64_t)(uintptr_t)p, 0, 0 };
       gsp_emit_normal(t, GSP_REC_FREE, 0, 0, gsp_now(), &f, sizeof(f),
@@ -243,7 +272,7 @@ GSP_EXPORT void *
 malloc(size_t size)
 {
   void *p = __libc_malloc(size);
-  if (p && should_record())
+  if (p && should_track())
     record_alloc(p, size, NULL);
   return p;
 }
@@ -252,7 +281,7 @@ GSP_EXPORT void *
 calloc(size_t n, size_t size)
 {
   void *p = __libc_calloc(n, size);
-  if (p && should_record())
+  if (p && should_track())
     record_alloc(p, n * size, NULL);
   return p;
 }
@@ -260,7 +289,7 @@ calloc(size_t n, size_t size)
 GSP_EXPORT void
 free(void *p)
 {
-  if (p && should_record())
+  if (p && should_track())
     record_free(p);
   __libc_free(p);
 }
@@ -272,7 +301,7 @@ realloc(void *old, size_t size)
 
   if (old == NULL)
     return malloc(size);
-  if (!should_record())
+  if (!should_track())
     return __libc_realloc(old, size);
   if (size == 0)
     {
@@ -286,7 +315,7 @@ realloc(void *old, size_t size)
   if (p == NULL)
     {
       /* The old block is still valid.  */
-      if (gsp_cfg.leaks)
+      if (live_enabled())
         {
           gsp_in_agent++;
           pthread_mutex_lock(&live_mutex);
@@ -316,7 +345,7 @@ GSP_EXPORT void *
 memalign(size_t align, size_t size)
 {
   void *p = __libc_memalign(align, size);
-  if (p && should_record())
+  if (p && should_track())
     record_alloc(p, size, NULL);
   return p;
 }
@@ -337,7 +366,7 @@ posix_memalign(void **out, size_t align, size_t size)
   p = __libc_memalign(align, size);
   if (p == NULL)
     return ENOMEM;
-  if (should_record())
+  if (should_track())
     record_alloc(p, size, NULL);
   *out = p;
   return 0;
@@ -347,7 +376,7 @@ GSP_EXPORT void *
 valloc(size_t size)
 {
   void *p = __libc_valloc(size);
-  if (p && should_record())
+  if (p && should_track())
     record_alloc(p, size, NULL);
   return p;
 }
@@ -356,7 +385,7 @@ GSP_EXPORT void *
 pvalloc(size_t size)
 {
   void *p = __libc_pvalloc(size);
-  if (p && should_record())
+  if (p && should_track())
     record_alloc(p, size, NULL);
   return p;
 }

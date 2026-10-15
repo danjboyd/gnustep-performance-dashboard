@@ -54,11 +54,63 @@ resolve_runtime(void)
   return resolved;
 }
 
+/* IMPs already written, so periodic dumps only emit new methods.  */
+static uint64_t *dumped;
+static uint64_t dumped_cap, dumped_used;
+static int last_class_count = -1;
+static uint64_t next_poll;
+
+static bool
+mark_dumped(uint64_t imp)
+{
+  if ((dumped_used + 1) * 2 > dumped_cap)
+    {
+      uint64_t ncap = dumped_cap ? dumped_cap * 2 : 65536;
+      uint64_t *n = gsp_map(ncap * 8);
+      if (n == NULL)
+        return true;
+      for (uint64_t i = 0; i < dumped_cap; i++)
+        if (dumped[i])
+          {
+            uint64_t j = (dumped[i] * 0x9E3779B97F4A7C15ull >> 20) & (ncap - 1);
+            while (n[j])
+              j = (j + 1) & (ncap - 1);
+            n[j] = dumped[i];
+          }
+      if (dumped)
+        gsp_unmap(dumped, dumped_cap * 8);
+      dumped = n;
+      dumped_cap = ncap;
+    }
+  uint64_t j = (imp * 0x9E3779B97F4A7C15ull >> 20) & (dumped_cap - 1);
+  while (dumped[j])
+    {
+      if (dumped[j] == imp)
+        return false;
+      j = (j + 1) & (dumped_cap - 1);
+    }
+  dumped[j] = imp;
+  dumped_used++;
+  return true;
+}
+
+/* Writer thread, every tick: dump new methods about once a second when
+   the class list grew (new bundles, lazily registered classes).  */
 void
 gsp_objc_poll(void)
 {
-  /* Resolution happens lazily on the first hooked call; nothing else is
-     needed periodically yet.  */
+  uint64_t now = gsp_now();
+  if (now < next_poll)
+    return;
+  next_poll = now + 1000000000ull;
+  if (dlsym(RTLD_DEFAULT, "objc_getClassList") == NULL || !resolve_runtime())
+    return;
+  int count = p_objc_getClassList(NULL, 0);
+  if (count != last_class_count)
+    {
+      last_class_count = count;
+      gsp_objc_dump_methods();
+    }
 }
 
 /* ------------------------------------------------------------------ */
@@ -232,7 +284,7 @@ dump_class(Class cls, char prefix)
     {
       IMP imp = p_method_getImplementation(list[i]);
       SEL sel = p_method_getName(list[i]);
-      if (imp == NULL || sel == NULL)
+      if (imp == NULL || sel == NULL || !mark_dumped((uint64_t)(uintptr_t)imp))
         continue;
       int n = snprintf(name, sizeof(name), "%c[%s %s]", prefix,
                        cname ? cname : "?", p_sel_getName(sel));
@@ -259,11 +311,13 @@ gsp_objc_dump_methods(void)
   count = p_objc_getClassList(NULL, 0);
   if (count <= 0)
     return;
-  bytes = sizeof(Class) * (size_t)(count + 16);
+  /* Ask for exactly `count`: libobjc2 2.x frees its enumerator twice when
+     the buffer is larger than the class table.  */
+  bytes = sizeof(Class) * (size_t)count;
   classes = gsp_map(bytes);
   if (classes == NULL)
     return;
-  count = p_objc_getClassList(classes, count + 16);
+  count = p_objc_getClassList(classes, count);
   for (int i = 0; i < count; i++)
     {
       dump_class(classes[i], '-');

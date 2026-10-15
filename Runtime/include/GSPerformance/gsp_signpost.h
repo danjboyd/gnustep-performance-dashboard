@@ -15,6 +15,12 @@
 extern "C" {
 #endif
 
+#if defined(_WIN32)
+#  define GSP_API __declspec(dllimport)
+#else
+#  define GSP_API __attribute__((visibility("default")))
+#endif
+
 typedef struct gsp_log_s *gsp_log_t;
 typedef uint64_t gsp_signpost_id_t;
 
@@ -35,27 +41,27 @@ enum
 #define GSP_CATEGORY_POINTS_OF_INTEREST "PointsOfInterest"
 
 /* Logs are never freed; create them once and keep them. */
-gsp_log_t gsp_log_create(const char *subsystem, const char *category);
-extern struct gsp_log_s gsp_log_default_s;
+GSP_API gsp_log_t gsp_log_create(const char *subsystem, const char *category);
+GSP_API extern struct gsp_log_s gsp_log_default_s;
 #define GSP_LOG_DEFAULT (&gsp_log_default_s)
 
-bool gsp_signpost_enabled(gsp_log_t log);
-gsp_signpost_id_t gsp_signpost_id_generate(gsp_log_t log);
-gsp_signpost_id_t gsp_signpost_id_make_with_pointer(gsp_log_t log,
+GSP_API bool gsp_signpost_enabled(gsp_log_t log);
+GSP_API gsp_signpost_id_t gsp_signpost_id_generate(gsp_log_t log);
+GSP_API gsp_signpost_id_t gsp_signpost_id_make_with_pointer(gsp_log_t log,
                                                     const void *ptr);
 
 /* kind: 0 event, 1 interval begin, 2 interval end (see gsp_format.h). */
-void gsp_signpost_emit(gsp_log_t log, int kind, gsp_signpost_id_t spid,
+GSP_API void gsp_signpost_emit(gsp_log_t log, int kind, gsp_signpost_id_t spid,
                        const char *name, const char *format, ...)
   __attribute__((format(printf, 5, 6)));
-void gsp_signpost_emitv(gsp_log_t log, int kind, gsp_signpost_id_t spid,
+GSP_API void gsp_signpost_emitv(gsp_log_t log, int kind, gsp_signpost_id_t spid,
                         const char *name, const char *format, va_list ap);
 
-void gsp_log_emit(gsp_log_t log, int level, const char *format, ...)
+GSP_API void gsp_log_emit(gsp_log_t log, int level, const char *format, ...)
   __attribute__((format(printf, 3, 4)));
 
 /* True while a recording is active in this process. */
-bool gsp_is_recording(void);
+GSP_API bool gsp_is_recording(void);
 
 #ifdef __cplusplus
 }

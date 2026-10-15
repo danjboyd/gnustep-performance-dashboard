@@ -635,12 +635,17 @@ static uint64_t
 hash_bytes(const void *p, size_t n)
 {
   const uint8_t *c = p;
-  uint64_t h = 1469598103934665603ull;
-  for (size_t i = 0; i < n; i++)
+  uint64_t h = 0x9E3779B97F4A7C15ull ^ n;
+  size_t i = 0;
+  for (; i + 8 <= n; i += 8)
     {
-      h ^= c[i];
-      h *= 1099511628211ull;
+      uint64_t w;
+      memcpy(&w, c + i, 8);
+      h = (h ^ w) * 0xff51afd7ed558ccdull;
+      h ^= h >> 32;
     }
+  for (; i < n; i++)
+    h = (h ^ c[i]) * 1099511628211ull;
   return h ? h : 1;
 }
 
@@ -743,6 +748,7 @@ finish_recording(void)
   if (gsp_cfg.leaks)
     gsp_leaks_snapshot();
   atomic_store(&gsp_alloc_on, 0);
+  gsp_alloc_stop_live();
   atomic_store(&finished, 1);
   /* Let in-flight producers publish what they have.  */
   struct timespec ts = { 0, 2000000 };
@@ -779,6 +785,9 @@ writer_main(void *arg)
   sigaddset(&set, GSP_SIG_WALL);
   sigaddset(&set, GSP_SIG_SUSPEND);
   sigaddset(&set, gsp_cfg.control_signal);
+  sigaddset(&set, SIGINT);
+  sigaddset(&set, SIGTERM);
+  sigaddset(&set, SIGHUP);
   pthread_sigmask(SIG_BLOCK, &set, NULL);
   prctl(PR_SET_NAME, "gsp-writer", 0, 0, 0);
   {
@@ -852,6 +861,42 @@ control_handler(int sig, siginfo_t *info, void *uc)
     atomic_store(&stop_requested, 1);
   gsp_writer_wake();
   errno = saved;
+}
+
+/* SIGINT/SIGTERM/SIGHUP while the app still has the default action:
+   finish the recording, then die the way the app would have.  */
+static int fatal_signals[] = { SIGINT, SIGTERM, SIGHUP };
+
+static void stop_and_wait(void);
+
+static void
+fatal_handler(int sig)
+{
+  struct sigaction dfl;
+
+  gsp_in_agent++;
+  stop_and_wait();
+  memset(&dfl, 0, sizeof(dfl));
+  dfl.sa_handler = SIG_DFL;
+  sigemptyset(&dfl.sa_mask);
+  sigaction(sig, &dfl, NULL);
+  raise(sig);
+}
+
+static void
+install_fatal_handlers(void)
+{
+  for (size_t i = 0; i < sizeof(fatal_signals) / sizeof(fatal_signals[0]); i++)
+    {
+      struct sigaction old, sa;
+      if (sigaction(fatal_signals[i], NULL, &old) != 0 || old.sa_handler != SIG_DFL)
+        continue;
+      memset(&sa, 0, sizeof(sa));
+      sa.sa_handler = fatal_handler;
+      sigemptyset(&sa.sa_mask);
+      sa.sa_flags = SA_RESETHAND;
+      sigaction(fatal_signals[i], &sa, NULL);
+    }
 }
 
 static void
@@ -1005,6 +1050,7 @@ gsp_init(void)
       return;
     }
   atexit(at_exit_handler);
+  install_fatal_handlers();
   atomic_store(&gsp_alloc_on, gsp_cfg.allocations ? 1 : 0);
   gsp_in_agent--;
 }
