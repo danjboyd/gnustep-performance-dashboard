@@ -367,11 +367,15 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
       return;
     }
   [_trace reload: NULL];
-  [_renderer invalidate];
+  if (_trace.changedOnLastReload)
+    {
+      [_renderer invalidate];
+      [self fitTimelineToTracks];
+      if (_ticks % 4 == 0)
+        [_detail reload];
+    }
   _timeline.duration = MAX(_trace.duration, -[_recordStart timeIntervalSinceNow]);
   [_timeline reloadData];
-  if (_ticks % 4 == 0)
-    [_detail reload];
 }
 
 - (void) stopRecording: (id)sender

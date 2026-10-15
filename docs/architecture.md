@@ -62,7 +62,13 @@ roots: writable mappings other than malloc heaps — with the agent's buffers,
 thread stacks and large blocks cut out of merged regions — each thread's live
 stack, saved registers and TLS. Memory is read with `process_vm_readv` so
 nothing can fault. Pointers to glibc's next-chunk headers are ignored, and
-self-relative offsets in block headers (fontconfig) are followed. Unmarked
+self-relative offsets in block headers (fontconfig) are followed.
+Uninitialised memory in live blocks is full of stale free-list pointers, so
+Objective-C objects (class-tagged blocks) count as referenced only through
+their start or object pointer; other blocks also accept interior pointers
+(GObject instances and ld.so link maps are referenced from the inside)
+unless the target looks like a stale chunk header. `GSP_LEAK_INTERIOR=0`
+(start only) and `=1` (any interior pointer) select the other policies. Unmarked
 blocks are leaks. The final scan runs from an interposed `exit()` before
 `atexit` handlers clear the globals that keep objects alive.
 

@@ -27,6 +27,7 @@ make -s >"$OUT/build.log" 2>&1 || { cat "$OUT/build.log"; echo "build failed"; e
 
 OBJCFLAGS=$(gnustep-config --objc-flags | sed 's/-MMD//; s/-MP//')
 cc -O0 -g "$ROOT/Tests/fixtures/cburn.c" -o "$OUT/cburn" -lpthread || exit 1
+cc -O1 -g -fno-omit-frame-pointer "$ROOT/Tests/fixtures/stress.c" -o "$OUT/stress" -lpthread || exit 1
 clang $OBJCFLAGS -O0 -Wno-unused-but-set-variable -I"$ROOT/Runtime/include" \
   "$ROOT/Tests/fixtures/objcwork.m" -o "$OUT/objcwork" $(gnustep-config --base-libs) \
   -L"$ROOT/Runtime/obj" -lgsperf -Wl,-rpath,"$ROOT/Runtime/obj" || exit 1
@@ -66,6 +67,13 @@ check "cburn: exactly the 10 leaked 48-byte blocks" "grep -q '^10 leaked block(s
 check "cburn: leak attributed to leak_some" "grep -q 'leak_some' '$OUT/cburn-leaks.txt'"
 "$GSTRACE" report "$OUT/cburn.gstrace" calltree --invert --depth 1 >"$OUT/cburn-tree.txt" 2>/dev/null
 check "cburn: inverted call tree leads with hot_inner" "sed -n 4p '$OUT/cburn-tree.txt' | grep -q hot_inner"
+
+echo "== Stress: 8 threads allocating during sampling and leak checks"
+record stress --instrument time-profiler --instrument allocations --instrument leaks \
+  --leak-interval 1 --launch "$OUT/stress"
+check "stress: finished cleanly" "'$GSTRACE' info '$OUT/stress.gstrace' 2>/dev/null | grep -q 'finished cleanly: yes'"
+"$GSTRACE" report "$OUT/stress.gstrace" leaks >"$OUT/stress-leaks.txt" 2>/dev/null
+check "stress: no false leak reports (only the threads' 4000-byte blocks, if any)" "[ \$(grep -v '^      ' '$OUT/stress-leaks.txt' | grep -E '^(Malloc|[A-Z])' | grep -v -E '^Malloc 3.91 KiB' | grep -c -v -E '^[0-9]') -eq 0 ]"
 
 echo "== Objective-C fixture: classes, leaks, signposts, os_log"
 record objcwork --instrument time-profiler --instrument allocations --instrument leaks \

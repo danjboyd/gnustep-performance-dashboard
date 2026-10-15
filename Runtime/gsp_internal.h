@@ -107,6 +107,7 @@ typedef struct gsp_thread
   gsp_ring ring_signal;
   gsp_ring ring_normal;
   uintptr_t stack_lo, stack_hi;
+  uintptr_t tls_base;          /* %fs base: the thread control block */
   timer_t cpu_timer;
   timer_t wall_timer;
   bool has_cpu_timer, has_wall_timer;

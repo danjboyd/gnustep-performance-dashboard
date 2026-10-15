@@ -18,6 +18,7 @@
 #include "gsp_internal.h"
 
 #include <errno.h>
+#include <link.h>
 #include <stdio.h>
 #include <fcntl.h>
 #include <semaphore.h>
@@ -30,6 +31,23 @@
 
 static sem_t suspend_ack;
 static uint64_t explain_size;
+static int interior_policy = 2;   /* see scan_buffer */
+static uintptr_t static_tls_size = 8192;
+
+/* Static TLS of the initially loaded modules plus glibc's surplus.  */
+static int
+tls_size_cb(struct dl_phdr_info *pi, size_t size, void *data)
+{
+  uintptr_t *total = data;
+  (void)size;
+  for (int i = 0; i < pi->dlpi_phnum; i++)
+    if (pi->dlpi_phdr[i].p_type == PT_TLS)
+      {
+        uintptr_t align = pi->dlpi_phdr[i].p_align ? pi->dlpi_phdr[i].p_align : 1;
+        *total += (pi->dlpi_phdr[i].p_memsz + align - 1) & ~(align - 1);
+      }
+  return 0;
+}
 static atomic_int world_stopped;
 static uint32_t snapshot_ordinal;
 
@@ -75,6 +93,13 @@ gsp_leaks_init(void)
     return;
   if (getenv("GSP_LEAK_EXPLAIN"))
     explain_size = strtoull(getenv("GSP_LEAK_EXPLAIN"), NULL, 10);
+  if (getenv("GSP_LEAK_INTERIOR") != NULL)
+    interior_policy = atoi(getenv("GSP_LEAK_INTERIOR"));
+  {
+    uintptr_t total = 0;
+    dl_iterate_phdr(tls_size_cb, &total);
+    static_tls_size = total + 1664 + 256;   /* glibc's TLS_STATIC_SURPLUS, rounding */
+  }
   sem_init(&suspend_ack, 0, 0);
   memset(&sa, 0, sizeof(sa));
   sa.sa_sigaction = suspend_handler;
@@ -403,6 +428,37 @@ explain(uintptr_t at, uint64_t v, mblock *m)
     }
 }
 
+/* Which pointers count as references.  Uninitialised memory in live
+   blocks holds stale glibc free-list pointers that land inside other
+   blocks and would keep leaks "reachable".  Such a pointer addresses an
+   old chunk header: the word after it looks like a malloc size field.
+   GSP_LEAK_INTERIOR selects the policy:
+     0  only pointers to a block's first 16 bytes (libobjc2 objects are 8
+        bytes in) count, like valgrind's "definitely reachable";
+     1  every interior pointer counts (most conservative);
+     2  (default) Objective-C objects (class-tagged blocks) are only
+        referenced through their start or object pointer; for other blocks
+        interior pointers count unless they look like stale chunk headers
+        (C code, GObject instances and ld.so's link maps are legitimately
+        referenced from the inside).  */
+#define START_SLACK 16
+
+static bool
+looks_like_chunk_header(const mblock *m, uint64_t v)
+{
+  uint64_t size_word;
+  struct iovec local = { &size_word, 8 };
+  struct iovec remote = { (void *)(uintptr_t)(v + 8), 8 };
+
+  if (v + 16 > m->address + m->size)
+    return false;
+  if (process_vm_readv(getpid(), &local, 1, &remote, 1, 0) != 8)
+    return false;
+  uint64_t sz = size_word & ~(uint64_t)7;
+  return (sz & 15) == 0 && sz >= 32 && sz <= (1u << 20)
+    && (size_word & 2) == 0;   /* not an mmap'd chunk */
+}
+
 static inline void
 scan_buffer(scan_state *s, const uint64_t *words, size_t n, uintptr_t base)
 {
@@ -412,6 +468,14 @@ scan_buffer(scan_state *s, const uint64_t *words, size_t n, uintptr_t base)
       if (v < 4096)
         continue;
       mblock *m = block_for(s, v);
+      if (m && v - m->address > START_SLACK)
+        {
+          if (interior_policy == 0)
+            continue;
+          if (interior_policy == 2 && !m->marked
+              && (m->class_name != 0 || looks_like_chunk_header(m, v)))
+            continue;
+        }
       if (m && !m->marked && !is_malloc_metadata(m, v))
         {
           m->marked = 1;
@@ -635,15 +699,26 @@ gsp_leaks_snapshot(void)
     static uintptr_t cuts[GSP_MAX_THREADS + 16400][2];
     int ncuts = gsp_agent_mappings(cuts, 16384);
     int nthreads = atomic_load(&gsp_thread_count);
+    /* Exited threads too: glibc keeps their stacks mapped for reuse, and
+       the stale frames would hide leaks.  Their thread control block and
+       static TLS (just below %fs, at the top of the mapping) stay roots:
+       glibc's stack cache still points at them.  */
     for (int i = 0; i < nthreads; i++)
       {
         gsp_thread *t = gsp_threads[i];
-        if (t && atomic_load(&t->state) == GSP_SLOT_ACTIVE && t->stack_hi)
+        if (t == NULL || t->stack_hi == 0)
+          continue;
+        uintptr_t hi = t->stack_hi;
+        if (atomic_load(&t->state) != GSP_SLOT_ACTIVE && t->tls_base > t->stack_lo
+            && t->tls_base < t->stack_hi + 65536)
           {
-            cuts[ncuts][0] = t->stack_lo;
-            cuts[ncuts][1] = t->stack_hi;
-            ncuts++;
+            uintptr_t keep = t->tls_base - static_tls_size;
+            if (keep > t->stack_lo && keep < hi)
+              hi = keep;
           }
+        cuts[ncuts][0] = t->stack_lo;
+        cuts[ncuts][1] = hi;
+        ncuts++;
       }
     if (gsp_writer_stack_hi)
       {

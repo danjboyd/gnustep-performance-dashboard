@@ -154,8 +154,11 @@ and `gstrace` use.
   `LD_PRELOAD`); use attach.
 - Leak detection is conservative: a stale pointer-sized value can keep a
   leaked block alive (a missed leak), and pointers hidden by encodings the
-  scanner does not understand can produce false reports. Self-relative
-  offsets of the kind fontconfig uses are followed.
+  scanner does not understand can produce false reports. Objective-C objects
+  are matched strictly (only pointers to the object count), so leaked
+  objects and retain cycles are found reliably; leaks of plain C blocks in
+  programs that churn the heap may be missed, as with any conservative
+  scanner. Self-relative offsets of the kind fontconfig uses are followed.
 - The System Time Profiler uses frame-pointer call chains from the kernel;
   code built without frame pointers shows shallow stacks there.
 - Retain/release history covers `objc_retain`/`objc_release`/

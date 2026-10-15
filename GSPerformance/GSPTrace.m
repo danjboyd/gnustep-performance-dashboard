@@ -131,6 +131,8 @@ typedef struct pending_ref
   uint32_t _interval, _wallInterval;
   uint64_t _dropped;
   BOOL _samplesSorted;
+@public
+  BOOL _changed;
 }
 
 - (instancetype) initWithPath: (NSString *)path
@@ -821,6 +823,7 @@ compare_raw_signposts(const void *a, const void *b)
       _haveHeader = YES;
     }
 
+  unsigned long long before = _offset;
   while (_offset + sizeof(gsp_record) <= length)
     {
       const gsp_record *r = (const gsp_record *)(bytes + _offset);
@@ -832,7 +835,11 @@ compare_raw_signposts(const void *a, const void *b)
                   length: r->size - sizeof(gsp_record)];
       _offset += r->size;
     }
-  [self resolve];
+  if (_offset != before)
+    {
+      [self resolve];
+      _changed = YES;
+    }
   return YES;
 }
 
@@ -840,6 +847,7 @@ compare_raw_signposts(const void *a, const void *b)
 
 @implementation GSPTrace
 {
+  BOOL _changed;
   NSString *_path;
   NSDictionary *_info;
   NSMutableArray *_processes;
@@ -859,6 +867,10 @@ compare_raw_signposts(const void *a, const void *b)
 {
   NSFileManager *fm = [NSFileManager defaultManager];
   BOOL isDir = NO;
+  NSUInteger processCount = [_processes count];
+
+  for (GSPProcess *p in _processes)
+    p->_changed = NO;
 
   if (![fm fileExistsAtPath: _path isDirectory: &isDir] || !isDir)
     {
@@ -894,6 +906,9 @@ compare_raw_signposts(const void *a, const void *b)
       else if (![proc parseMore: error])
         return NO;
     }
+  _changed = [_processes count] != processCount;
+  for (GSPProcess *p in _processes)
+    _changed |= p->_changed;
   if ([_processes count] == 0)
     {
       if (error)
@@ -907,6 +922,7 @@ compare_raw_signposts(const void *a, const void *b)
 }
 
 - (NSString *) path { return _path; }
+- (BOOL) changedOnLastReload { return _changed; }
 - (NSDictionary *) info { return _info; }
 - (NSArray *) processes { return _processes; }
 

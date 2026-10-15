@@ -162,6 +162,8 @@ typedef struct GSPRefCountEvent
 
 /* Re-read event streams that grew (live recording). */
 - (BOOL) reload: (NSError **)error;
+/* Whether the last -reload: found new data. */
+@property (nonatomic, readonly) BOOL changedOnLastReload;
 
 @property (nonatomic, readonly, copy) NSString *path;
 @property (nonatomic, readonly) NSDictionary *info;      /* Info.plist */
