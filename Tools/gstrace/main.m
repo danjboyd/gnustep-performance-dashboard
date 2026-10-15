@@ -901,30 +901,15 @@ cmd_install_helper(NSArray *args)
   /* Find the helper and policy next to this tool (build tree or install),
      copy them somewhere root can read, then run the helper's installer
      through pkexec.  */
-  NSString *exe = [[NSBundle mainBundle] executablePath];
-  NSString *dir = [exe stringByDeletingLastPathComponent];
   NSFileManager *fm = [NSFileManager defaultManager];
-  NSArray *helperCandidates = [NSArray arrayWithObjects:
-    [dir stringByAppendingPathComponent: @"gstrace-helper"],
-    [dir stringByAppendingPathComponent: @"../../gstrace-helper/gstrace-helper"],
-    [dir stringByAppendingPathComponent: @"../libexec/gstrace-helper"], nil];
-  NSString *helper = nil;
-  for (NSString *c in helperCandidates)
-    if ([fm isExecutableFileAtPath: [c stringByStandardizingPath]])
-      {
-        helper = [c stringByStandardizingPath];
-        break;
-      }
+  NSString *helper = [GSPRecorder bundledHelperPath];
   if (helper == nil)
     {
-      err(@"cannot find gstrace-helper next to gstrace");
+      err(@"cannot find gstrace-helper (expected next to gstrace or in libexec/gnustep-instruments)");
       return 1;
     }
   NSString *policy = [[helper stringByDeletingLastPathComponent]
     stringByAppendingPathComponent: @"org.gnustep.instruments.policy"];
-  if (![fm fileExistsAtPath: policy])
-    policy = [[helper stringByDeletingLastPathComponent]
-      stringByAppendingPathComponent: @"../share/polkit-1/actions/org.gnustep.instruments.policy"];
   NSString *staging = [NSTemporaryDirectory() stringByAppendingPathComponent:
     [NSString stringWithFormat: @"gstrace-helper-%d", getpid()]];
   [fm createDirectoryAtPath: staging withIntermediateDirectories: YES attributes:
@@ -933,7 +918,7 @@ cmd_install_helper(NSArray *args)
   NSString *h2 = [staging stringByAppendingPathComponent: @"gstrace-helper"];
   NSString *p2 = [staging stringByAppendingPathComponent: @"org.gnustep.instruments.policy"];
   [fm copyItemAtPath: helper toPath: h2 error: NULL];
-  [fm copyItemAtPath: [policy stringByStandardizingPath] toPath: p2 error: NULL];
+  [fm copyItemAtPath: policy toPath: p2 error: NULL];
   out([NSString stringWithFormat: @"Installing %@ (you will be asked for an administrator password)\n",
        [GSPRecorder helperInstallLocation]]);
   NSTask *task = [NSTask launchedTaskWithLaunchPath: @"/usr/bin/pkexec"

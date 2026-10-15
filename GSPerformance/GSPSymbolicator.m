@@ -608,6 +608,11 @@ static char *(*cxa_demangle)(const char *, char *, size_t *, int *);
     }
   sym.name = name;
   sym.start = start;
+  if ([name hasSuffix: @" [kernel]"])
+    {
+      sym.isSystem = YES;
+      sym.imagePath = @"[kernel]";
+    }
   [_cache setObject: sym forKey: key];
   return sym;
 }
