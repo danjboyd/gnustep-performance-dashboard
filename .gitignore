@@ -1,0 +1,8 @@
+obj/
+*.o
+*.d
+*.app/
+*.bundle/
+*.gstrace/
+Tests/out/
+build/
