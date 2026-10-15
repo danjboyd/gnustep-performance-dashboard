@@ -6,6 +6,23 @@
 #include <GSPerformance/gsp_format.h>
 #include <GSPerformance/gsp_signpost.h>
 
+/* Right-clicking selects the row under the pointer, so the context menu
+   acts on it (GNUstep does not set the clicked row for menu events).  */
+@interface INOutlineView : NSOutlineView
+@end
+
+@implementation INOutlineView
+- (NSMenu *) menuForEvent: (NSEvent *)event
+{
+  NSInteger row = [self rowAtPoint: [self convertPoint: [event locationInWindow]
+                                              fromView: nil]];
+  if (row >= 0)
+    [self selectRowIndexes: [NSIndexSet indexSetWithIndex: (NSUInteger)row]
+      byExtendingSelection: NO];
+  return [super menuForEvent: event];
+}
+@end
+
 /* A row in list-style modes. */
 @interface INRow : NSObject
 @property (nonatomic, strong) NSMutableDictionary *values;  /* column id -> string */
@@ -71,6 +88,8 @@ responsible_frame(GSPProcess *p, uint32_t stack)
   BOOL _weightIsBytes;
   NSMapTable *_filtered;        /* node -> filtered children */
   NSString *_filterText;
+  NSMutableSet *_charged, *_pruned;   /* data mining */
+  NSString *_focus;
 
   /* list modes */
   NSMutableArray *_rows;
@@ -156,7 +175,7 @@ check_box(NSString *title, NSRect frame, id target, SEL action)
   [_scroll setHasHorizontalScroller: YES];
   [_scroll setBorderType: NSBezelBorder];
   [_scroll setAutoresizingMask: NSViewWidthSizable | NSViewHeightSizable];
-  _outline = [[NSOutlineView alloc] initWithFrame: [[_scroll contentView] bounds]];
+  _outline = [[INOutlineView alloc] initWithFrame: [[_scroll contentView] bounds]];
   [_outline setDataSource: self];
   [_outline setDelegate: self];
   [_outline setUsesAlternatingRowBackgroundColors: YES];
@@ -171,7 +190,91 @@ check_box(NSString *title, NSRect frame, id target, SEL action)
   _filtered = [NSMapTable mapTableWithKeyOptions: NSPointerFunctionsObjectPointerPersonality
                                     valueOptions: NSPointerFunctionsStrongMemory];
   _allocCategory = UINT32_MAX;
+  _charged = [NSMutableSet set];
+  _pruned = [NSMutableSet set];
+  [_outline setMenu: [self dataMiningMenu]];
   return self;
+}
+
+/* ------------------------------------------------------------------ */
+/* data mining (call tree context menu)                                */
+
+- (NSMenu *) dataMiningMenu
+{
+  NSMenu *m = [[NSMenu alloc] initWithTitle: @"Data Mining"];
+  [[m addItemWithTitle: @"Charge Symbol to Caller" action: @selector(chargeToCaller:)
+         keyEquivalent: @""] setTarget: self];
+  [[m addItemWithTitle: @"Prune Symbol and Subtree" action: @selector(pruneSymbol:)
+         keyEquivalent: @""] setTarget: self];
+  [[m addItemWithTitle: @"Focus on Symbol" action: @selector(focusSymbol:)
+         keyEquivalent: @""] setTarget: self];
+  [[m addItemWithTitle: @"Restore All" action: @selector(restoreDataMining:)
+         keyEquivalent: @""] setTarget: self];
+  return m;
+}
+
+- (GSPCallTreeNode *) clickedNode
+{
+  NSInteger row = [_outline selectedRow];
+  id item = row >= 0 ? [_outline itemAtRow: row] : nil;
+  return [item isKindOfClass: [GSPCallTreeNode class]] && ![item isThread] ? item : nil;
+}
+
+- (void) applyDataMining
+{
+  _tree.chargedToCaller = _charged;
+  _tree.pruned = _pruned;
+  _tree.focusSymbol = _focus;
+  [_tree rebuild];
+  [self applyFilter];
+  [_outline reloadData];
+  [self expandHeaviest];
+  NSMutableArray *notes = [NSMutableArray array];
+  if ([_charged count])
+    [notes addObject: [NSString stringWithFormat: @"%lu charged to caller", (unsigned long)[_charged count]]];
+  if ([_pruned count])
+    [notes addObject: [NSString stringWithFormat: @"%lu pruned", (unsigned long)[_pruned count]]];
+  if (_focus)
+    [notes addObject: [NSString stringWithFormat: @"focused on %@", _focus]];
+  if ([notes count])
+    [_status setStringValue: [NSString stringWithFormat: @"Data mining: %@ (right-click, Restore All)",
+                              [notes componentsJoinedByString: @", "]]];
+}
+
+- (void) chargeToCaller: (id)sender
+{
+  GSPCallTreeNode *n = [self clickedNode];
+  if (n == nil || ![self isCallTreeMode])
+    return;
+  [_charged addObject: n.name];
+  [self applyDataMining];
+}
+
+- (void) pruneSymbol: (id)sender
+{
+  GSPCallTreeNode *n = [self clickedNode];
+  if (n == nil || ![self isCallTreeMode])
+    return;
+  [_pruned addObject: n.name];
+  [self applyDataMining];
+}
+
+- (void) focusSymbol: (id)sender
+{
+  GSPCallTreeNode *n = [self clickedNode];
+  if (n == nil || ![self isCallTreeMode])
+    return;
+  _focus = [n.name copy];
+  [self applyDataMining];
+}
+
+- (void) restoreDataMining: (id)sender
+{
+  [_charged removeAllObjects];
+  [_pruned removeAllObjects];
+  _focus = nil;
+  if ([self isCallTreeMode])
+    [self reload];
 }
 
 /* ------------------------------------------------------------------ */
@@ -364,6 +467,13 @@ col(NSString *ident, NSString *title, CGFloat width)
   [[[_outline tableColumnWithIdentifier: @"self"] headerCell]
     setStringValue: _weightIsBytes ? @"Self Bytes" : @"Self Weight"];
   _weightScale = _weightIsBytes ? 1 : (p.sampleIntervalMicroseconds ?: 1000) / 1e6;
+  if ([_charged count] || [_pruned count] || _focus)
+    {
+      _tree.chargedToCaller = _charged;
+      _tree.pruned = _pruned;
+      _tree.focusSymbol = _focus;
+      [_tree rebuild];
+    }
   [self applyFilter];
   [_status setStringValue: _weightIsBytes
     ? [NSString stringWithFormat: @"%@ in %llu allocations",

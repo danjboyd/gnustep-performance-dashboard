@@ -64,6 +64,7 @@
   GSPProcess *_process;
   GSPCallTreeNode *_root;
   uint64_t _total;
+  NSData *_input;
 }
 
 - (instancetype) initWithProcess: (GSPProcess *)process
@@ -203,9 +204,18 @@
   return frames;
 }
 
+- (void) rebuild
+{
+  NSData *input = _input;
+  [self buildFromStacks: [input bytes] count: [input length] / sizeof(GSPWeightedStack)];
+}
+
 - (void) buildFromStacks: (const GSPWeightedStack *)stacks count: (NSUInteger)count
 {
   NSMutableDictionary *cache = [NSMutableDictionary dictionary];
+
+  if (stacks != [_input bytes])
+    _input = [NSData dataWithBytes: stacks length: count * sizeof(GSPWeightedStack)];
   BOOL invert = (_options & GSPCallTreeInvert) != 0;
   BOOL byThread = (_options & GSPCallTreeSeparateByThread) != 0;
   BOOL top = (_options & GSPCallTreeTopFunctions) != 0;

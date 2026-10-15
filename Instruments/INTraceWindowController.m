@@ -524,6 +524,29 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
     _timeline.visibleStart = MAX(0, (s + e) / 2 - _timeline.visibleDuration / 2);
 }
 
+/* View menu actions arrive through the window delegate; the timeline
+   does the work whether or not it is first responder.  */
+- (void) zoomIn: (id)sender { [_timeline zoomIn: sender]; }
+- (void) zoomOut: (id)sender { [_timeline zoomOut: sender]; }
+- (void) zoomToFit: (id)sender { [_timeline zoomToFit: sender]; }
+- (void) zoomToSelection: (id)sender { [_timeline zoomToSelection: sender]; }
+- (void) clearSelection { [_timeline clearSelection]; }
+
+- (BOOL) validateMenuItem: (NSMenuItem *)item
+{
+  SEL a = [item action];
+  if (a == @selector(startRecording:))
+    return !_recorder.isRecording && (_options != nil
+                                      || [_trace.info objectForKey: @"TargetPath"] != nil);
+  if (a == @selector(stopRecording:))
+    return _recorder.isRecording;
+  if (a == @selector(checkForLeaksNow:))
+    return _recorder.isRecording && [_options.instrumentIdentifiers containsObject: GSPInstrumentLeaks];
+  if (a == @selector(saveTraceAs:) || a == @selector(exportTrace:))
+    return _trace != nil && !_recorder.isRecording;
+  return YES;
+}
+
 - (BOOL) windowShouldClose: (id)sender
 {
   if (_recorder.isRecording)

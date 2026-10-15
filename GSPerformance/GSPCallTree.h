@@ -63,6 +63,9 @@ typedef struct GSPWeightedStack
 
 - (instancetype) initWithProcess: (GSPProcess *)process;
 - (void) buildFromStacks: (const GSPWeightedStack *)stacks count: (NSUInteger)count;
+/* Build again from the last input, e.g. after changing the options or the
+   data-mining sets. */
+- (void) rebuild;
 
 @property (nonatomic, readonly) GSPCallTreeNode *root;
 @property (nonatomic, readonly) uint64_t totalWeight;
