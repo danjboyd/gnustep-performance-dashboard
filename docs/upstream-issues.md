@@ -23,6 +23,20 @@ clicks are detected — in the wrong column.
 
 Workaround: the call tree puts Symbol Name first.
 
+## libs-gui: `+[NSBitmapImageRep _bitmapIsJPEG:]` leaks 72 bytes per non-JPEG image
+
+Found with the Leaks template on Gorm (185 leaks) and reproduced with a
+ten-line program that calls `+imageRepsWithData:` on a TIFF ten times: all
+ten 72-byte blocks allocated by `gs_jpeg_memory_src_create`
+(`sizeof(gs_jpeg_source_mgr)`) stay live. On non-JPEG data
+`jpeg_read_header` longjmps back to the `setjmp` branch, which should free
+`cinfo.src`. `cinfo` is a non-volatile local modified after `setjmp`, so
+its value there is indeterminate; at -O2 the compiler can use the value it
+had at `setjmp` time (NULL from the memset) and `free(NULL)`. Likely fix:
+declare `cinfo` (and `jerrMgr`) `volatile`, or keep the source manager
+pointer in a volatile local and free that. Same pattern in
+`-_initBitmapFromJPEG:errorMessage:`.
+
 ## (Retracted) libs-back font strings
 
 About 1,900 `GSCInlineString`s from `FCFontEnumerator` were reported as
