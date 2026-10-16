@@ -1,6 +1,8 @@
 **Repository:** gnustep/libobjc2
 
-**Status:** draft, not reviewed. Under `docs/upstream-policy.md` this report
+**Filed:** [gnustep/libobjc2#433](https://github.com/gnustep/libobjc2/issues/433), 2026-10-16, as approved at e2e420d (the text below the line).
+
+**Status:** sent. Under `docs/upstream-policy.md` this report
 contains no code of ours. The reproducer `getclasslist_overallocate.c` next
 to this file is for our own checks and is not sent unless Dan decides
 otherwise.

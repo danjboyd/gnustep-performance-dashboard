@@ -222,12 +222,12 @@ Tests/Scripts/gcc-syntax-check.sh --files docs/upstream-issues/outline_column.m
 
 ## Where things stand (2026-10-16)
 
-Nothing from this project has been sent upstream. The findings are listed
-in `upstream-issues.md`:
+Findings are listed in `upstream-issues.md`:
 
-- **libobjc2 `objc_getClassList` double free:** drafted as a bug report
-  with no code (see libobjc2 above), not reviewed. Our workaround stays
-  until it is fixed upstream.
+- **libobjc2 `objc_getClassList` double free:** filed as
+  [libobjc2#433](https://github.com/gnustep/libobjc2/issues/433) on
+  2026-10-16, a bug report with no code. Our workaround stays until it is
+  fixed upstream.
 - **libs-gui outline column** and **libs-gui JPEG probe leak:** leads
   only. Neither has a draft, a GCC-clean reproducer, a run on current
   master or a duplicate check yet (Stage 1).

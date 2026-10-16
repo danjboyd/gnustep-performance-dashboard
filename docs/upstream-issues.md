@@ -9,8 +9,10 @@ verified to that standard. Each has a workaround here.
 
 ## libobjc2: `objc_getClassList` double-frees its enumerator
 
-**Status:** drafted, not reviewed:
-`upstream-issues/1-libobjc2-getclasslist-double-free.md`. A bug report
+**Status:** filed as
+[gnustep/libobjc2#433](https://github.com/gnustep/libobjc2/issues/433)
+on 2026-10-16 (draft:
+`upstream-issues/1-libobjc2-getclasslist-double-free.md`). A bug report
 only; libobjc2 accepts no AI-generated code, so the report describes the
 bug in prose and the maintainer writes the fix (`upstream-policy.md`).
 
