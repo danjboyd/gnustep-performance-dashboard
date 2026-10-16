@@ -3,7 +3,7 @@
 Public releases go through the shared GNUstep release toolchain
 (gnustep-packager + gnustep-cli-new). No release has been made yet. This file
 records the conventions to follow so the design stays release-ready, and how
-the Linux AppImage is built.
+the packages are built.
 
 ## Conventions
 
@@ -11,15 +11,16 @@ the Linux AppImage is built.
   `vX.Y.Z-rcN` published as GitHub pre-releases and tested on every platform
   (install, launch, in-app update) before the final.
 - Every tag and publish is approved by Dan directly in this session.
-- Assets: `PerformanceDashboard-<version>-x86_64.AppImage` (+ `.zsync`),
-  `PerformanceDashboard-<version>-win64.msi`, `PerformanceDashboard-<version>-win64-portable.zip`,
-  plus `SHA256SUMS`, the packager's `provenance.json` and the update feed.
+- Assets: `PerformanceDashboard-<version>-x86_64.AppImage`,
+  `PerformanceDashboard-<version>-win64.msi`, plus `SHA256SUMS` and the
+  provenance files (later: the AppImage's `.zsync` and the update feed).
 - README leads with a download table, per-platform install steps (including
   the unsigned-binary SmartScreen workaround), real screenshots, then
   build-from-source.
-- Packaging is described by `package.manifest.json` (gnustep-packager
-  `docs/consumer-setup.md`), using `themeInputs` for Adwaita (Linux) and
-  WinUITheme (Windows) and `packagedDefaults.defaultTheme`.
+- Packaging is described by `packaging/package.manifest.json`
+  (gnustep-packager `docs/consumer-setup.md`): Adwaita is staged by
+  `scripts/package-stage.sh` for Linux, WinUITheme comes from `themeInputs`
+  for Windows (`platformOverrides.windows`).
 - Commits as `Daniel Boyd <danieljboyd@icloud.com>`.
 
 ## Building the Linux AppImage
@@ -43,16 +44,44 @@ gnustep-cli-new install (`GNUSTEP_CLI_ROOT`, default
   inputs (Adwaita, gnustep-packager, appimagetool; libs-back with its
   patches), checked out by `scripts/pinned-checkout.sh` into `out/`.
 - `scripts/check-appimage-record.sh`: the release check that the AppImage
-  records a program (Leaks template, a fixture with ten known leaks) and
-  quits on SIGTERM.
+  records a program (Leaks template, a fixture with ten known leaks), quits
+  on SIGTERM, and that its bundled `gstrace` records the same.
 
 The output goes to `dist/packages`: the AppImage, the packager's metadata,
 diagnostics and provenance files, and our provenance JSON (commit, pins,
 build IDs, checks).
 
-Not done yet: the Windows MSI (it needs a Windows host or CI runner), the
-update feed and in-app updates (`updates` is disabled in the manifest), and a
-release workflow.
+## The Windows MSI
+
+Built on GitHub's `windows-latest` runner by gnustep-packager's reusable
+workflow at its pin, with the gnustep-cli-new toolchain: the manifest's
+Windows overrides run `scripts/package-build-windows.ps1` and
+`scripts/package-stage-windows.ps1` (adapted from ScreenshotTool's), which
+stage the app, `gstrace.exe`, the recording agent, the DLLs the programs
+import (by import closure from CLANG64), GNUstep's resources and tools, a
+relocatable `GNUstep.conf` and the license notices. The packager adds
+WinUITheme, builds the MSI and a portable zip, installs the MSI, audits its
+runtime and launches it. The MSI is per-user and unsigned.
+
+## The release workflow
+
+`.github/workflows/release.yml` runs on `v*` tags, on `release/**` branches
+and by hand (with a version such as `0.1.0-rc1`):
+
+- `linux`: the AppImage in a Debian 13 container
+  (`scripts/ci-release-linux.sh`: the pinned gnustep-cli-new bootstrap and
+  PowerShell, then `scripts/package-linux.sh --release` with its checks).
+- `windows`: the MSI, as above.
+- `windows-record`: installs the MSI on a clean runner and records
+  `defaults.exe` with the installed `gstrace.exe`.
+- `release`: the AppImage and the MSI with `SHA256SUMS`, as the workflow
+  artifact "release".
+
+Nothing is signed, tagged or published by the workflow: a tag, and
+publishing the artifact as a GitHub release, each need Dan's approval.
+
+Not done yet: the update feed and in-app updates (`updates` is disabled in
+the manifest), and code signing.
 
 ## Design constraints that follow from packaging
 

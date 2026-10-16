@@ -25,6 +25,41 @@ launched by the recorder or attached to (see
 [docs/windows.md](docs/windows.md)). Not yet released; see
 [docs/release.md](docs/release.md).
 
+## Installing
+
+Releases will carry two packages, built on GitHub's runners
+([docs/release.md](docs/release.md)):
+
+| Platform | Package |
+|---|---|
+| Linux x86_64 | `PerformanceDashboard-<version>-x86_64.AppImage` |
+| Windows x86_64 | `PerformanceDashboard-<version>-win64.msi` |
+
+**Linux.** Make the AppImage executable and run it:
+
+```sh
+chmod +x PerformanceDashboard-*-x86_64.AppImage
+./PerformanceDashboard-*-x86_64.AppImage
+```
+
+It brings its own GNUstep runtime and the Adwaita theme; nothing is
+installed. Recording programs you launch needs no privileges. To attach to
+running processes, use **Performance Dashboard ▸ Install Profiling Helper…**
+once (see [Privileges](#privileges)). The command-line recorder is inside the
+AppImage: after `--appimage-extract`, run
+`squashfs-root/usr/runtime/bin/gstrace` with `LD_LIBRARY_PATH` set to
+`squashfs-root/usr/runtime/lib` and `GNUSTEP_CONFIG_FILE` to
+`squashfs-root/usr/runtime/etc/GNUstep/GNUstep.conf`.
+
+**Windows.** Run the MSI. It installs for the current user only, with no
+administrator rights, under `%LOCALAPPDATA%\Performance Dashboard`, and adds
+a Start menu shortcut. The installer is not code-signed yet, so Windows
+SmartScreen may say "Windows protected your PC": choose **More info**, then
+**Run anyway**. `gstrace.exe` is in the install's `runtime\bin`.
+
+Both packages are checked before release: each records a program with the
+Leaks template, from the app and from `gstrace`.
+
 ## Instruments
 
 | Instrument | What it records |
