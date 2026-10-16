@@ -63,7 +63,13 @@ make_button(NSString *title, NSRect frame, id target, SEL action)
 + (GSPRecordingOptions *) runPanelWithTemplate: (NSString *)templateName
 {
   INRecordPanel *p = [INRecordPanel new];
-  return [p run: templateName];
+  return [p run: templateName initial: nil];
+}
+
++ (GSPRecordingOptions *) runPanelWithOptions: (GSPRecordingOptions *)options
+{
+  INRecordPanel *p = [INRecordPanel new];
+  return [p run: options.templateName initial: options];
 }
 
 - (void) build
@@ -156,9 +162,31 @@ make_button(NSString *title, NSRect frame, id target, SEL action)
   [_panel center];
 }
 
-- (GSPRecordingOptions *) run: (NSString *)templateName
+- (void) fillFromOptions: (GSPRecordingOptions *)o
+{
+  NSMutableArray *args = [NSMutableArray array];
+  NSMutableArray *env = [NSMutableArray array];
+  NSCharacterSet *special = [NSCharacterSet characterSetWithCharactersInString: @" \t\"'"];
+
+  for (NSString *a in o.arguments)
+    if ([a length] == 0 || [a rangeOfCharacterFromSet: special].location != NSNotFound)
+      [args addObject: [NSString stringWithFormat:
+        [a rangeOfString: @"'"].location == NSNotFound ? @"'%@'" : @"\"%@\"", a]];
+    else
+      [args addObject: a];
+  for (NSString *k in [[o.environment allKeys] sortedArrayUsingSelector: @selector(compare:)])
+    [env addObject: [NSString stringWithFormat: @"%@=%@", k, [o.environment objectForKey: k]]];
+  [_target setStringValue: o.executablePath ?: @""];
+  [_args setStringValue: [args componentsJoinedByString: @" "]];
+  [_env setStringValue: [env componentsJoinedByString: @" "]];
+  [_cwd setStringValue: o.workingDirectory ?: @""];
+}
+
+- (GSPRecordingOptions *) run: (NSString *)templateName initial: (GSPRecordingOptions *)initial
 {
   [self build];
+  if (initial != nil)
+    [self fillFromOptions: initial];
   NSString *want = templateName ?: [[NSUserDefaults standardUserDefaults]
                                      stringForKey: @"INLastTemplate"] ?: @"Time Profiler";
   NSUInteger idx = 0;

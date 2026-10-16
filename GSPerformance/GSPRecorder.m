@@ -424,6 +424,14 @@ under(NSString *value, NSString *root)
 {
   NSFileManager *fm = [NSFileManager defaultManager];
 
+  /* A relative target path would be looked up in the target's working
+     directory; make it absolute now (and in Info.plist) instead.  */
+  NSString *exe = _options.executablePath;
+  if (!_options.attachPID && [exe length] && ![exe isAbsolutePath]
+      && [exe rangeOfString: @"/"].location != NSNotFound)
+    _options.executablePath = [[[fm currentDirectoryPath]
+      stringByAppendingPathComponent: exe] stringByStandardizingPath];
+
   _tracePath = [_options.outputPath copy];
   if (_tracePath == nil)
     _tracePath = [GSPRecorder defaultTracePathForExecutable: _options.executablePath

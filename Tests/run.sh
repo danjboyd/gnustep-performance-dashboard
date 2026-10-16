@@ -105,6 +105,11 @@ check "files: failed opens recorded as errors" "grep -E -q '/nonexistent/iofix +
 check "files: call tree attributes I/O to write_file and read_file" "grep -q write_file '$OUT/io-tree.txt' && grep -q read_file '$OUT/io-tree.txt'"
 check "network: 5000 bytes sent and received over loopback" "grep -E -q '^127.0.0.1:[0-9]+ +1 +0 +0 Bytes +1 +4.88 KiB' '$OUT/io-net.txt' && grep -E -q '^127.0.0.1:[0-9]+ +1 +1 +4.88 KiB' '$OUT/io-net.txt'"
 
+echo "== Relative target path with another working directory"
+record relpath --template "Time Profiler" --cwd / --launch Tests/out/cburn
+check "relative target: launched and recorded" "'$GSTRACE' info '$OUT/relpath.gstrace' 2>/dev/null | grep -q 'finished cleanly: yes'"
+check "relative target: Info.plist stores the absolute path" "grep -q 'TargetPath = \"$OUT/cburn\"' '$OUT/relpath.gstrace/Info.plist'"
+
 echo "== Zombies"
 record zombie --template Zombies --launch "$OUT/objcwork" zombie
 "$GSTRACE" report "$OUT/zombie.gstrace" zombies >"$OUT/zombie.txt" 2>/dev/null

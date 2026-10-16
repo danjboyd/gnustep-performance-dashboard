@@ -4,6 +4,8 @@
 #import "INDetailController.h"
 #import "INInspectorView.h"
 #import "INTheme.h"
+#import "INAppController.h"
+#import "INRecordPanel.h"
 
 @interface INTraceWindowController () <INTimelineDelegate, INDetailControllerDelegate,
                                        GSPRecorderDelegate, NSWindowDelegate>
@@ -171,7 +173,6 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
       _tracePath = [path copy];
       [self buildWindow];
       [self attachTrace: trace];
-      [_recordButton setEnabled: [trace.info objectForKey: @"TargetPath"] != nil];
       [self updateLabels];
     }
   return self;
@@ -322,15 +323,24 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
 {
   if (_options == nil)
     {
-      /* re-record the same target with the same template */
+      /* An opened trace: show the template chooser (or the process list
+         for an attached trace) set up like this trace, and record into a
+         new window so this one stays as it is.  */
       NSDictionary *info = _trace.info;
-      if ([info objectForKey: @"TargetPath"] == nil)
-        return;
-      _options = [GSPRecordingOptions new];
-      _options.executablePath = [info objectForKey: @"TargetPath"];
-      _options.arguments = [info objectForKey: @"Arguments"] ?: [NSArray array];
-      _options.templateName = _trace.templateName;
-      _options.instrumentIdentifiers = _trace.instrumentIdentifiers;
+      GSPRecordingOptions *o;
+      if ([[info objectForKey: @"Attached"] boolValue])
+        o = [INAttachPanel runPanel];
+      else
+        {
+          GSPRecordingOptions *initial = [GSPRecordingOptions new];
+          initial.templateName = _trace.templateName;
+          initial.executablePath = [info objectForKey: @"TargetPath"];
+          initial.arguments = [info objectForKey: @"Arguments"];
+          o = [INRecordPanel runPanelWithOptions: initial];
+        }
+      if (o != nil)
+        [(INAppController *)[NSApp delegate] startRecordingWithOptions: o];
+      return;
     }
   _options.outputPath = [self temporaryTracePath];
   _options.captureOutput = YES;
@@ -550,8 +560,7 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
 {
   SEL a = [item action];
   if (a == @selector(startRecording:))
-    return !_recorder.isRecording && (_options != nil
-                                      || [_trace.info objectForKey: @"TargetPath"] != nil);
+    return !_recorder.isRecording;
   if (a == @selector(stopRecording:))
     return _recorder.isRecording;
   if (a == @selector(checkForLeaksNow:))
