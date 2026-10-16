@@ -25,7 +25,13 @@ API_OBJS = $(OBJDIR)/gsp_signpost_api.o
 UNAME := $(shell uname -s 2>/dev/null)
 WINDOWS := $(findstring MINGW,$(UNAME))$(findstring MSYS,$(UNAME))
 
+$(OBJDIR):
+	mkdir -p $(OBJDIR)
+
 ifneq (,$(WINDOWS))
+ifeq ($(origin CC),default)
+CC = clang
+endif
 # Windows: gsperf-agent.dll (injected by the recorder) and gsperf.dll with
 # its import library for applications that emit signposts.
 all: $(OBJDIR)/gsperf-agent.dll $(OBJDIR)/gsperf.dll
@@ -47,9 +53,6 @@ install: all
 	install -m 644 include/os/*.h $(DESTDIR)$(HEADER_PREFIX)/os/
 else
 all: $(OBJDIR)/libgsperf-agent.so $(OBJDIR)/libgsperf.so
-
-$(OBJDIR):
-	mkdir -p $(OBJDIR)
 
 $(OBJDIR)/%.o: %.c gsp_internal.h include/GSPerformance/gsp_format.h \
                include/GSPerformance/gsp_signpost.h | $(OBJDIR)
