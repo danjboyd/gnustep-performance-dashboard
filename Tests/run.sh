@@ -201,6 +201,18 @@ if [ "${SKIP_GUI:-0}" != 1 ] && command -v Xvfb >/dev/null 2>&1; then
       else wait "$1"; STATUS=$?; fi
     }
     key() { DISPLAY=$DISP xdotool key --window "$1" "$2"; }
+    # diagnose <name>: the screen, the windows and the app's log, kept in
+    # Tests/out (CI uploads them when the suite fails).
+    diagnose() {
+      if command -v import >/dev/null 2>&1; then
+        DISPLAY=$DISP import -window root "$OUT/gui-$1.png" 2>/dev/null
+      elif command -v xwd >/dev/null 2>&1; then
+        DISPLAY=$DISP xwd -root -silent -out "$OUT/gui-$1.xwd" 2>/dev/null
+      fi
+      { echo "== windows"; DISPLAY=$DISP xdotool search --name '.' getwindowname %@ 2>/dev/null
+        echo "== focus"; DISPLAY=$DISP xdotool getwindowfocus getwindowname 2>/dev/null
+        echo "== app log"; tail -40 "$OUT/gui.log"; } >"$OUT/gui-$1.txt" 2>&1
+    }
     # Ctrl+R and Ctrl+Q are the shortcuts only when Control is GNUstep's
     # Command key; its default is Alt (CI has no user defaults).
     KEYS="-GSFirstCommandKey Control_L -GSSecondCommandKey Control_R"
@@ -214,6 +226,7 @@ if [ "${SKIP_GUI:-0}" != 1 ] && command -v Xvfb >/dev/null 2>&1; then
     [ -n "$W" ] && key "$W" ctrl+r
     P=$(window_id "Choose a Profiling Template" 10)
     check "app: Record on an opened trace shows the template chooser" "[ -n '$P' ]"
+    [ -n "$P" ] || diagnose no-chooser
     # Xvfb has no window manager, so the panel is not the key window and
     # GNUstep takes the first click on it to activate it: click an empty
     # spot, then Record (its centre is 29 points above the content's
@@ -229,12 +242,15 @@ if [ "${SKIP_GUI:-0}" != 1 ] && command -v Xvfb >/dev/null 2>&1; then
       sleep 3
       n=$((n + 1))
     done
+    window_id 'objcwork — Time Profiler' 10 >/dev/null || diagnose no-recording
     check "app: the chooser records into a new window" "window_id 'objcwork — Time Profiler' 10 >/dev/null"
     sleep 3
     NEW=$(find "$TRACES" -maxdepth 1 -name 'objcwork*.gstrace' -newer "$OUT/gui.mark" | head -1)
     check "app: the new recording finished cleanly" "[ -n '$NEW' ] && '$GSTRACE' info '$NEW' 2>/dev/null | grep -q 'finished cleanly: yes'"
     check "app: the opened trace stays open" "window_id 'objcwork — Custom' 1 >/dev/null"
     [ -n "$W" ] && key "$W" ctrl+q
+    n=0; while [ $n -lt 10 ] && kill -0 $APID 2>/dev/null; do sleep 1; n=$((n + 1)); done
+    kill -0 $APID 2>/dev/null && diagnose no-quit
     wait_app $APID
     check "app: Quit exits with status 0 ($STATUS)" "[ $STATUS = 0 ]"
     check "app: no selector type mismatches logged" "! grep -q 'incorrect signature' '$OUT/gui.log'"
