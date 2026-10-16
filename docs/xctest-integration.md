@@ -2,13 +2,13 @@
 
 [tools-xctest](https://github.com/danjboyd/tools-xctest) already implements
 XCTest's performance API (`measureBlock:`, `XCTMetric`, baselines). These are
-the places where it and GNUstep Instruments can meet. Nothing here requires
-tools-xctest to depend on Instruments' framework or app.
+the places where it and Performance Dashboard can meet. Nothing here requires
+tools-xctest to depend on Performance Dashboard's framework or app.
 
 ## 1. XCTOSSignpostMetric
 
 Apple's `XCTOSSignpostMetric` measures the duration of signpost intervals
-emitted by the code under test. GNUstep Instruments ships `<os/signpost.h>`
+emitted by the code under test. Performance Dashboard ships `<os/signpost.h>`
 (libgsperf), so the metric can be implemented in tools-xctest by:
 
 - weak-linking or `dlopen`ing `libgsperf.so` (optional dependency), and

@@ -1,4 +1,4 @@
-/* gsp_format.h - on-disk layout of GNUstep Instruments event streams.
+/* gsp_format.h - on-disk layout of Performance Dashboard event streams.
 
    A trace is a directory bundle (Foo.gstrace/) holding an Info.plist written
    by the recorder and one event stream per traced process

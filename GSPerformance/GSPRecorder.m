@@ -207,7 +207,7 @@ make_error(NSInteger code, NSString *message)
       [candidates addObject: [lib stringByAppendingPathComponent:
         @"../../Tools/gstrace-helper/gstrace-helper"]];
       [candidates addObject: [lib stringByAppendingPathComponent:
-        @"../libexec/gnustep-instruments/gstrace-helper"]];
+        @"../libexec/performance-dashboard/gstrace-helper"]];
     }
   for (NSString *c in candidates)
     {
@@ -252,7 +252,7 @@ copy_private(NSString *from, NSString *to, mode_t mode)
       return nil;
     }
   NSString *policy = [[helper stringByDeletingLastPathComponent]
-    stringByAppendingPathComponent: @"org.gnustep.instruments.policy"];
+    stringByAppendingPathComponent: @"org.gnustep.performancedashboard.policy"];
   /* A fresh directory only this user can write: the root installer will
      copy whatever it finds there.  */
   char templ[PATH_MAX];
@@ -268,7 +268,7 @@ copy_private(NSString *from, NSString *to, mode_t mode)
   NSString *dir = [NSString stringWithUTF8String: templ];
   if (!copy_private(helper, [dir stringByAppendingPathComponent: @"gstrace-helper"], 0755)
       || !copy_private(policy, [dir stringByAppendingPathComponent:
-                                     @"org.gnustep.instruments.policy"], 0644))
+                                     @"org.gnustep.performancedashboard.policy"], 0644))
     {
       [[NSFileManager defaultManager] removeItemAtPath: dir error: NULL];
       if (error)
@@ -330,7 +330,7 @@ copy_private(NSString *from, NSString *to, mode_t mode)
 #endif
 
 /* When running from an AppImage, copy the agent out of the mount: the
-   target may outlive Instruments and the mount disappears with it.  */
+   target may outlive Performance Dashboard and the mount disappears with it.  */
 + (NSString *) stableAgentPath: (NSString *)agent
 {
   const char *appdir = getenv("APPDIR");
@@ -342,7 +342,7 @@ copy_private(NSString *from, NSString *to, mode_t mode)
   NSDictionary *attrs = [[NSFileManager defaultManager]
     attributesOfItemAtPath: agent error: NULL];
   NSString *dir = [base stringByAppendingPathComponent:
-    [NSString stringWithFormat: @"gnustep-instruments/%llu-%.0f",
+    [NSString stringWithFormat: @"performance-dashboard/%llu-%.0f",
      [attrs fileSize], [[attrs fileModificationDate] timeIntervalSince1970]]];
   NSString *dest = [dir stringByAppendingPathComponent: @"libgsperf-agent.so"];
   NSFileManager *fm = [NSFileManager defaultManager];
@@ -375,7 +375,7 @@ under(NSString *value, NSString *root)
 
   if (appdir != nil)
     {
-      /* Undo what an AppImage runtime added for Instruments itself.  */
+      /* Undo what an AppImage runtime added for Performance Dashboard itself.  */
       for (NSString *key in [env allKeys])
         {
           NSString *value = [env objectForKey: key];

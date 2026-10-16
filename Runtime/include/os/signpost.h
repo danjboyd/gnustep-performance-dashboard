@@ -1,4 +1,4 @@
-/* os/signpost.h - Apple's signpost API on top of GNUstep Instruments.
+/* os/signpost.h - Apple's signpost API on top of Performance Dashboard.
 
    Source written for Apple platforms compiles unchanged; link with -lgsperf.
    Apple restricts the name to a string literal and the format to a literal

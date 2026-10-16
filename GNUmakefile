@@ -1,4 +1,4 @@
-# GNUstep Instruments - top-level build.
+# Performance Dashboard - top-level build.
 #
 #   make            build everything
 #   make check      build, then run the regression suite
@@ -11,9 +11,9 @@
 UNAME := $(shell uname -s 2>/dev/null)
 WINDOWS := $(findstring MINGW,$(UNAME))$(findstring MSYS,$(UNAME))$(findstring mingw,$(GNUSTEP_HOST_OS))$(findstring windows,$(GNUSTEP_HOST_OS))
 ifneq (,$(WINDOWS))
-SUBDIRS = Runtime GSPerformance Tools/gstrace Instruments
+SUBDIRS = Runtime GSPerformance Tools/gstrace Dashboard
 else
-SUBDIRS = Runtime GSPerformance Tools/gstrace Tools/gstrace-helper Instruments
+SUBDIRS = Runtime GSPerformance Tools/gstrace Tools/gstrace-helper Dashboard
 endif
 
 all install clean:

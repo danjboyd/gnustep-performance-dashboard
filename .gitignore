@@ -8,3 +8,4 @@ Tests/out/
 build/
 *.xctest/
 !Tests/data/*.gstrace/
+Tools/gstrace-helper/gstrace-helper

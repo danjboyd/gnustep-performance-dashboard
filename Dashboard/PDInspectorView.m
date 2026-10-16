@@ -1,10 +1,10 @@
-#import "INInspectorView.h"
-#import "INTheme.h"
+#import "PDInspectorView.h"
+#import "PDTheme.h"
 
-@interface INInspectorView () <NSTableViewDataSource, NSTableViewDelegate>
+@interface PDInspectorView () <NSTableViewDataSource, NSTableViewDelegate>
 @end
 
-@implementation INInspectorView
+@implementation PDInspectorView
 {
   NSTextField *_title;
   NSTextView *_text;
@@ -29,7 +29,7 @@
       [_title setSelectable: YES];
       [_title setBezeled: NO];
       [_title setDrawsBackground: NO];
-      [_title setFont: [INTheme boldLabelFont]];
+      [_title setFont: [PDTheme boldLabelFont]];
       [_title setStringValue: @"Extended Detail"];
       [_title setAutoresizingMask: NSViewWidthSizable | NSViewMinYMargin];
       [self addSubview: _title];
@@ -41,7 +41,7 @@
       _text = [[NSTextView alloc] initWithFrame: [[_textScroll contentView] bounds]];
       [_text setEditable: NO];
       [_text setSelectable: YES];
-      [_text setFont: [INTheme smallFont]];
+      [_text setFont: [PDTheme smallFont]];
       [_text setAutoresizingMask: NSViewWidthSizable];
       [_textScroll setDocumentView: _text];
       [self addSubview: _textScroll];
@@ -49,7 +49,7 @@
       _sourceLines = [[NSButton alloc] initWithFrame: NSMakeRect(4, h - 146, w - 8, 20)];
       [_sourceLines setButtonType: NSSwitchButton];
       [_sourceLines setTitle: @"Show source lines"];
-      [_sourceLines setFont: [INTheme smallFont]];
+      [_sourceLines setFont: [PDTheme smallFont]];
       [_sourceLines setTarget: self];
       [_sourceLines setAction: @selector(toggleLines:)];
       [_sourceLines setAutoresizingMask: NSViewWidthSizable | NSViewMinYMargin];
@@ -165,9 +165,9 @@
 {
   GSPSymbol *s = [_symbols objectAtIndex: (NSUInteger)row];
   if ([cell respondsToSelector: @selector(setTextColor:)])
-    [cell setTextColor: s.isSystem ? [INTheme secondaryTextColor] : [INTheme textColor]];
+    [cell setTextColor: s.isSystem ? [PDTheme secondaryTextColor] : [PDTheme textColor]];
   if ([cell respondsToSelector: @selector(setFont:)])
-    [cell setFont: [INTheme smallFont]];
+    [cell setFont: [PDTheme smallFont]];
 
 }
 

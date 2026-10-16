@@ -1,5 +1,5 @@
-#import "INTrackRenderer.h"
-#import "INTheme.h"
+#import "PDTrackRenderer.h"
+#import "PDTheme.h"
 
 #include <GSPerformance/gsp_format.h>
 #include <GSPerformance/gsp_signpost.h>
@@ -7,7 +7,7 @@
 
 #define TRACK_HEIGHT 64.0
 
-@implementation INTrackRenderer
+@implementation PDTrackRenderer
 {
   NSArray *_tracks;
   GSPHangAnalysis *_hangs;
@@ -69,7 +69,7 @@
     [tracks addObject: GSPInstrumentTimeProfiler];
 
   /* Threads that used at least 2% of the CPU get their own sub-track
-     under the Time Profiler, as in Instruments.  */
+     under the Time Profiler, as in Apple Instruments.  */
   NSUInteger tp = [tracks indexOfObject: GSPInstrumentTimeProfiler];
   if (tp == NSNotFound)
     tp = [tracks indexOfObject: GSPInstrumentSystemProfiler];
@@ -168,12 +168,12 @@
 /* ------------------------------------------------------------------ */
 /* data source                                                         */
 
-- (NSUInteger) numberOfTracksInTimeline: (INTimelineView *)view
+- (NSUInteger) numberOfTracksInTimeline: (PDTimelineView *)view
 {
   return [_tracks count];
 }
 
-- (NSString *) timeline: (INTimelineView *)view titleOfTrack: (NSUInteger)track
+- (NSString *) timeline: (PDTimelineView *)view titleOfTrack: (NSUInteger)track
 {
   uint32_t tid = [self threadForTrack: track];
   if (tid)
@@ -194,7 +194,7 @@
   return (double)w * (_process.sampleIntervalMicroseconds ?: 1000) / 1e6;
 }
 
-- (NSString *) timeline: (INTimelineView *)view subtitleOfTrack: (NSUInteger)track
+- (NSString *) timeline: (PDTimelineView *)view subtitleOfTrack: (NSUInteger)track
 {
   NSString *ident = [self instrumentForTrack: track];
   if ([self threadForTrack: track])
@@ -243,7 +243,7 @@
   return nil;
 }
 
-- (CGFloat) timeline: (INTimelineView *)view heightOfTrack: (NSUInteger)track
+- (CGFloat) timeline: (PDTimelineView *)view heightOfTrack: (NSUInteger)track
 {
   return [self threadForTrack: track] ? 36.0 : TRACK_HEIGHT;
 }
@@ -268,7 +268,7 @@ draw_area(double *values, NSUInteger n, double maxValue, NSRect rect, NSColor *c
     }
   [path lineToPoint: NSMakePoint(NSMaxX(rect), bottom)];
   [path closePath];
-  [[INTheme color: color alpha: 0.45] set];
+  [[PDTheme color: color alpha: 0.45] set];
   [path fill];
   [color set];
   [path setLineWidth: 1];
@@ -279,7 +279,7 @@ static void
 draw_label(NSString *s, NSPoint p, NSColor *color)
 {
   NSDictionary *a = [NSDictionary dictionaryWithObjectsAndKeys:
-    [INTheme smallFont], NSFontAttributeName, color, NSForegroundColorAttributeName, nil];
+    [PDTheme smallFont], NSFontAttributeName, color, NSForegroundColorAttributeName, nil];
   [s drawAtPoint: p withAttributes: a];
 }
 
@@ -360,13 +360,13 @@ draw_label(NSString *s, NSPoint p, NSColor *color)
         peak = v[i];
     }
   double scale = MAX(100.0, ceil(peak / 100.0 - 0.15) * 100.0);
-  draw_area(v, n, scale, NSInsetRect(r, 0, 2), [INTheme cpuColor]);
+  draw_area(v, n, scale, NSInsetRect(r, 0, 2), [PDTheme cpuColor]);
   draw_label([NSString stringWithFormat: @"%.0f%%", scale],
-             NSMakePoint(r.origin.x + 4, r.origin.y), [INTheme secondaryTextColor]);
+             NSMakePoint(r.origin.x + 4, r.origin.y), [PDTheme secondaryTextColor]);
   free(v);
 }
 
-- (void) drawHangs: (NSRect)r from: (double)start to: (double)end view: (INTimelineView *)view
+- (void) drawHangs: (NSRect)r from: (double)start to: (double)end view: (PDTimelineView *)view
 {
   GSPHangAnalysis *h = [self hangAnalysis];
   if (h.runLoopDetected)
@@ -377,7 +377,7 @@ draw_label(NSString *s, NSPoint p, NSColor *color)
       [h busyFraction: busy buckets: n start: [self abs: start] end: [self abs: end]];
       NSRect graph = NSMakeRect(r.origin.x, r.origin.y + r.size.height * 0.5,
                                 r.size.width, r.size.height * 0.5);
-      draw_area(busy, n, 1.0, graph, [INTheme logColor]);
+      draw_area(busy, n, 1.0, graph, [PDTheme logColor]);
       free(busy);
     }
 
@@ -391,7 +391,7 @@ draw_label(NSString *s, NSPoint p, NSColor *color)
       CGFloat x0 = r.origin.x + (CGFloat)((hs - start) / span) * r.size.width;
       CGFloat x1 = r.origin.x + (CGFloat)((he - start) / span) * r.size.width;
       NSRect bar = NSMakeRect(x0, r.origin.y + 4, MAX(2, x1 - x0), r.size.height * 0.45);
-      [[INTheme hangColor: hang.severity] set];
+      [[PDTheme hangColor: hang.severity] set];
       NSRectFill(bar);
       if (bar.size.width > 60)
         draw_label([NSString stringWithFormat: @"%@ %@", hang.severityName,
@@ -401,7 +401,7 @@ draw_label(NSString *s, NSPoint p, NSColor *color)
   if (!h.runLoopDetected)
     draw_label(h.hasWallSamples ? @"Main thread never waited in a run loop"
                                 : @"No main-thread samples",
-               NSMakePoint(r.origin.x + 8, r.origin.y + 4), [INTheme secondaryTextColor]);
+               NSMakePoint(r.origin.x + 8, r.origin.y + 4), [PDTheme secondaryTextColor]);
 }
 
 - (NSUInteger) colorIndexForSignpost: (NSString *)name
@@ -430,7 +430,7 @@ draw_label(NSString *s, NSPoint p, NSColor *color)
         continue;
       CGFloat x0 = r.origin.x + (CGFloat)((bs - start) / span) * r.size.width;
       CGFloat x1 = r.origin.x + (CGFloat)((be - start) / span) * r.size.width;
-      NSColor *c = [INTheme signpostColor: [self colorIndexForSignpost: s.name]];
+      NSColor *c = [PDTheme signpostColor: [self colorIndexForSignpost: s.name]];
       NSUInteger lane = 0;
       for (lane = 0; lane < lanes; lane++)
         if (laneEnd[lane] < x0)
@@ -453,7 +453,7 @@ draw_label(NSString *s, NSPoint p, NSColor *color)
           continue;
         }
       NSRect bar = NSMakeRect(x0, y + 1, MAX(2, x1 - x0), laneH - 2);
-      [[INTheme color: c alpha: s.isOpen ? 0.45 : 0.85] set];
+      [[PDTheme color: c alpha: s.isOpen ? 0.45 : 0.85] set];
       NSRectFill(bar);
       if (bar.size.width > 40)
         draw_label(s.name, NSMakePoint(x0 + 3, y + 1), [NSColor whiteColor]);
@@ -470,7 +470,7 @@ draw_label(NSString *s, NSPoint p, NSColor *color)
       if (t < start || t > end)
         continue;
       CGFloat x = r.origin.x + (CGFloat)((t - start) / span) * r.size.width;
-      NSColor *c = m.level >= GSP_LOG_LEVEL_ERROR ? [INTheme leakColor] : [INTheme logColor];
+      NSColor *c = m.level >= GSP_LOG_LEVEL_ERROR ? [PDTheme leakColor] : [PDTheme logColor];
       [c set];
       NSRectFill(NSMakeRect(x, r.origin.y + 8, 2, r.size.height - 16));
     }
@@ -483,9 +483,9 @@ draw_label(NSString *s, NSPoint p, NSColor *color)
   double *v = calloc(n, sizeof(double));
   [a liveBytes: v buckets: n start: [self abs: start] end: [self abs: end]];
   double peak = MAX(1, (double)a.peakLiveBytes);
-  draw_area(v, n, peak, NSInsetRect(r, 0, 2), [INTheme allocationColor]);
+  draw_area(v, n, peak, NSInsetRect(r, 0, 2), [PDTheme allocationColor]);
   draw_label([GSPAllocationAnalysis formatBytes: (uint64_t)peak],
-             NSMakePoint(r.origin.x + 4, r.origin.y), [INTheme secondaryTextColor]);
+             NSMakePoint(r.origin.x + 4, r.origin.y), [PDTheme secondaryTextColor]);
   free(v);
 }
 
@@ -503,7 +503,7 @@ draw_label(NSString *s, NSPoint p, NSColor *color)
       CGFloat cy = r.origin.y + r.size.height / 2;
       NSRect dot = NSMakeRect(x - 7, cy - 7, 14, 14);
       NSBezierPath *circle = [NSBezierPath bezierPathWithOvalInRect: dot];
-      [(fresh ? [INTheme leakColor] : [INTheme okColor]) set];
+      [(fresh ? [PDTheme leakColor] : [PDTheme okColor]) set];
       [circle fill];
       NSBezierPath *mark = [NSBezierPath bezierPath];
       [mark setLineWidth: 2];
@@ -524,7 +524,7 @@ draw_label(NSString *s, NSPoint p, NSColor *color)
       [mark stroke];
       if (fresh)
         draw_label([NSString stringWithFormat: @"%lu new", (unsigned long)fresh],
-                   NSMakePoint(x + 10, cy - 7), [INTheme textColor]);
+                   NSMakePoint(x + 10, cy - 7), [PDTheme textColor]);
     }
 }
 
@@ -537,7 +537,7 @@ draw_label(NSString *s, NSPoint p, NSColor *color)
       if (t < start || t > end)
         continue;
       CGFloat x = r.origin.x + (CGFloat)((t - start) / span) * r.size.width;
-      [[INTheme zombieColor] set];
+      [[PDTheme zombieColor] set];
       NSRectFill(NSMakeRect(x, r.origin.y + 6, 2, r.size.height - 12));
       NSBezierPath *flag = [NSBezierPath bezierPath];
       [flag moveToPoint: NSMakePoint(x + 2, r.origin.y + 6)];
@@ -546,7 +546,7 @@ draw_label(NSString *s, NSPoint p, NSColor *color)
       [flag closePath];
       [flag fill];
       draw_label([NSString stringWithFormat: @"-%@", z.selector ?: @"?"],
-                 NSMakePoint(x + 16, r.origin.y + 6), [INTheme textColor]);
+                 NSMakePoint(x + 16, r.origin.y + 6), [PDTheme textColor]);
     }
 }
 
@@ -562,24 +562,24 @@ draw_label(NSString *s, NSPoint p, NSColor *color)
     peak = MAX(peak, MAX(rd[i], wr[i]));
   CGFloat half = r.size.height / 2;
   NSRect top = NSMakeRect(r.origin.x, r.origin.y, r.size.width, half);
-  draw_area(rd, n, peak, top, [INTheme cpuColor]);
+  draw_area(rd, n, peak, top, [PDTheme cpuColor]);
   CGFloat step = r.size.width / n;
-  [[INTheme color: [INTheme hangColor: 1] alpha: 0.75] set];
+  [[PDTheme color: [PDTheme hangColor: 1] alpha: 0.75] set];
   for (NSUInteger i = 0; i < n; i++)
     if (wr[i] > 0)
       NSRectFill(NSMakeRect(r.origin.x + i * step, r.origin.y + half,
                             MAX(1, step), half * MIN(1.0, wr[i] / peak)));
-  [[INTheme gridColor] set];
+  [[PDTheme gridColor] set];
   NSRectFill(NSMakeRect(r.origin.x, r.origin.y + half, r.size.width, 1));
   draw_label(net ? @"in" : @"read", NSMakePoint(r.origin.x + 4, r.origin.y),
-             [INTheme secondaryTextColor]);
+             [PDTheme secondaryTextColor]);
   draw_label(net ? @"out" : @"written", NSMakePoint(r.origin.x + 4, r.origin.y + half + 2),
-             [INTheme secondaryTextColor]);
+             [PDTheme secondaryTextColor]);
   free(rd);
   free(wr);
 }
 
-- (void) timeline: (INTimelineView *)view drawTrack: (NSUInteger)track
+- (void) timeline: (PDTimelineView *)view drawTrack: (NSUInteger)track
            inRect: (NSRect)rect from: (double)start to: (double)end
 {
   NSString *ident = [self instrumentForTrack: track];
@@ -607,7 +607,7 @@ draw_label(NSString *s, NSPoint p, NSColor *color)
     [self drawIO: rect from: start to: end network: YES];
 }
 
-- (NSString *) timeline: (INTimelineView *)view describeTrack: (NSUInteger)track
+- (NSString *) timeline: (PDTimelineView *)view describeTrack: (NSUInteger)track
                  atTime: (double)seconds
 {
   NSString *ident = [self instrumentForTrack: track];

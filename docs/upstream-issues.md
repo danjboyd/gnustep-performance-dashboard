@@ -1,4 +1,4 @@
-# Upstream issues found while building GNUstep Instruments
+# Upstream issues found while building Performance Dashboard
 
 None of these have been reported yet — they need Dan's go-ahead (public
 issues on other projects). Each has a workaround here.

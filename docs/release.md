@@ -10,8 +10,8 @@ records the conventions to follow so the design stays release-ready.
   `vX.Y.Z-rcN` published as GitHub pre-releases and tested on every platform
   (install, launch, in-app update) before the final.
 - Every tag and publish is approved by Dan directly in this session.
-- Assets: `Instruments-<version>-x86_64.AppImage` (+ `.zsync`),
-  `Instruments-<version>-win64.msi`, `Instruments-<version>-win64-portable.zip`,
+- Assets: `PerformanceDashboard-<version>-x86_64.AppImage` (+ `.zsync`),
+  `PerformanceDashboard-<version>-win64.msi`, `PerformanceDashboard-<version>-win64-portable.zip`,
   plus `SHA256SUMS`, the packager's `provenance.json` and the update feed.
 - README leads with a download table, per-platform install steps (including
   the unsigned-binary SmartScreen workaround), real screenshots, then
@@ -28,8 +28,8 @@ records the conventions to follow so the design stays release-ready.
   arbitrary processes with their own versions.  Objective-C hooks are made
   through `dlsym` at runtime; libunwind is optional and loaded with `dlopen`.
 - Before injecting, the recorder copies the agent to a stable per-user path
-  (`$XDG_RUNTIME_DIR/gnustep-instruments/` or `~/.cache/gnustep-instruments/`)
-  because an AppImage mount disappears when Instruments quits.
+  (`$XDG_RUNTIME_DIR/performance-dashboard/` or `~/.cache/performance-dashboard/`)
+  because an AppImage mount disappears when Performance Dashboard quits.
 - Targets are launched with a scrubbed environment: AppRun's
   `LD_LIBRARY_PATH`, `GNUSTEP_*` and similar variables from the packaged app
   are removed so the target runs against its own libraries.  Only

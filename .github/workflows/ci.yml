@@ -100,7 +100,7 @@ jobs:
           make -C "$RUNNER_TEMP/tools-xctest"
           make -C "$RUNNER_TEMP/tools-xctest" install
 
-      - name: Build (framework, gstrace, Instruments.app)
+      - name: Build (framework, gstrace, PerformanceDashboard.app)
         run: |
           . /clang64/share/GNUstep/Makefiles/GNUstep.sh
           export ADDITIONAL_CPPFLAGS=-DHAVE_MODE_T

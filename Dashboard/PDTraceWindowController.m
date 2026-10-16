@@ -1,17 +1,17 @@
-#import "INTraceWindowController.h"
-#import "INTimelineView.h"
-#import "INTrackRenderer.h"
-#import "INDetailController.h"
-#import "INInspectorView.h"
-#import "INTheme.h"
-#import "INAppController.h"
-#import "INRecordPanel.h"
+#import "PDTraceWindowController.h"
+#import "PDTimelineView.h"
+#import "PDTrackRenderer.h"
+#import "PDDetailController.h"
+#import "PDInspectorView.h"
+#import "PDTheme.h"
+#import "PDAppController.h"
+#import "PDRecordPanel.h"
 
-@interface INTraceWindowController () <INTimelineDelegate, INDetailControllerDelegate,
+@interface PDTraceWindowController () <PDTimelineDelegate, PDDetailControllerDelegate,
                                        GSPRecorderDelegate, NSWindowDelegate>
 @end
 
-@implementation INTraceWindowController
+@implementation PDTraceWindowController
 {
   NSString *_tracePath;
   GSPTrace *_trace;
@@ -19,10 +19,10 @@
   GSPRecordingOptions *_options;
   BOOL _temporary;
 
-  INTrackRenderer *_renderer;
-  INTimelineView *_timeline;
-  INDetailController *_detail;
-  INInspectorView *_inspector;
+  PDTrackRenderer *_renderer;
+  PDTimelineView *_timeline;
+  PDDetailController *_detail;
+  PDInspectorView *_inspector;
   NSSplitView *_mainSplit;
   NSUInteger _sizedForTracks;
 
@@ -91,10 +91,10 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
   [bar setAutoresizingMask: NSViewWidthSizable | NSViewMinYMargin];
   _recordButton = push_button(@"Record", NSMakeRect(8, 6, 96, 28), self, @selector(toggleRecording:));
   [bar addSubview: _recordButton];
-  _targetLabel = label(NSMakeRect(112, 18, 420, 18), [INTheme boldLabelFont]);
+  _targetLabel = label(NSMakeRect(112, 18, 420, 18), [PDTheme boldLabelFont]);
   [bar addSubview: _targetLabel];
-  _statusLabel = label(NSMakeRect(112, 2, 420, 16), [INTheme smallFont]);
-  [_statusLabel setTextColor: [INTheme secondaryTextColor]];
+  _statusLabel = label(NSMakeRect(112, 2, 420, 16), [PDTheme smallFont]);
+  [_statusLabel setTextColor: [PDTheme secondaryTextColor]];
   [bar addSubview: _statusLabel];
   _leaksButton = push_button(@"Check for Leaks", NSMakeRect(540, 6, 130, 28), self,
                              @selector(checkForLeaksNow:));
@@ -131,7 +131,7 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
   [main setVertical: NO];
   [main setAutoresizingMask: NSViewWidthSizable | NSViewHeightSizable];
 
-  _timeline = [[INTimelineView alloc] initWithFrame: NSMakeRect(0, 0, b.size.width, 330)];
+  _timeline = [[PDTimelineView alloc] initWithFrame: NSMakeRect(0, 0, b.size.width, 330)];
   [_timeline setAutoresizingMask: NSViewWidthSizable | NSViewHeightSizable];
   _timeline.delegate = self;
 
@@ -141,10 +141,10 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
   [lower setAutoresizingMask: NSViewWidthSizable | NSViewHeightSizable];
   CGFloat inspectorW = 340;
   NSRect lowerB = [lower bounds];
-  _inspector = [[INInspectorView alloc] initWithFrame:
+  _inspector = [[PDInspectorView alloc] initWithFrame:
     NSMakeRect(0, 0, inspectorW, lowerB.size.height)];
   [_inspector setAutoresizingMask: NSViewHeightSizable | NSViewMinXMargin];
-  _detail = [[INDetailController alloc] initWithFrame:
+  _detail = [[PDDetailController alloc] initWithFrame:
     NSMakeRect(0, 0, lowerB.size.width - inspectorW - 8, lowerB.size.height) inspector: _inspector];
   _detail.delegate = self;
   [lower addSubview: _detail.view];
@@ -196,7 +196,7 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
   _trace = trace;
   if (_renderer == nil)
     {
-      _renderer = [[INTrackRenderer alloc] initWithTrace: trace];
+      _renderer = [[PDTrackRenderer alloc] initWithTrace: trace];
       _timeline.dataSource = _renderer;
       _detail.renderer = _renderer;
       [_detail showInstrument: [_renderer instrumentForTrack: 0]];
@@ -221,7 +221,7 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
   if (n == 0 || n == _sizedForTracks)
     return;
   _sizedForTracks = n;
-  CGFloat want = [INTimelineView rulerHeight] + 15 + 6;
+  CGFloat want = [PDTimelineView rulerHeight] + 15 + 6;
   for (NSUInteger i = 0; i < n; i++)
     want += [_renderer timeline: _timeline heightOfTrack: i];
   CGFloat total = [_mainSplit bounds].size.height;
@@ -280,7 +280,7 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
     {
       double t = -[_recordStart timeIntervalSinceNow];
       [_statusLabel setStringValue: [NSString stringWithFormat: @"Recording  %@  (pid %d)",
-        [INTimelineView formatTime: t], _recorder.pid]];
+        [PDTimelineView formatTime: t], _recorder.pid]];
       [_recordButton setTitle: @"Stop"];
     }
   else
@@ -310,7 +310,7 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
 
 - (NSString *) temporaryTracePath
 {
-  NSString *dir = [NSTemporaryDirectory() stringByAppendingPathComponent: @"GNUstep Instruments"];
+  NSString *dir = [NSTemporaryDirectory() stringByAppendingPathComponent: @"Performance Dashboard"];
   [[NSFileManager defaultManager] createDirectoryAtPath: dir withIntermediateDirectories: YES
                                              attributes: nil error: NULL];
   NSDateFormatter *f = [NSDateFormatter new];
@@ -329,17 +329,17 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
       NSDictionary *info = _trace.info;
       GSPRecordingOptions *o;
       if ([[info objectForKey: @"Attached"] boolValue])
-        o = [INAttachPanel runPanel];
+        o = [PDAttachPanel runPanel];
       else
         {
           GSPRecordingOptions *initial = [GSPRecordingOptions new];
           initial.templateName = _trace.templateName;
           initial.executablePath = [info objectForKey: @"TargetPath"];
           initial.arguments = [info objectForKey: @"Arguments"];
-          o = [INRecordPanel runPanelWithOptions: initial];
+          o = [PDRecordPanel runPanelWithOptions: initial];
         }
       if (o != nil)
-        [(INAppController *)[NSApp delegate] startRecordingWithOptions: o];
+        [(PDAppController *)[NSApp delegate] startRecordingWithOptions: o];
       return;
     }
   _options.outputPath = [self temporaryTracePath];
@@ -460,7 +460,7 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
   _trace = [GSPTrace traceWithPath: dest error: NULL] ?: _trace;
   [self attachTrace: _trace];
   [self updateLabels];
-  [[NSUserDefaults standardUserDefaults] setObject: dest forKey: @"INLastSavedTrace"];
+  [[NSUserDefaults standardUserDefaults] setObject: dest forKey: @"PDLastSavedTrace"];
 }
 
 - (void) exportTrace: (id)sender
@@ -502,7 +502,7 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
 /* ------------------------------------------------------------------ */
 /* timeline / detail coordination                                      */
 
-- (void) timelineSelectionDidChange: (INTimelineView *)view
+- (void) timelineSelectionDidChange: (PDTimelineView *)view
 {
   if (view.hasSelection)
     [_detail setRangeStart: [_trace absoluteTime: view.selectionStart]
@@ -511,7 +511,7 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
     [_detail setRangeStart: 0 end: 0];
 }
 
-- (void) timeline: (INTimelineView *)view didSelectTrack: (NSUInteger)track
+- (void) timeline: (PDTimelineView *)view didSelectTrack: (NSUInteger)track
 {
   uint32_t tid = [_renderer threadForTrack: track];
   NSString *ident = [_renderer instrumentForTrack: track];
@@ -530,7 +530,7 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
     [_detail showThread: 0];
 }
 
-- (void) detailController: (INDetailController *)dc
+- (void) detailController: (PDDetailController *)dc
        showTimeRangeStart: (GSPTime)start end: (GSPTime)end
 {
   /* Show where the item is without filtering the detail list itself. */
@@ -600,7 +600,7 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
 {
   [_timer invalidate];
   _timer = nil;
-  [[NSNotificationCenter defaultCenter] postNotificationName: @"INTraceWindowClosed"
+  [[NSNotificationCenter defaultCenter] postNotificationName: @"PDTraceWindowClosed"
                                                       object: self];
 }
 

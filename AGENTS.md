@@ -1,7 +1,9 @@
 # Repository guidance
 
-GNUstep Instruments: a performance analysis tool for GNUstep (an Apple
+Performance Dashboard: a performance analysis tool for GNUstep (an Apple
 Instruments equivalent). Read README.md, then docs/architecture.md.
+Never name the product, app, bundle or files "Instruments" (Apple's
+trademark); "instrument" stays as the generic word for a recording type.
 
 ## Layout
 
@@ -15,7 +17,7 @@ Instruments equivalent). Read README.md, then docs/architecture.md.
   trees, analyses, recorder, exporters.
 - `Tools/gstrace/` — CLI. `Tools/gstrace-helper/` — privileged perf_event
   helper (C, runs as root through pkexec: keep it small and defensive).
-- `Instruments/` — the AppKit app, programmatic UI (no nibs).
+- `Dashboard/` — the AppKit app, programmatic UI (no nibs).
 - `Tests/Unit/` — tools-xctest bundle with a synthetic trace builder.
   `Tests/fixtures/` — C, Objective-C and AppKit programs with known
   behaviour. `Tests/run.sh` — the regression suite.
@@ -38,13 +40,13 @@ passing.
 
 GUI changes: run the app under a private Xvfb display (never another
 session's display) and look at screenshots; check at least Adwaita and one
-other theme (Sombre). Use standard controls and theme colours (`INTheme`).
+other theme (Sombre). Use standard controls and theme colours (`PDTheme`).
 
 ## Conventions
 
 - C code: GNU style as in the existing files; signal handlers must not lock
   or allocate; agent memory comes from `gsp_map`.
-- Objective-C: ARC in GSPerformance, gstrace, Instruments and tests; GNU
+- Objective-C: ARC in GSPerformance, gstrace, Dashboard and tests; GNU
   brace style; match the surrounding code.
 - Commits as Daniel Boyd <danieljboyd@icloud.com>. Releases follow
   docs/release.md; every tag and publish needs Dan's approval in-session.

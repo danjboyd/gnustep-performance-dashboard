@@ -393,7 +393,7 @@ child(GSPCallTreeNode *n, NSString *name)
     [dir stringByAppendingPathComponent: @"gstrace-helper"] error: NULL];
   XCTAssertEqual([h filePosixPermissions], (NSUInteger)0755);
   XCTAssertTrue([fm fileExistsAtPath:
-    [dir stringByAppendingPathComponent: @"org.gnustep.instruments.policy"]]);
+    [dir stringByAppendingPathComponent: @"org.gnustep.performancedashboard.policy"]]);
   /* two stagings never share a directory */
   NSString *again = [GSPRecorder stageHelperForInstall: NULL];
   XCTAssertFalse([again isEqual: dir]);

@@ -1,4 +1,4 @@
-/* os/log.h - a subset of Apple's os_log API on top of GNUstep Instruments.
+/* os/log.h - a subset of Apple's os_log API on top of Performance Dashboard.
 
    Messages go into the trace (the "os_log" table) while recording and are
    otherwise discarded.  */

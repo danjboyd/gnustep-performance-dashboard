@@ -1,10 +1,10 @@
-/* INTraceWindowController.h - one trace document window: control bar,
+/* PDTraceWindowController.h - one trace document window: control bar,
    timeline, detail pane and inspector, plus live recording.  */
 
 #import <AppKit/AppKit.h>
 #import <GSPerformance/GSPerformance.h>
 
-@interface INTraceWindowController : NSWindowController
+@interface PDTraceWindowController : NSWindowController
 
 /* Open an existing trace bundle. */
 - (instancetype) initWithTracePath: (NSString *)path error: (NSError **)error;

@@ -1,24 +1,24 @@
 {
-  ApplicationName = "Instruments";
+  ApplicationName = "Performance Dashboard";
   ApplicationDescription = "Performance analysis for GNUstep applications";
   ApplicationRelease = "0.1.0";
   FullVersionID = "0.1.0";
-  CFBundleIdentifier = "org.gnustep.Instruments";
-  NSExecutable = "Instruments";
-  NSIcon = "Instruments.png";
+  CFBundleIdentifier = "org.gnustep.PerformanceDashboard";
+  NSExecutable = "PerformanceDashboard";
+  NSIcon = "PerformanceDashboard.png";
   NSRole = "Viewer";
   NSTypes = (
     {
-      NSName = "GNUstep Instruments Trace";
-      NSHumanReadableName = "Instruments Trace";
+      NSName = "Performance Dashboard Trace";
+      NSHumanReadableName = "Performance Dashboard Trace";
       NSUnixExtensions = ( "gstrace" );
-      NSIcon = "Instruments.png";
+      NSIcon = "PerformanceDashboard.png";
       NSRole = "Viewer";
     }
   );
   CFBundleDocumentTypes = (
     {
-      CFBundleTypeName = "Instruments Trace";
+      CFBundleTypeName = "Performance Dashboard Trace";
       CFBundleTypeExtensions = ( "gstrace" );
       CFBundleTypeRole = "Viewer";
       LSTypeIsPackage = YES;

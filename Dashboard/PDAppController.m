@@ -1,10 +1,10 @@
-#import "INAppController.h"
-#import "INTraceWindowController.h"
-#import "INRecordPanel.h"
-#import "INTimelineView.h"
+#import "PDAppController.h"
+#import "PDTraceWindowController.h"
+#import "PDRecordPanel.h"
+#import "PDTimelineView.h"
 #import <GSPerformance/GSPerformance.h>
 
-@implementation INAppController
+@implementation PDAppController
 {
   NSMutableArray *_windows;
   BOOL _openedAtLaunch;
@@ -16,7 +16,7 @@
     {
       _windows = [NSMutableArray array];
       [[NSNotificationCenter defaultCenter] addObserver: self
-        selector: @selector(windowClosed:) name: @"INTraceWindowClosed" object: nil];
+        selector: @selector(windowClosed:) name: @"PDTraceWindowClosed" object: nil];
     }
   return self;
 }
@@ -32,25 +32,25 @@ add_item(NSMenu *menu, NSString *title, SEL action, NSString *key, id target)
 
 - (void) buildMenus
 {
-  NSMenu *main = [[NSMenu alloc] initWithTitle: @"Instruments"];
+  NSMenu *main = [[NSMenu alloc] initWithTitle: @"Performance Dashboard"];
   NSMenuItem *item;
 
-  NSMenu *app = [[NSMenu alloc] initWithTitle: @"Instruments"];
-  add_item(app, @"About Instruments", @selector(showAbout:), nil, self);
+  NSMenu *app = [[NSMenu alloc] initWithTitle: @"Performance Dashboard"];
+  add_item(app, @"About Performance Dashboard", @selector(showAbout:), nil, self);
 #if !defined(_WIN32)
   /* Windows attaches by injecting the agent; no helper there */
   add_item(app, @"Install Profiling Helper…", @selector(installHelper:), nil, self);
 #endif
   add_item(app, @"Hide", @selector(hide:), @"h", NSApp);
-  add_item(app, @"Quit Instruments", @selector(terminate:), @"q", NSApp);
-  item = add_item(main, @"Instruments", NULL, nil, nil);
+  add_item(app, @"Quit Performance Dashboard", @selector(terminate:), @"q", NSApp);
+  item = add_item(main, @"Performance Dashboard", NULL, nil, nil);
   [main setSubmenu: app forItem: item];
 
   NSMenu *file = [[NSMenu alloc] initWithTitle: @"File"];
   add_item(file, @"New Recording…", @selector(newRecording:), @"n", self);
   add_item(file, @"Open…", @selector(openTrace:), @"o", self);
   NSMenu *recent = [[NSMenu alloc] initWithTitle: @"Open Recent"];
-  for (NSString *path in [[NSUserDefaults standardUserDefaults] arrayForKey: @"INRecentTraces"])
+  for (NSString *path in [[NSUserDefaults standardUserDefaults] arrayForKey: @"PDRecentTraces"])
     {
       NSMenuItem *r = add_item(recent, [path lastPathComponent], @selector(openRecent:), nil, self);
       [r setRepresentedObject: path];
@@ -97,24 +97,24 @@ add_item(NSMenu *menu, NSString *title, SEL action, NSString *key, id target)
 - (void) applicationDidFinishLaunching: (NSNotification *)n
 {
   NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
-  /* Automation (tests, screenshots): -INRecordTarget path
-     [-INRecordTemplate name] [-INRecordArguments "a b"] [-INRecordTimeLimit s] */
-  NSString *target = [d stringForKey: @"INRecordTarget"];
+  /* Automation (tests, screenshots): -PDRecordTarget path
+     [-PDRecordTemplate name] [-PDRecordArguments "a b"] [-PDRecordTimeLimit s] */
+  NSString *target = [d stringForKey: @"PDRecordTarget"];
   if (target != nil)
     {
       GSPRecordingOptions *o = [GSPRecordingOptions new];
       GSPTemplate *t = [GSPTemplate templateNamed:
-        [d stringForKey: @"INRecordTemplate"] ?: @"Time Profiler"];
+        [d stringForKey: @"PDRecordTemplate"] ?: @"Time Profiler"];
       o.templateName = t.name;
       o.instrumentIdentifiers = t.instrumentIdentifiers;
       o.executablePath = target;
-      NSString *args = [d stringForKey: @"INRecordArguments"];
+      NSString *args = [d stringForKey: @"PDRecordArguments"];
       o.arguments = [args length] ? [args componentsSeparatedByString: @" "] : [NSArray array];
-      o.timeLimit = [d doubleForKey: @"INRecordTimeLimit"];
+      o.timeLimit = [d doubleForKey: @"PDRecordTimeLimit"];
       [self startRecordingWithOptions: o];
       return;
     }
-  NSString *open = [d stringForKey: @"INOpenTrace"];
+  NSString *open = [d stringForKey: @"PDOpenTrace"];
   if (open != nil)
     {
       [self openTraceAtPath: open];
@@ -143,12 +143,12 @@ add_item(NSMenu *menu, NSString *title, SEL action, NSString *key, id target)
 - (void) remember: (NSString *)path
 {
   NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
-  NSMutableArray *recent = [[d arrayForKey: @"INRecentTraces"] mutableCopy] ?: [NSMutableArray array];
+  NSMutableArray *recent = [[d arrayForKey: @"PDRecentTraces"] mutableCopy] ?: [NSMutableArray array];
   [recent removeObject: path];
   [recent insertObject: path atIndex: 0];
   while ([recent count] > 10)
     [recent removeLastObject];
-  [d setObject: recent forKey: @"INRecentTraces"];
+  [d setObject: recent forKey: @"PDRecentTraces"];
 }
 
 - (BOOL) openTraceAtPath: (NSString *)path
@@ -158,7 +158,7 @@ add_item(NSMenu *menu, NSString *title, SEL action, NSString *key, id target)
   if (![[path pathExtension] isEqual: @"gstrace"]
       && [[[path stringByDeletingLastPathComponent] pathExtension] isEqual: @"gstrace"])
     path = [path stringByDeletingLastPathComponent];
-  INTraceWindowController *wc = [[INTraceWindowController alloc] initWithTracePath: path
+  PDTraceWindowController *wc = [[PDTraceWindowController alloc] initWithTracePath: path
                                                                              error: &error];
   if (wc == nil)
     {
@@ -191,7 +191,7 @@ add_item(NSMenu *menu, NSString *title, SEL action, NSString *key, id target)
 
 - (void) startRecordingWithOptions: (GSPRecordingOptions *)o
 {
-  INTraceWindowController *wc = [[INTraceWindowController alloc] initWithRecordingOptions: o];
+  PDTraceWindowController *wc = [[PDTraceWindowController alloc] initWithRecordingOptions: o];
   [_windows addObject: wc];
   [wc showWindow: self];
   [wc startRecording: nil];
@@ -199,21 +199,21 @@ add_item(NSMenu *menu, NSString *title, SEL action, NSString *key, id target)
 
 - (void) newRecording: (id)sender
 {
-  GSPRecordingOptions *o = [INRecordPanel runPanelWithTemplate: nil];
+  GSPRecordingOptions *o = [PDRecordPanel runPanelWithTemplate: nil];
   if (o != nil)
     [self startRecordingWithOptions: o];
 }
 
 - (void) attachToProcess: (id)sender
 {
-  GSPRecordingOptions *o = [INAttachPanel runPanel];
+  GSPRecordingOptions *o = [PDAttachPanel runPanel];
   if (o != nil)
     [self startRecordingWithOptions: o];
 }
 
 - (void) showAbout: (id)sender
 {
-  NSRunAlertPanel(@"GNUstep Instruments",
+  NSRunAlertPanel(@"Performance Dashboard",
     @"Version 0.1.0\n\nA performance analysis tool for GNUstep applications: Time Profiler, Hangs, Points of Interest, os_log, Allocations, Leaks and Zombies.\n\nAgent: %@",
     @"OK", nil, nil, [GSPRecorder agentLibraryPath] ?: @"not found");
 }
@@ -224,12 +224,12 @@ add_item(NSMenu *menu, NSString *title, SEL action, NSString *key, id target)
   if (helper == nil)
     {
       NSRunAlertPanel(@"Profiling Helper Not Found",
-        @"This build of Instruments does not include gstrace-helper.", @"OK", nil, nil);
+        @"This build of Performance Dashboard does not include gstrace-helper.", @"OK", nil, nil);
       return;
     }
   NSString *installed = [GSPRecorder installedHelperPath];
   NSInteger r = NSRunAlertPanel(installed ? @"Reinstall Profiling Helper?" : @"Install Profiling Helper?",
-    @"The profiling helper lets Instruments attach to running processes and record kernel stacks. "
+    @"The profiling helper lets Performance Dashboard attach to running processes and record kernel stacks. "
     @"It is installed as %@ with a polkit policy, and you will be asked for an administrator password.\n\n"
     @"Alternatively, set kernel.perf_event_paranoid to 2 or lower to sample your own processes without it.",
     @"Install", @"Cancel", nil, [GSPRecorder helperInstallLocation]);

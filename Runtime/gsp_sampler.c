@@ -1,7 +1,7 @@
 /* gsp_sampler.c - Time Profiler and Hangs sampling, thread and image hooks.
 
    CPU samples come from a per-thread CLOCK_THREAD_CPUTIME_ID timer, so a
-   thread is only sampled while it runs on a CPU (as Instruments' Time
+   thread is only sampled while it runs on a CPU (as Apple Instruments' Time
    Profiler does).  The main thread also gets a wall-clock timer whose
    samples show where it is even while blocked; the Hangs analysis uses them
    to find periods when the main run loop was not waiting for events.  */

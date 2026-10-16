@@ -1,4 +1,4 @@
-# GNUstep Instruments
+# Performance Dashboard
 
 A performance analysis tool for GNUstep applications, modelled on Apple's
 Instruments: record a program, then explore where its time and memory go on a
@@ -9,9 +9,10 @@ signposts and hang detection.
 
 It has three parts:
 
-- **Instruments.app** — the GNUstep AppKit front end: choose a template and a
-  target, record, and analyse. Works with any GNUstep theme (Adwaita on Linux,
-  WinUITheme on Windows are the defaults the release packages ship).
+- **Performance Dashboard** (`PerformanceDashboard.app`) — the GNUstep
+  AppKit front end: choose a template and a target, record, and analyse.
+  Works with any GNUstep theme (Adwaita on Linux, WinUITheme on Windows
+  are the defaults the release packages ship).
 - **gstrace** — the command-line equivalent of `xctrace`: record, report,
   export and symbolicate traces, for scripts and CI.
 - **libgsperf** — `os_signpost` / `os_log` for GNUstep (`<os/signpost.h>`,
@@ -47,7 +48,7 @@ File Activity, Network, Logging, System Time Profiler and Blank (`gstrace list t
 In a shell where `GNUstep.sh` has been sourced (clang and libobjc2):
 
 ```sh
-make             # runtime, framework, gstrace, gstrace-helper, Instruments.app
+make             # runtime, framework, gstrace, gstrace-helper, PerformanceDashboard.app
 make check       # unit tests (tools-xctest) and end-to-end recordings
 make install     # GNUstep Local domain; honours DESTDIR
 ```
@@ -60,7 +61,7 @@ the end-to-end suite runs the AppKit fixture under `Xvfb` when it is available
 
 ![Template chooser](docs/screenshots/template-chooser.png)
 
-Launch `Instruments.app`, pick a template, choose the program to record
+Launch `PerformanceDashboard.app`, pick a template, choose the program to record
 (an `.app` bundle or any executable) and press **Record**. The timeline fills
 in live; **Stop** ends the target. Click a track to see its details below;
 drag on the timeline to set an inspection range that filters the details;
@@ -130,12 +131,12 @@ nothing, so they can stay in release builds.
 
 Recording a program you launch needs no privileges: the agent is loaded into
 the target with `LD_PRELOAD` and samples it from the inside. (Set-uid and
-file-capability binaries ignore `LD_PRELOAD`; Instruments says so.)
+file-capability binaries ignore `LD_PRELOAD`; Performance Dashboard says so.)
 
 Attaching to a running process uses the kernel's `perf_event`, which Debian
 restricts (`kernel.perf_event_paranoid` = 3). Either
 
-- install the profiling helper once — **Instruments ▸ Install Profiling
+- install the profiling helper once — **Performance Dashboard ▸ Install Profiling
   Helper…** or `gstrace install-helper` — which asks for an administrator
   password through polkit, installs `/usr/local/libexec/gstrace-helper` with a
   polkit policy, and is then used through `pkexec` on demand (kernel stacks
@@ -196,3 +197,7 @@ Known upstream issues found while building this are listed in
 ## License
 
 GNU LGPL 2.1 or later, like GNUstep's libraries (see `COPYING.LIB`).
+
+Performance Dashboard is not affiliated with or endorsed by Apple Inc.
+Instruments and Xcode are trademarks of Apple Inc., used here only to
+describe what this tool is comparable to.

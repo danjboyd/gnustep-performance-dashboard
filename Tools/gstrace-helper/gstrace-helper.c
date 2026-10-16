@@ -1,7 +1,7 @@
-/* gstrace-helper - privileged perf_event sampling for GNUstep Instruments.
+/* gstrace-helper - privileged perf_event sampling for Performance Dashboard.
 
    Runs as root through pkexec (installed at /usr/local/libexec/gstrace-helper
-   with the org.gnustep.instruments polkit policy), or unprivileged when
+   with the org.gnustep.performancedashboard polkit policy), or unprivileged when
    kernel.perf_event_paranoid allows it.
 
      gstrace-helper record --pid PID --output DIR [--duration SECS] [--frequency HZ]
@@ -43,7 +43,10 @@
 #define HELPER_VERSION "0.1.0"
 #define INSTALL_PATH "/usr/local/libexec/gstrace-helper"
 #define POLICY_DIR "/usr/share/polkit-1/actions"
-#define POLICY_NAME "org.gnustep.instruments.policy"
+#define POLICY_NAME "org.gnustep.performancedashboard.policy"
+/* The policy's name before the project was renamed; removed on install
+   and uninstall.  */
+#define OLD_POLICY_NAME "org.gnustep.instruments.policy"
 #define MAX_THREADS 4096
 #define RING_PAGES 64  /* data pages per event, power of two */
 
@@ -782,6 +785,7 @@ cmd_install(int argc, char **argv)
   mkdir(POLICY_DIR, 0755);
   copy_file(src, "gstrace-helper", INSTALL_PATH, 0755);
   copy_file(src, POLICY_NAME, POLICY_DIR "/" POLICY_NAME, 0644);
+  unlink(POLICY_DIR "/" OLD_POLICY_NAME);
   printf("Installed %s and %s/%s\n", INSTALL_PATH, POLICY_DIR, POLICY_NAME);
   return 0;
 }
@@ -795,6 +799,7 @@ cmd_uninstall(void)
     die("run uninstall from a copy of the helper (e.g. the one next to gstrace) through pkexec");
   unlink(INSTALL_PATH);
   unlink(POLICY_DIR "/" POLICY_NAME);
+  unlink(POLICY_DIR "/" OLD_POLICY_NAME);
   printf("Removed %s and the polkit policy\n", INSTALL_PATH);
   return 0;
 }

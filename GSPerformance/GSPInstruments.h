@@ -1,4 +1,4 @@
-/* GSPInstruments.h - the instruments and templates GNUstep Instruments
+/* GSPInstruments.h - the instruments and templates Performance Dashboard
    offers, and how each maps onto agent configuration.  */
 
 #import <Foundation/Foundation.h>

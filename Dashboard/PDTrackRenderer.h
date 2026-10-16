@@ -1,11 +1,11 @@
-/* INTrackRenderer.h - draws one timeline track per instrument and owns the
+/* PDTrackRenderer.h - draws one timeline track per instrument and owns the
    analyses those tracks (and the detail views) share.  */
 
 #import <AppKit/AppKit.h>
 #import <GSPerformance/GSPerformance.h>
-#import "INTimelineView.h"
+#import "PDTimelineView.h"
 
-@interface INTrackRenderer : NSObject <INTimelineDataSource>
+@interface PDTrackRenderer : NSObject <PDTimelineDataSource>
 
 - (instancetype) initWithTrace: (GSPTrace *)trace;
 

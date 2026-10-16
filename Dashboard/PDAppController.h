@@ -1,10 +1,10 @@
-/* INAppController.h - application delegate: menus, opening and recording
+/* PDAppController.h - application delegate: menus, opening and recording
    traces, and installing the profiling helper.  */
 
 #import <AppKit/AppKit.h>
 #import <GSPerformance/GSPerformance.h>
 
-@interface INAppController : NSObject <NSApplicationDelegate>
+@interface PDAppController : NSObject <NSApplicationDelegate>
 - (void) newRecording: (id)sender;
 - (void) openTrace: (id)sender;
 - (void) attachToProcess: (id)sender;

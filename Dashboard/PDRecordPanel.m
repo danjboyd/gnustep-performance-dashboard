@@ -1,5 +1,5 @@
-#import "INRecordPanel.h"
-#import "INTheme.h"
+#import "PDRecordPanel.h"
+#import "PDTheme.h"
 
 #include <sys/stat.h>
 #if defined(_WIN32)
@@ -45,10 +45,10 @@ make_button(NSString *title, NSRect frame, id target, SEL action)
 
 /* ------------------------------------------------------------------ */
 
-@interface INRecordPanel () <NSTableViewDataSource, NSTableViewDelegate>
+@interface PDRecordPanel () <NSTableViewDataSource, NSTableViewDelegate>
 @end
 
-@implementation INRecordPanel
+@implementation PDRecordPanel
 {
   NSPanel *_panel;
   NSTableView *_templates;
@@ -62,13 +62,13 @@ make_button(NSString *title, NSRect frame, id target, SEL action)
 
 + (GSPRecordingOptions *) runPanelWithTemplate: (NSString *)templateName
 {
-  INRecordPanel *p = [INRecordPanel new];
+  PDRecordPanel *p = [PDRecordPanel new];
   return [p run: templateName initial: nil];
 }
 
 + (GSPRecordingOptions *) runPanelWithOptions: (GSPRecordingOptions *)options
 {
-  INRecordPanel *p = [INRecordPanel new];
+  PDRecordPanel *p = [PDRecordPanel new];
   return [p run: options.templateName initial: options];
 }
 
@@ -111,7 +111,7 @@ make_button(NSString *title, NSRect frame, id target, SEL action)
   _instruments = make_label(@"", NSMakeRect(272, 250, 430, 140));
   [_instruments setAlignment: NSLeftTextAlignment];
   [[_instruments cell] setWraps: YES];
-  [_instruments setFont: [INTheme smallFont]];
+  [_instruments setFont: [PDTheme smallFont]];
   [c addSubview: _instruments];
 
   CGFloat y = 206;
@@ -143,8 +143,8 @@ make_button(NSString *title, NSRect frame, id target, SEL action)
 
   _warning = make_label(@"", NSMakeRect(220, y, 484, 24));
   [_warning setAlignment: NSLeftTextAlignment];
-  [_warning setTextColor: [INTheme leakColor]];
-  [_warning setFont: [INTheme smallFont]];
+  [_warning setTextColor: [PDTheme leakColor]];
+  [_warning setFont: [PDTheme smallFont]];
   [c addSubview: _warning];
 
   NSButton *cancel = make_button(@"Cancel", NSMakeRect(500, 14, 96, 30), self, @selector(cancel:));
@@ -155,10 +155,10 @@ make_button(NSString *title, NSRect frame, id target, SEL action)
   [c addSubview: rec];
 
   NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
-  [_target setStringValue: [d stringForKey: @"INLastTarget"] ?: @""];
-  [_args setStringValue: [d stringForKey: @"INLastArguments"] ?: @""];
-  [_env setStringValue: [d stringForKey: @"INLastEnvironment"] ?: @""];
-  [_cwd setStringValue: [d stringForKey: @"INLastDirectory"] ?: @""];
+  [_target setStringValue: [d stringForKey: @"PDLastTarget"] ?: @""];
+  [_args setStringValue: [d stringForKey: @"PDLastArguments"] ?: @""];
+  [_env setStringValue: [d stringForKey: @"PDLastEnvironment"] ?: @""];
+  [_cwd setStringValue: [d stringForKey: @"PDLastDirectory"] ?: @""];
   [_panel center];
 }
 
@@ -188,7 +188,7 @@ make_button(NSString *title, NSRect frame, id target, SEL action)
   if (initial != nil)
     [self fillFromOptions: initial];
   NSString *want = templateName ?: [[NSUserDefaults standardUserDefaults]
-                                     stringForKey: @"INLastTemplate"] ?: @"Time Profiler";
+                                     stringForKey: @"PDLastTemplate"] ?: @"Time Profiler";
   NSUInteger idx = 0;
   for (NSUInteger i = 0; i < [_list count]; i++)
     if ([[[_list objectAtIndex: i] name] isEqual: want])
@@ -224,11 +224,11 @@ make_button(NSString *title, NSRect frame, id target, SEL action)
   o.timeLimit = [_limit doubleValue];
 
   NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
-  [d setObject: t.name forKey: @"INLastTemplate"];
-  [d setObject: [_target stringValue] forKey: @"INLastTarget"];
-  [d setObject: [_args stringValue] forKey: @"INLastArguments"];
-  [d setObject: [_env stringValue] forKey: @"INLastEnvironment"];
-  [d setObject: [_cwd stringValue] forKey: @"INLastDirectory"];
+  [d setObject: t.name forKey: @"PDLastTemplate"];
+  [d setObject: [_target stringValue] forKey: @"PDLastTarget"];
+  [d setObject: [_args stringValue] forKey: @"PDLastArguments"];
+  [d setObject: [_env stringValue] forKey: @"PDLastEnvironment"];
+  [d setObject: [_cwd stringValue] forKey: @"PDLastDirectory"];
   return o;
 }
 
@@ -361,10 +361,10 @@ make_button(NSString *title, NSRect frame, id target, SEL action)
 
 /* ------------------------------------------------------------------ */
 
-@interface INAttachPanel () <NSTableViewDataSource>
+@interface PDAttachPanel () <NSTableViewDataSource>
 @end
 
-@implementation INAttachPanel
+@implementation PDAttachPanel
 {
   NSPanel *_panel;
   NSTableView *_table;
@@ -377,7 +377,7 @@ make_button(NSString *title, NSRect frame, id target, SEL action)
 
 + (GSPRecordingOptions *) runPanel
 {
-  return [[INAttachPanel new] run];
+  return [[PDAttachPanel new] run];
 }
 
 - (void) refresh: (id)sender
@@ -477,7 +477,7 @@ make_button(NSString *title, NSRect frame, id target, SEL action)
   _status = make_label(@"", NSMakeRect(16, 60, 608, 52));
   [_status setAlignment: NSLeftTextAlignment];
   [[_status cell] setWraps: YES];
-  [_status setFont: [INTheme smallFont]];
+  [_status setFont: [PDTheme smallFont]];
 #if defined(_WIN32)
   [_status setFrame: NSMakeRect(124, 60, 500, 52)];
   [_status setStringValue: @"The recording agent is loaded into the program, which keeps running when the recording stops. A program can be recorded this way once per run."];
@@ -500,7 +500,7 @@ make_button(NSString *title, NSRect frame, id target, SEL action)
     [_status setStringValue: @"The profiling helper is installed; you will be asked for a password when recording starts. Kernel stacks are included."];
   else
     [_status setStringValue: [NSString stringWithFormat:
-      @"kernel.perf_event_paranoid is %d and the profiling helper is not installed. Use Install Profiling Helper… in the Instruments menu first.",
+      @"kernel.perf_event_paranoid is %d and the profiling helper is not installed. Use Install Profiling Helper… in the Performance Dashboard menu first.",
       paranoid]];
   [c addSubview: _status];
 #endif

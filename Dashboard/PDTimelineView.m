@@ -1,5 +1,5 @@
-#import "INTimelineView.h"
-#import "INTheme.h"
+#import "PDTimelineView.h"
+#import "PDTheme.h"
 
 #include <math.h>
 
@@ -8,7 +8,7 @@
 #define SCROLLER_HEIGHT 15.0
 #define MIN_VISIBLE 0.0005
 
-@implementation INTimelineView
+@implementation PDTimelineView
 {
   NSScroller *_scroller;
   BOOL _hasSelection;
@@ -256,12 +256,12 @@ nice_step(double minStep)
 {
   NSRect r = NSMakeRect(0, 0, NSMaxX(g), RULER_HEIGHT);
   NSDictionary *attrs = [NSDictionary dictionaryWithObjectsAndKeys:
-    [INTheme smallFont], NSFontAttributeName,
-    [INTheme secondaryTextColor], NSForegroundColorAttributeName, nil];
+    [PDTheme smallFont], NSFontAttributeName,
+    [PDTheme secondaryTextColor], NSForegroundColorAttributeName, nil];
 
-  [[INTheme headerBackground] set];
+  [[PDTheme headerBackground] set];
   NSRectFill(r);
-  [[INTheme gridColor] set];
+  [[PDTheme gridColor] set];
   NSRectFill(NSMakeRect(0, RULER_HEIGHT - 1, NSMaxX(g), 1));
 
   double secondsPerPixel = _visibleDuration / g.size.width;
@@ -270,7 +270,7 @@ nice_step(double minStep)
   for (double t = first; t <= _visibleStart + _visibleDuration; t += step)
     {
       CGFloat x = floor([self xForTime: t]) + 0.5;
-      [[INTheme gridColor] set];
+      [[PDTheme gridColor] set];
       NSRectFill(NSMakeRect(x, RULER_HEIGHT - 6, 1, 6));
       NSString *label = step >= 1 ? [NSString stringWithFormat: @"%.0fs", t]
         : (step >= 0.01 ? [NSString stringWithFormat: @"%.2fs", t]
@@ -283,7 +283,7 @@ nice_step(double minStep)
        t += minor)
     {
       CGFloat x = floor([self xForTime: t]) + 0.5;
-      [[INTheme gridColor] set];
+      [[PDTheme gridColor] set];
       NSRectFill(NSMakeRect(x, RULER_HEIGHT - 3, 1, 3));
     }
   NSString *title = @"Time";
@@ -295,13 +295,13 @@ nice_step(double minStep)
   NSRect g = [self graphRect];
   NSUInteger n = [_dataSource numberOfTracksInTimeline: self];
   NSDictionary *titleAttrs = [NSDictionary dictionaryWithObjectsAndKeys:
-    [INTheme boldLabelFont], NSFontAttributeName,
-    [INTheme textColor], NSForegroundColorAttributeName, nil];
+    [PDTheme boldLabelFont], NSFontAttributeName,
+    [PDTheme textColor], NSForegroundColorAttributeName, nil];
   NSDictionary *subAttrs = [NSDictionary dictionaryWithObjectsAndKeys:
-    [INTheme smallFont], NSFontAttributeName,
-    [INTheme secondaryTextColor], NSForegroundColorAttributeName, nil];
+    [PDTheme smallFont], NSFontAttributeName,
+    [PDTheme secondaryTextColor], NSForegroundColorAttributeName, nil];
 
-  [[INTheme viewBackground] set];
+  [[PDTheme viewBackground] set];
   NSRectFill([self bounds]);
   [self drawRuler: g];
 
@@ -312,13 +312,13 @@ nice_step(double minStep)
       NSRect header = NSMakeRect(0, y, HEADER_WIDTH, h);
       NSRect track = NSMakeRect(HEADER_WIDTH, y, g.size.width, h);
 
-      [(i % 2 ? [INTheme alternateBackground] : [INTheme viewBackground]) set];
+      [(i % 2 ? [PDTheme alternateBackground] : [PDTheme viewBackground]) set];
       NSRectFill(track);
-      [[INTheme headerBackground] set];
+      [[PDTheme headerBackground] set];
       NSRectFill(header);
       if (i == _selectedTrack)
         {
-          [[INTheme selectedTrackColor] set];
+          [[PDTheme selectedTrackColor] set];
           NSRectFillUsingOperation(header, NSCompositeSourceOver);
         }
       [[_dataSource timeline: self titleOfTrack: i]
@@ -335,18 +335,18 @@ nice_step(double minStep)
                        from: _visibleStart to: _visibleStart + _visibleDuration];
       [NSGraphicsContext restoreGraphicsState];
 
-      [[INTheme gridColor] set];
+      [[PDTheme gridColor] set];
       NSRectFill(NSMakeRect(0, y + h - 1, NSMaxX(track), 1));
       y += h;
     }
-  [[INTheme gridColor] set];
+  [[PDTheme gridColor] set];
   NSRectFill(NSMakeRect(HEADER_WIDTH - 1, 0, 1, y));
 
   /* end of data */
   if (_duration > 0 && _duration < _visibleStart + _visibleDuration)
     {
       CGFloat x = [self xForTime: _duration];
-      [[INTheme color: [INTheme textColor] alpha: 0.08] set];
+      [[PDTheme color: [PDTheme textColor] alpha: 0.08] set];
       NSRectFillUsingOperation(NSMakeRect(x, RULER_HEIGHT, NSMaxX(g) - x, y - RULER_HEIGHT),
                                NSCompositeSourceOver);
     }
@@ -359,7 +359,7 @@ nice_step(double minStep)
         x1 = x0 + 1;
       if (x1 > g.origin.x && x0 < NSMaxX(g))
         {
-          [[INTheme selectionColor] set];
+          [[PDTheme selectionColor] set];
           NSRectFillUsingOperation(NSMakeRect(x0, 0, x1 - x0, y), NSCompositeSourceOver);
           [[NSColor selectedControlColor] set];
           NSRectFill(NSMakeRect(x0, 0, 1, y));
@@ -370,7 +370,7 @@ nice_step(double minStep)
   if (_hover)
     {
       NSDictionary *a = [NSDictionary dictionaryWithObjectsAndKeys:
-        [INTheme smallFont], NSFontAttributeName,
+        [PDTheme smallFont], NSFontAttributeName,
         [NSColor controlTextColor], NSForegroundColorAttributeName, nil];
       NSSize sz = [_hover sizeWithAttributes: a];
       NSRect box = NSMakeRect(_hoverPoint.x + 12, _hoverPoint.y + 4, sz.width + 10, sz.height + 6);
@@ -378,7 +378,7 @@ nice_step(double minStep)
         box.origin.x = _hoverPoint.x - box.size.width - 8;
       [[NSColor controlBackgroundColor] set];
       NSRectFill(box);
-      [[INTheme gridColor] set];
+      [[PDTheme gridColor] set];
       NSFrameRect(box);
       [_hover drawAtPoint: NSMakePoint(box.origin.x + 5, box.origin.y + 3) withAttributes: a];
     }
@@ -468,8 +468,8 @@ nice_step(double minStep)
     {
       double t = [self timeForX: p.x];
       NSString *d = [_dataSource timeline: self describeTrack: (NSUInteger)track atTime: t];
-      text = d ? [NSString stringWithFormat: @"%@  %@", [INTimelineView formatTime: t], d]
-               : [INTimelineView formatTime: t];
+      text = d ? [NSString stringWithFormat: @"%@  %@", [PDTimelineView formatTime: t], d]
+               : [PDTimelineView formatTime: t];
     }
   if (text != _hover && ![text isEqual: _hover])
     {

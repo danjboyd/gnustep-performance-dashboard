@@ -1,9 +1,9 @@
-/* INRecordPanel.h - "Choose a profiling template" and target setup.  */
+/* PDRecordPanel.h - "Choose a profiling template" and target setup.  */
 
 #import <AppKit/AppKit.h>
 #import <GSPerformance/GSPerformance.h>
 
-@interface INRecordPanel : NSObject
+@interface PDRecordPanel : NSObject
 /* Runs modally; returns nil when cancelled. */
 + (GSPRecordingOptions *) runPanelWithTemplate: (NSString *)templateName;
 /* The same, starting from the template, target, arguments, environment
@@ -12,6 +12,6 @@
 @end
 
 /* "Attach to Process": pick a running process of the current user. */
-@interface INAttachPanel : NSObject
+@interface PDAttachPanel : NSObject
 + (GSPRecordingOptions *) runPanel;
 @end

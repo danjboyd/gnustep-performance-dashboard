@@ -1,7 +1,7 @@
 # Architecture
 
 ```
- target process                                   recorder (gstrace / Instruments.app)
+ target process                                   recorder (gstrace / PerformanceDashboard.app)
  ┌──────────────────────────────────────────┐     ┌──────────────────────────────────┐
  │ app code ── malloc/free ─┐                │     │ GSPRecorder                      │
  │ GNUstep ── objc_alloc ───┤ libgsperf-     │     │  posix_spawn + LD_PRELOAD        │
@@ -22,7 +22,7 @@
 | `GSPerformance/` | `libGSPerformance` | Objective-C (ARC) | gnustep-base |
 | `Tools/gstrace/` | `gstrace` | Objective-C | GSPerformance |
 | `Tools/gstrace-helper/` | `gstrace-helper` | C | libc |
-| `Instruments/` | `Instruments.app` | Objective-C (ARC) | gnustep-gui, GSPerformance |
+| `Dashboard/` | `PerformanceDashboard.app` | Objective-C (ARC) | gnustep-gui, GSPerformance |
 | `Tests/` | unit tests, fixtures, `run.sh` | | tools-xctest |
 
 ## The agent (libgsperf-agent.so)
@@ -156,12 +156,12 @@ most five seconds; fork children turn all tracking off.
 - `GSPAnalysis`: Hangs, Allocations, Leaks, signpost summaries, zombie history.
 - `GSPRecorder`, `GSPInstruments`, `GSPExporter`.
 
-## Instruments.app
+## PerformanceDashboard.app
 
 Programmatic AppKit UI (no nibs), standard controls everywhere so the theme
 applies; custom drawing (timeline, tracks) uses the theme's system colours
-plus fixed data-series hues. `INTimelineView` (ruler, tracks, inspection
-range, pan/zoom), `INTrackRenderer` (per-instrument drawing and shared
-analyses), `INDetailController` (per-instrument modes in one outline view),
-`INInspectorView` (Extended Detail), `INRecordPanel` (templates, target,
+plus fixed data-series hues. `PDTimelineView` (ruler, tracks, inspection
+range, pan/zoom), `PDTrackRenderer` (per-instrument drawing and shared
+analyses), `PDDetailController` (per-instrument modes in one outline view),
+`PDInspectorView` (Extended Detail), `PDRecordPanel` (templates, target,
 attach).

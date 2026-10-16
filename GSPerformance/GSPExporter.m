@@ -372,7 +372,7 @@ json_data(id obj, NSError **error)
     [NSDictionary dictionaryWithObject: frames forKey: @"frames"], @"shared",
     profiles, @"profiles",
     [p.executablePath lastPathComponent] ?: @"trace", @"name",
-    @"GNUstep Instruments", @"exporter", nil];
+    @"Performance Dashboard", @"exporter", nil];
   return json_data(root, error);
 }
 

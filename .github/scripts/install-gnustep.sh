@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds the clang/libobjc2 GNUstep stack GNUstep Instruments is tested
+# Builds the clang/libobjc2 GNUstep stack Performance Dashboard is tested
 # against, plus tools-xctest for the unit tests, into $PREFIX (GNUstep
 # filesystem layout). The workflow caches $PREFIX, keyed on this file.
 

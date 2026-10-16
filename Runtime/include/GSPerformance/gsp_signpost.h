@@ -1,4 +1,4 @@
-/* gsp_signpost.h - signposts and trace logging for GNUstep Instruments.
+/* gsp_signpost.h - signposts and trace logging for Performance Dashboard.
 
    Link with -lgsperf.  When the process is not being recorded every call is
    a cheap no-op, so signposts can stay in release builds.  <os/signpost.h>
@@ -39,7 +39,7 @@ enum
   GSP_LOG_LEVEL_FAULT = 17
 };
 
-/* Category used by Instruments' "Points of Interest" track. */
+/* Category shown on the "Points of Interest" track. */
 #define GSP_CATEGORY_POINTS_OF_INTEREST "PointsOfInterest"
 
 /* Logs are never freed; create them once and keep them. */

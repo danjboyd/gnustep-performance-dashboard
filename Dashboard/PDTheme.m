@@ -1,4 +1,4 @@
-#import "INTheme.h"
+#import "PDTheme.h"
 
 static NSColor *
 rgb(double r, double g, double b)
@@ -15,7 +15,7 @@ with_alpha(NSColor *c, CGFloat a)
   return [(rgbc ? rgbc : c) colorWithAlphaComponent: a];
 }
 
-@implementation INTheme
+@implementation PDTheme
 
 + (NSColor *) viewBackground
 {

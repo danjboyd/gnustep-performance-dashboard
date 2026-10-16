@@ -2,7 +2,7 @@
 
    - Instance allocation: class_createInstance and the objc_alloc family are
      interposed so allocations can be labelled with their class
-     (OBJC_TAG records), as Instruments' Allocations does.
+     (OBJC_TAG records), as Apple Instruments' Allocations does.
    - Reference counting history: objc_retain/objc_release/objc_autorelease
      are interposed when GSP_REFCOUNTS is set.
    - Zombies: GNUstep's GSLogZombie is interposed to record the message

@@ -1,4 +1,4 @@
-/* GSPerformance.h - GNUstep Instruments framework (trace reading,
+/* GSPerformance.h - Performance Dashboard framework (trace reading,
    symbolication, analyses, recording, export).  */
 
 #import <GSPerformance/GSPTrace.h>

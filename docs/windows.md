@@ -2,7 +2,7 @@
 
 ## Status
 
-- **Viewer.** `libGSPerformance`, `gstrace` and Instruments.app build with
+- **Viewer.** `libGSPerformance`, `gstrace` and PerformanceDashboard.app build with
   MSYS2 clang64 and read traces from either platform.
 - **Recording** with `gsperf-agent.dll`:
   - *Time Profiler, Hangs*: a sampler thread suspends threads whose cycle

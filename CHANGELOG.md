@@ -4,6 +4,13 @@
 
 Since the first implementation:
 
+- Renamed from "GNUstep Instruments" to Performance Dashboard: the app
+  is `PerformanceDashboard.app`, the bundle id
+  `org.gnustep.PerformanceDashboard`, the polkit policy
+  `org.gnustep.performancedashboard.policy` (installing or removing the
+  helper also removes the old policy file). Trace bundles are unchanged.
+- Record on an opened trace shows the template chooser, filled in from
+  the trace, and records into a new window.
 - Windows recording: `gsperf-agent.dll` injected at launch or into a
   running program (no elevation for the user's own programs). Time
   Profiler and Hangs (thread suspension + `RtlVirtualUnwind`), Points of
@@ -28,14 +35,14 @@ First implementation (phases 0–3):
   termination signals.
 - `os_signpost` / `os_log` API (`libgsperf`).
 - `libGSPerformance`: trace reader, symbolication (ELF, `.eh_frame`, ObjC
-  method tables, debug files), call trees with Instruments' options and data
+  method tables, debug files), call trees with Apple Instruments' options and data
   mining, Hangs / Allocations / Leaks / signpost analyses, recorder,
   exporters (JSON, Chrome/Perfetto, speedscope, folded stacks, CSV).
 - `gstrace` command-line tool (record, info, report, export, symbolicate,
   list, install-helper).
 - `gstrace-helper`: perf_event sampling of running processes through pkexec
   (polkit policy) or without privileges when perf_event_paranoid allows.
-- Instruments.app: template chooser, live recording, timeline with
+- PerformanceDashboard.app: template chooser, live recording, timeline with
   per-instrument tracks, inspection ranges, detail views, extended detail,
   attach to process, helper installation, save/export.
 - Regression suite: tools-xctest unit tests and end-to-end recordings.

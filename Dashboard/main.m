@@ -1,5 +1,5 @@
 #import <AppKit/AppKit.h>
-#import "INAppController.h"
+#import "PDAppController.h"
 
 int
 main(int argc, const char **argv)
@@ -7,7 +7,7 @@ main(int argc, const char **argv)
   @autoreleasepool
     {
       [NSApplication sharedApplication];
-      INAppController *controller = [INAppController new];
+      PDAppController *controller = [PDAppController new];
       [NSApp setDelegate: controller];
       [NSApp run];
     }

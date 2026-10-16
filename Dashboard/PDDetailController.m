@@ -1,7 +1,7 @@
-#import "INDetailController.h"
-#import "INTrackRenderer.h"
-#import "INInspectorView.h"
-#import "INTheme.h"
+#import "PDDetailController.h"
+#import "PDTrackRenderer.h"
+#import "PDInspectorView.h"
+#import "PDTheme.h"
 
 #include <GSPerformance/gsp_format.h>
 #include <GSPerformance/gsp_signpost.h>
@@ -9,10 +9,10 @@
 
 /* Right-clicking selects the row under the pointer, so the context menu
    acts on it (GNUstep does not set the clicked row for menu events).  */
-@interface INOutlineView : NSOutlineView
+@interface PDOutlineView : NSOutlineView
 @end
 
-@implementation INOutlineView
+@implementation PDOutlineView
 - (NSMenu *) menuForEvent: (NSEvent *)event
 {
   NSInteger row = [self rowAtPoint: [self convertPoint: [event locationInWindow]
@@ -25,7 +25,7 @@
 @end
 
 /* A row in list-style modes. */
-@interface INRow : NSObject
+@interface PDRow : NSObject
 @property (nonatomic, strong) NSMutableDictionary *values;  /* column id -> string */
 @property (nonatomic, strong) NSMutableDictionary *sortKeys; /* column id -> NSNumber/NSString */
 @property (nonatomic, strong) id payload;
@@ -34,7 +34,7 @@
 @property (nonatomic, copy) NSString *detail;
 @end
 
-@implementation INRow
+@implementation PDRow
 - (instancetype) init
 {
   if ((self = [super init]) != nil)
@@ -51,10 +51,10 @@
 }
 @end
 
-@interface INDetailController () <NSOutlineViewDataSource, NSOutlineViewDelegate>
+@interface PDDetailController () <NSOutlineViewDataSource, NSOutlineViewDelegate>
 @end
 
-/* The frame Instruments calls "responsible": the first one outside system
+/* The frame Apple Instruments calls "responsible": the first one outside system
    libraries, or the leaf if all are system frames.  */
 static NSString *
 responsible_frame(GSPProcess *p, uint32_t stack)
@@ -66,10 +66,10 @@ responsible_frame(GSPProcess *p, uint32_t stack)
   return [syms count] ? [[syms objectAtIndex: 0] name] : @"";
 }
 
-@implementation INDetailController
+@implementation PDDetailController
 {
   NSView *_view;
-  INInspectorView *_inspector;
+  PDInspectorView *_inspector;
   NSPopUpButton *_mode;
   NSPopUpButton *_threads;
   NSButton *_separate, *_invert, *_hideSystem, *_flatten, *_top;
@@ -108,14 +108,14 @@ check_box(NSString *title, NSRect frame, id target, SEL action)
   NSButton *b = [[NSButton alloc] initWithFrame: frame];
   [b setButtonType: NSSwitchButton];
   [b setTitle: title];
-  [b setFont: [INTheme smallFont]];
+  [b setFont: [PDTheme smallFont]];
   [b setTarget: target];
   [b setAction: action];
   [b sizeToFit];
   return b;
 }
 
-- (instancetype) initWithFrame: (NSRect)frame inspector: (INInspectorView *)inspector
+- (instancetype) initWithFrame: (NSRect)frame inspector: (PDInspectorView *)inspector
 {
   if ((self = [super init]) == nil)
     return nil;
@@ -166,8 +166,8 @@ check_box(NSString *title, NSRect frame, id target, SEL action)
   [_status setEditable: NO];
   [_status setBezeled: NO];
   [_status setDrawsBackground: NO];
-  [_status setFont: [INTheme smallFont]];
-  [_status setTextColor: [INTheme secondaryTextColor]];
+  [_status setFont: [PDTheme smallFont]];
+  [_status setTextColor: [PDTheme secondaryTextColor]];
   [_status setAutoresizingMask: NSViewWidthSizable | NSViewMaxYMargin];
   [_view addSubview: _status];
 
@@ -176,7 +176,7 @@ check_box(NSString *title, NSRect frame, id target, SEL action)
   [_scroll setHasHorizontalScroller: YES];
   [_scroll setBorderType: NSBezelBorder];
   [_scroll setAutoresizingMask: NSViewWidthSizable | NSViewHeightSizable];
-  _outline = [[INOutlineView alloc] initWithFrame: [[_scroll contentView] bounds]];
+  _outline = [[PDOutlineView alloc] initWithFrame: [[_scroll contentView] bounds]];
   [_outline setDataSource: self];
   [_outline setDelegate: self];
   [_outline setUsesAlternatingRowBackgroundColors: YES];
@@ -594,7 +594,7 @@ col(NSString *ident, NSString *title, CGFloat width)
     }
   for (GSPThreadInfo *t in [p sortedThreads])
     {
-      INRow *r = [INRow new];
+      PDRow *r = [PDRow new];
       uint64_t w = [[cpu objectForKey: [NSNumber numberWithUnsignedInt: t.tid]] unsignedLongLongValue];
       [r set: @"thread" text: t.displayName sort: nil];
       [r set: @"cpu" text: GSPFormatDuration(w * interval) sort: [NSNumber numberWithUnsignedLongLong: w]];
@@ -619,10 +619,10 @@ col(NSString *ident, NSString *title, CGFloat width)
     {
       if (_end && (hang.endTime < _start || hang.startTime > _end))
         continue;
-      INRow *r = [INRow new];
+      PDRow *r = [PDRow new];
       GSPProcess *p = _renderer.process;
       NSString *where = responsible_frame(p, hang.representativeStack);
-      [r set: @"start" text: [INTimelineView formatTime: [_renderer.trace relativeTime: hang.startTime]]
+      [r set: @"start" text: [PDTimelineView formatTime: [_renderer.trace relativeTime: hang.startTime]]
         sort: [NSNumber numberWithUnsignedLongLong: hang.startTime]];
       [r set: @"duration" text: GSPFormatDuration(hang.duration)
         sort: [NSNumber numberWithDouble: hang.duration]];
@@ -654,7 +654,7 @@ col(NSString *ident, NSString *title, CGFloat width)
         col(@"min", @"Min", 90), col(@"max", @"Max", 90), nil] outline: nil];
       for (GSPSignpostSummary *s in [GSPSignpostAnalysis summariesForSignposts: sps])
         {
-          INRow *r = [INRow new];
+          PDRow *r = [PDRow new];
           [r set: @"name" text: s.isEvent ? [s.name stringByAppendingString: @" (event)"] : s.name sort: s.name];
           [r set: @"category" text: s.category sort: nil];
           [r set: @"count" text: [NSString stringWithFormat: @"%lu", (unsigned long)s.count]
@@ -678,8 +678,8 @@ col(NSString *ident, NSString *title, CGFloat width)
         col(@"message", @"Message", 300), col(@"thread", @"Thread", 90), nil] outline: nil];
       for (GSPSignpost *s in sps)
         {
-          INRow *r = [INRow new];
-          [r set: @"start" text: [INTimelineView formatTime: [_renderer.trace relativeTime: s.beginTime]]
+          PDRow *r = [PDRow new];
+          [r set: @"start" text: [PDTimelineView formatTime: [_renderer.trace relativeTime: s.beginTime]]
             sort: [NSNumber numberWithUnsignedLongLong: s.beginTime]];
           [r set: @"duration" text: s.isEvent ? @"event" : (s.isOpen ? @"(open)" : GSPFormatDuration((double)s.duration / 1e9))
             sort: [NSNumber numberWithUnsignedLongLong: s.duration]];
@@ -710,11 +710,11 @@ col(NSString *ident, NSString *title, CGFloat width)
     {
       if (_end && (m.time < _start || m.time > _end))
         continue;
-      INRow *r = [INRow new];
+      PDRow *r = [PDRow new];
       NSString *type = m.level == GSP_LOG_LEVEL_ERROR ? @"Error"
         : (m.level == GSP_LOG_LEVEL_FAULT ? @"Fault"
            : (m.level == GSP_LOG_LEVEL_DEBUG ? @"Debug" : (m.level == GSP_LOG_LEVEL_INFO ? @"Info" : @"Default")));
-      [r set: @"time" text: [INTimelineView formatTime: [_renderer.trace relativeTime: m.time]]
+      [r set: @"time" text: [PDTimelineView formatTime: [_renderer.trace relativeTime: m.time]]
         sort: [NSNumber numberWithUnsignedLongLong: m.time]];
       [r set: @"type" text: type sort: [NSNumber numberWithInt: m.level]];
       [r set: @"subsystem" text: m.subsystem sort: nil];
@@ -736,7 +736,7 @@ col(NSString *ident, NSString *title, CGFloat width)
     col(@"count", @"# Total", 80), nil] outline: nil];
   for (GSPAllocationCategory *c in [a categoriesFrom: _start to: _end])
     {
-      INRow *r = [INRow new];
+      PDRow *r = [PDRow new];
       [r set: @"category" text: c.name sort: nil];
       [r set: @"pbytes" text: [GSPAllocationAnalysis formatBytes: c.persistentBytes]
         sort: [NSNumber numberWithUnsignedLongLong: c.persistentBytes]];
@@ -775,13 +775,13 @@ col(NSString *ident, NSString *title, CGFloat width)
         return;
       }
     const GSPAllocationRecord *rec = &a.records[i];
-    INRow *r = [INRow new];
+    PDRow *r = [PDRow new];
     BOOL live = rec->freeTime == 0 || (_end && rec->freeTime > _end);
     NSString *caller = responsible_frame(p, rec->stack);
     [r set: @"address" text: [NSString stringWithFormat: @"0x%llx", (unsigned long long)rec->address]
       sort: [NSNumber numberWithUnsignedLongLong: rec->address]];
     [r set: @"category" text: [a.categoryNames objectAtIndex: rec->category] sort: nil];
-    [r set: @"time" text: [INTimelineView formatTime: [_renderer.trace relativeTime: rec->allocTime]]
+    [r set: @"time" text: [PDTimelineView formatTime: [_renderer.trace relativeTime: rec->allocTime]]
       sort: [NSNumber numberWithUnsignedLongLong: rec->allocTime]];
     [r set: @"live" text: live ? @"•" : @"" sort: [NSNumber numberWithBool: live]];
     [r set: @"size" text: [GSPAllocationAnalysis formatBytes: rec->size]
@@ -812,7 +812,7 @@ col(NSString *ident, NSString *title, CGFloat width)
   for (GSPLeakGroup *g in [la groupsForSnapshot: snap])
     {
       GSPLeak *first = [g.leaks objectAtIndex: 0];
-      INRow *r = [INRow new];
+      PDRow *r = [PDRow new];
       NSString *caller = responsible_frame(p, first.stack);
       [r set: @"object" text: g.name sort: nil];
       [r set: @"count" text: [NSString stringWithFormat: @"%llu", (unsigned long long)g.count]
@@ -850,8 +850,8 @@ col(NSString *ident, NSString *title, CGFloat width)
     col(@"scan", @"Scan Time", 100), nil] outline: nil];
   for (GSPLeakSnapshot *s in _renderer.process.leakSnapshots)
     {
-      INRow *r = [INRow new];
-      [r set: @"time" text: [INTimelineView formatTime: [_renderer.trace relativeTime: s.time]]
+      PDRow *r = [PDRow new];
+      [r set: @"time" text: [PDTimelineView formatTime: [_renderer.trace relativeTime: s.time]]
         sort: [NSNumber numberWithUnsignedLongLong: s.time]];
       [r set: @"leaks" text: [NSString stringWithFormat: @"%lu", (unsigned long)[s.leaks count]]
         sort: [NSNumber numberWithUnsignedInteger: [s.leaks count]]];
@@ -884,7 +884,7 @@ col(NSString *ident, NSString *title, CGFloat width)
     col(@"errors", @"Errors", 60), col(@"time", @"Time", 100), nil] outline: nil];
   for (GSPIOSummary *sum in [io summariesForNetwork: net from: _start to: _end])
     {
-      INRow *r = [INRow new];
+      PDRow *r = [PDRow new];
       [r set: @"name" text: sum.name sort: nil];
       [r set: @"opens" text: [NSString stringWithFormat: @"%llu", (unsigned long long)sum.opens]
         sort: [NSNumber numberWithUnsignedLongLong: sum.opens]];
@@ -925,13 +925,13 @@ col(NSString *ident, NSString *title, CGFloat width)
         return;
       }
     const GSPIOEvent *e = &ev[i];
-    INRow *r = [INRow new];
+    PDRow *r = [PDRow new];
     NSString *res = e->result < 0
       ? [NSString stringWithFormat: @"%s", strerror((int)-e->result)]
       : ((e->op == GSP_IO_READ || e->op == GSP_IO_WRITE || e->op == GSP_IO_SEND || e->op == GSP_IO_RECV)
          ? [GSPAllocationAnalysis formatBytes: (uint64_t)e->result]
          : [NSString stringWithFormat: @"%lld", (long long)e->result]);
-    [r set: @"time" text: [INTimelineView formatTime: [_renderer.trace relativeTime: e->time]]
+    [r set: @"time" text: [PDTimelineView formatTime: [_renderer.trace relativeTime: e->time]]
       sort: [NSNumber numberWithUnsignedLongLong: e->time]];
     [r set: @"op" text: [GSPIOAnalysis operationName: e->op] sort: nil];
     [r set: @"duration" text: GSPFormatDuration(e->duration / 1e9)
@@ -960,8 +960,8 @@ col(NSString *ident, NSString *title, CGFloat width)
     col(@"address", @"Address", 130), nil] outline: nil];
   for (GSPZombieEvent *z in p.zombies)
     {
-      INRow *r = [INRow new];
-      [r set: @"time" text: [INTimelineView formatTime: [_renderer.trace relativeTime: z.time]]
+      PDRow *r = [PDRow new];
+      [r set: @"time" text: [PDTimelineView formatTime: [_renderer.trace relativeTime: z.time]]
         sort: [NSNumber numberWithUnsignedLongLong: z.time]];
       [r set: @"class" text: z.className ?: @"(unknown class)" sort: nil];
       [r set: @"selector" text: [@"-" stringByAppendingString: z.selector ?: @"?"] sort: nil];
@@ -1036,7 +1036,7 @@ col(NSString *ident, NSString *title, CGFloat width)
     return;
   NSString *colId = _sortColumn;
   BOOL asc = _sortAscending;
-  INRow *pinned = nil;
+  PDRow *pinned = nil;
   if ([[_rows objectAtIndex: 0] payload] != nil
       && [[[_rows objectAtIndex: 0] payload] isKindOfClass: [GSPAllocationCategory class]]
       && [(GSPAllocationCategory *)[[_rows objectAtIndex: 0] payload] index] == UINT32_MAX)
@@ -1044,7 +1044,7 @@ col(NSString *ident, NSString *title, CGFloat width)
       pinned = [_rows objectAtIndex: 0];
       [_rows removeObjectAtIndex: 0];
     }
-  [_rows sortUsingComparator: ^NSComparisonResult(INRow *a, INRow *b) {
+  [_rows sortUsingComparator: ^NSComparisonResult(PDRow *a, PDRow *b) {
     id x = [a.sortKeys objectForKey: colId], y = [b.sortKeys objectForKey: colId];
     NSComparisonResult r = [x isKindOfClass: [NSString class]]
       ? [x caseInsensitiveCompare: y] : [x compare: y];
@@ -1064,7 +1064,7 @@ col(NSString *ident, NSString *title, CGFloat width)
   else
     {
       _sortColumn = ident;
-      INRow *any = [_rows lastObject];
+      PDRow *any = [_rows lastObject];
       _sortAscending = [[any.sortKeys objectForKey: ident] isKindOfClass: [NSString class]];
     }
   [self sortRows];
@@ -1116,7 +1116,7 @@ col(NSString *ident, NSString *title, CGFloat width)
         return n.imageName ?: @"";
       return @"";
     }
-  return [[(INRow *)item values] objectForKey: ident];
+  return [[(PDRow *)item values] objectForKey: ident];
 }
 
 - (void) outlineView: (NSOutlineView *)ov willDisplayCell: (id)cell
@@ -1124,12 +1124,12 @@ col(NSString *ident, NSString *title, CGFloat width)
 {
   if (![cell respondsToSelector: @selector(setTextColor:)])
     return;
-  NSColor *c = [INTheme textColor];
+  NSColor *c = [PDTheme textColor];
   if ([item isKindOfClass: [GSPCallTreeNode class]])
     {
       GSPCallTreeNode *n = item;
       if (n.symbol.isSystem)
-        c = [INTheme secondaryTextColor];
+        c = [PDTheme secondaryTextColor];
     }
   [cell setTextColor: c];
 }
@@ -1155,7 +1155,7 @@ col(NSString *ident, NSString *title, CGFloat width)
       [_inspector showTitle: @"Heaviest Stack Trace" text: text stack: n.heaviestStack process: p];
       return;
     }
-  INRow *r = item;
+  PDRow *r = item;
   [_inspector showTitle: @"Extended Detail" text: r.detail stack: r.stack process: p];
   if (r.start && [_delegate respondsToSelector: @selector(detailController:showTimeRangeStart:end:)])
     [_delegate detailController: self showTimeRangeStart: r.start end: r.end];
@@ -1167,10 +1167,10 @@ col(NSString *ident, NSString *title, CGFloat width)
   if (row < 0)
     return;
   id item = [_outline itemAtRow: row];
-  if ([item isKindOfClass: [INRow class]]
-      && [[(INRow *)item payload] isKindOfClass: [GSPAllocationCategory class]])
+  if ([item isKindOfClass: [PDRow class]]
+      && [[(PDRow *)item payload] isKindOfClass: [GSPAllocationCategory class]])
     {
-      _allocCategory = [(GSPAllocationCategory *)[(INRow *)item payload] index];
+      _allocCategory = [(GSPAllocationCategory *)[(PDRow *)item payload] index];
       [_mode selectItemWithTitle: @"Allocations List"];
       _currentMode = @"Allocations List";
       [self reload];

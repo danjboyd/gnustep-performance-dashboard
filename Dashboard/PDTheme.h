@@ -1,4 +1,4 @@
-/* INTheme.h - colours and fonts for custom drawing.
+/* PDTheme.h - colours and fonts for custom drawing.
 
    Window chrome uses standard controls so every GNUstep theme applies.
    Custom views (timeline, tracks) take their background, text and grid
@@ -7,7 +7,7 @@
 
 #import <AppKit/AppKit.h>
 
-@interface INTheme : NSObject
+@interface PDTheme : NSObject
 + (NSColor *) viewBackground;
 + (NSColor *) alternateBackground;
 + (NSColor *) headerBackground;

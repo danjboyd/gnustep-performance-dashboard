@@ -1,4 +1,4 @@
-/* GSPTrace.h - reading GNUstep Instruments trace bundles.  */
+/* GSPTrace.h - reading Performance Dashboard trace bundles.  */
 
 #import <Foundation/Foundation.h>
 
