@@ -68,7 +68,7 @@ check "network: 5000 bytes sent and received over loopback" "grep -E -q '^127.0.
 # Objective-C: method names come from the runtime's method table
 if command -v gnustep-config >/dev/null 2>&1; then
   OBJCFLAGS=$(gnustep-config --objc-flags | sed 's/-MMD//; s/-MP//')
-  clang $OBJCFLAGS -DHAVE_MODE_T -O0 -Wno-unused-but-set-variable -I"$ROOT/Runtime/include" \
+  clang $OBJCFLAGS -DHAVE_MODE_T -O0 -g -Wno-unused-but-set-variable -I"$ROOT/Runtime/include" \
     "$ROOT/Tests/fixtures/objcwork.m" -o "$OUT/objcwork.exe" $(gnustep-config --base-libs) \
     -L"$ROOT/Runtime/obj" -lgsperf >"$OUT/objcwork-build.log" 2>&1 || cat "$OUT/objcwork-build.log"
   rm -rf "$OUT/objc.gstrace"
@@ -110,6 +110,8 @@ if command -v gnustep-config >/dev/null 2>&1; then
   check "Leaks: all 5 Leaky objects (incl. a retain cycle) found" "grep -E -q '^Leaky +5 ' '$OUT/objleaks.txt'"
   check "Leaks: leak stack names make_leaks" "grep -q make_leaks '$OUT/objleaks.txt'"
   check "Leaks: few other reports (< 50 blocks)" "[ \$(sed -n 2p '$OUT/objleaks.txt' | cut -d' ' -f1) -lt 50 ]"
+  "$GSTRACE" report "$OUT/objleaks.gstrace" leaks --lines >"$OUT/objleaks-lines.txt" 2>&1
+  check "source lines: leak stack shows objcwork.m:<line>" "grep -E -q 'make_leaks .*objcwork\.m:[0-9]+' '$OUT/objleaks-lines.txt'"
 
   # Zombies: a message to a deallocated object
   rm -rf "$OUT/zombie.gstrace"

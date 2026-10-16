@@ -33,6 +33,8 @@ typedef struct elf_sym
   NSString *debugLink;
   uint64_t *funcStarts;      /* from .eh_frame_hdr, sorted */
   NSUInteger funcCount;
+  BOOL isPE;
+  uint64_t imageBase;        /* PE: preferred load address */
 }
 - (BOOL) functionStart: (uint64_t)vaddr into: (uint64_t *)start;
 + (GSPELFFile *) fileAtPath: (NSString *)path;
@@ -165,6 +167,8 @@ static uint32_t rd32(const uint8_t *p) { uint32_t v; memcpy(&v, p, 4); return v;
   const uint8_t *opt = fh + 20;
   if (opt + optsize > b + len || rd16(opt) != 0x20b)   /* PE32+ only */
     return NO;
+  isPE = YES;
+  imageBase = (uint64_t)rd32(opt + 24) | ((uint64_t)rd32(opt + 28) << 32);
   uint32_t ndirs = rd32(opt + 108);
   const uint8_t *dirs = opt + 112;
   const uint8_t *sec = opt + optsize;
@@ -869,6 +873,45 @@ is_agent(GSPSymbol *s)
   return [self symbolForAddress: address];
 }
 
+/* addr2line on Linux; on Windows llvm-addr2line (MSYS2's clang ships it)
+   or binutils' addr2line from PATH.  */
++ (NSString *) addr2linePath
+{
+  static NSString *path;
+  static BOOL looked;
+  @synchronized (self)
+    {
+      if (!looked)
+        {
+          looked = YES;
+          NSFileManager *fm = [NSFileManager defaultManager];
+#if defined(_WIN32)
+          NSArray *dirs = [[[[NSProcessInfo processInfo] environment] objectForKey: @"PATH"]
+                            componentsSeparatedByString: @";"];
+          for (NSString *name in [NSArray arrayWithObjects: @"llvm-addr2line.exe",
+                                   @"addr2line.exe", nil])
+            {
+              for (NSString *dir in dirs)
+                {
+                  NSString *c = [dir stringByAppendingPathComponent: name];
+                  if ([fm isExecutableFileAtPath: c])
+                    {
+                      path = c;
+                      break;
+                    }
+                }
+              if (path)
+                break;
+            }
+#else
+          if ([fm isExecutableFileAtPath: @"/usr/bin/addr2line"])
+            path = @"/usr/bin/addr2line";
+#endif
+        }
+    }
+  return path;
+}
+
 - (NSString *) sourceLocationForFrame: (uint64_t)address index: (NSUInteger)index
 {
   if (index > 0 && address > 0)
@@ -880,15 +923,20 @@ is_agent(GSPSymbol *s)
 
   NSString *result = nil;
   GSPImage *image = [self imageFor: address];
-  NSString *tool = @"/usr/bin/addr2line";
-  if (image != nil && [[NSFileManager defaultManager] isExecutableFileAtPath: tool])
+  NSString *tool = [GSPSymbolicator addr2linePath];
+  if (image != nil && tool != nil)
     {
+      /* ELF: the address in the file is the offset from the load bias;
+         PE: addr2line wants the address at the preferred image base.  */
+      GSPELFFile *file = [GSPELFFile fileAtPath: image.path];
+      uint64_t where = address - image.base;
+      if (file != nil && file->isPE)
+        where += file->imageBase;
       NSTask *task = [NSTask new];
       NSPipe *pipe = [NSPipe pipe];
       [task setLaunchPath: tool];
       [task setArguments: [NSArray arrayWithObjects: @"-e", image.path,
-        [NSString stringWithFormat: @"0x%llx",
-                  (unsigned long long)(address - image.base)], nil]];
+        [NSString stringWithFormat: @"0x%llx", (unsigned long long)where], nil]];
       [task setStandardOutput: pipe];
       [task setStandardError: [NSFileHandle fileHandleWithNullDevice]];
       @try
@@ -905,11 +953,15 @@ is_agent(GSPSymbol *s)
             s = [s substringToIndex: disc.location];
           if ([s length] && ![s hasPrefix: @"??"])
             {
-              NSArray *parts = [s componentsSeparatedByString: @":"];
-              if ([parts count] >= 2 && ![[parts lastObject] isEqual: @"0"]
-                  && ![[parts lastObject] isEqual: @"?"])
-                result = [NSString stringWithFormat: @"%@:%@",
-                  [[parts objectAtIndex: 0] lastPathComponent], [parts lastObject]];
+              /* "path:line"; a Windows path has a drive colon too */
+              NSRange colon = [s rangeOfString: @":" options: NSBackwardsSearch];
+              NSString *line = colon.location != NSNotFound
+                ? [s substringFromIndex: NSMaxRange(colon)] : nil;
+              NSString *file = colon.location != NSNotFound
+                ? [[s substringToIndex: colon.location]
+                    stringByReplacingOccurrencesOfString: @"\\" withString: @"/"] : nil;
+              if (line && [line length] && ![line isEqual: @"0"] && ![line isEqual: @"?"])
+                result = [NSString stringWithFormat: @"%@:%@", [file lastPathComponent], line];
             }
         }
       @catch (NSException *e)

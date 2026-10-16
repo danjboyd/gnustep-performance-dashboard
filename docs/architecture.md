@@ -83,6 +83,41 @@ finish the recording before the process dies.
 helper processes (gdnc, gpbs) inherit `LD_PRELOAD`. The agent records only when
 its parent is the recorder (`GSP_RECORDER_PID`) unless children are followed.
 
+## The Windows agent (gsperf-agent.dll)
+
+`Runtime/win/`; the trace format is the same. There is no `LD_PRELOAD` and
+there are no asynchronous signals, so:
+
+- **Injection.** The recorder starts the target suspended, loads the DLL
+  with a remote `LoadLibraryW` thread, waits for `Local\gsperf-ready-<pid>`
+  (set when the sampler runs) and resumes it. To attach, it puts the
+  settings in shared memory (`Local\gsperf-config-<pid>`), loads the DLL
+  the same way and calls the `gsp_agent_attach` export in a second remote
+  thread. `Local\gsperf-stop-<pid>` stops a recording.
+- **Sampling** (`gsp_agent_win.c`). One sampler thread suspends each thread
+  whose cycle count moved since the last tick, reads its context, unwinds it
+  with `RtlVirtualUnwind` and resumes it; the weight is the cycles used over
+  the cycles of an interval (the nominal rate from the registry). While a
+  thread is suspended the sampler takes no lock it could hold: function
+  entries come from its own copy of the modules' `.pdata`, not
+  `RtlLookupFunctionEntry` (which takes the loader's lock), and records are
+  written after resuming. A second, low-priority thread records modules and
+  the Objective-C method table.
+- **Hooks** (`gsp_heap_win.c`, `gsp_io_win.c`). Import address tables of
+  every module except the agent, kernel32 and kernelbase are patched: UCRT
+  heap functions, libobjc2 allocation and reference counting, `exit`, the
+  kernel32 file functions, winsock and `LoadLibrary*` (so modules loaded
+  later are patched too). What does not go through an import table is
+  replaced through the Objective-C runtime: `-[NSObject retain/release/
+  autorelease]` (clang on Windows sends them as messages) and
+  `-[NSZombie forwardInvocation:]`. A thread-local flag keeps the hooks
+  from recording the agent's own work.
+- **Leaks** (`gsp_leaks_win.c`). The scan suspends every other thread and
+  marks from all writable committed memory that is not a tracked block,
+  the agent, an agent thread's stack or a dead stack area, plus the threads'
+  registers. Blocks allocated before injection are untracked and so count
+  as roots.
+
 ## The privileged helper
 
 `gstrace-helper record` opens a `perf_event` (software cpu-clock, callchains,

@@ -42,7 +42,8 @@
    it and already adjusted to point at the call (use index 0 with them). */
 - (NSArray *) addressesForStack: (uint32_t)stack;
 
-/* "file.m:42" via addr2line, or nil.  Slow; cached. */
+/* "file.m:42" via addr2line (llvm-addr2line on Windows), or nil.  Slow;
+   cached. */
 - (NSString *) sourceLocationForFrame: (uint64_t)address index: (NSUInteger)index;
 
 /* Forget caches after the process' images or methods changed. */
@@ -53,6 +54,7 @@
 - (NSDictionary *) symbolTableForAllStacks;
 
 + (BOOL) isSystemLibraryPath: (NSString *)path;
++ (NSString *) addr2linePath;   /* nil when no addr2line is installed */
 + (NSString *) prettyObjCName: (NSString *)elfName;
 + (NSString *) demangle: (NSString *)name;
 
