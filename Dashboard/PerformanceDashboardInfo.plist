@@ -3,7 +3,7 @@
   ApplicationDescription = "Performance analysis for GNUstep applications";
   ApplicationRelease = "0.1.0";
   FullVersionID = "0.1.0";
-  CFBundleIdentifier = "org.gnustep.PerformanceDashboard";
+  CFBundleIdentifier = "io.github.danjboyd.PerformanceDashboard";
   NSExecutable = "PerformanceDashboard";
   NSIcon = "PerformanceDashboard.png";
   NSRole = "Viewer";

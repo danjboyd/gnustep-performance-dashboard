@@ -5,7 +5,7 @@
     "gnustep-gui"
   ],
   "package": {
-    "id": "org.gnustep.PerformanceDashboard",
+    "id": "io.github.danjboyd.PerformanceDashboard",
     "name": "PerformanceDashboard",
     "displayName": "Performance Dashboard",
     "version": "0.1.0",

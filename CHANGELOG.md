@@ -14,7 +14,7 @@ Since the first implementation:
   app safely.
 - Renamed from "GNUstep Instruments" to Performance Dashboard: the app
   is `PerformanceDashboard.app`, the bundle id
-  `org.gnustep.PerformanceDashboard`, the polkit policy
+  `io.github.danjboyd.PerformanceDashboard`, the polkit policy
   `org.gnustep.performancedashboard.policy` (installing or removing the
   helper also removes the old policy file). Trace bundles are unchanged.
 - Record on an opened trace shows the template chooser, filled in from
