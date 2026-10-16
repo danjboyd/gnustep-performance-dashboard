@@ -3,7 +3,8 @@
 # recordings of the fixtures with gstrace.
 #
 #   sh Tests/run.sh            build what is needed and run everything
-#   SKIP_GUI=1 sh Tests/run.sh skip the AppKit fixture (needs X / Xvfb)
+#   SKIP_GUI=1 sh Tests/run.sh skip the AppKit fixture and the app checks
+#                              (they need Xvfb; the app checks also xdotool)
 #
 # Judge the suite by the exit status and the final line.
 
@@ -162,6 +163,90 @@ if [ "${SKIP_GUI:-0}" != 1 ] && command -v Xvfb >/dev/null 2>&1; then
   DISPLAY=$DISP XAUTHORITY= record hangleaks --template Leaks --launch "$OUT/hangapp"
   "$GSTRACE" report "$OUT/hangleaks.gstrace" leaks >"$OUT/hangleaks.txt" 2>/dev/null
   check "GUI app leak check stays small (< 100 blocks, no GSCInlineString)" "[ \$(sed -n 2p '$OUT/hangleaks.txt' | cut -d' ' -f1) -lt 100 ] && ! grep -q '^GSCInlineString' '$OUT/hangleaks.txt'"
+
+  if command -v xdotool >/dev/null 2>&1; then
+    echo "== Performance Dashboard app (Xvfb, xdotool)"
+    APP=$ROOT/Dashboard/PerformanceDashboard.app/PerformanceDashboard
+    SAMPLE=$ROOT/Tests/data/sample.gstrace
+    TRACES="/tmp/GNUstepSecure$(id -u)/Performance Dashboard"
+    # window_id <title> [seconds]: the visible window with that title
+    window_id() {
+      n=0
+      while [ $n -lt "${2:-20}" ]; do
+        w=$(DISPLAY=$DISP xdotool search --onlyvisible --name "^$1\$" 2>/dev/null | head -1)
+        [ -n "$w" ] && { echo "$w"; return 0; }
+        sleep 1; n=$((n + 1))
+      done
+      return 1
+    }
+    # wait_app <pid> [seconds]: sets STATUS to the app's exit status, or
+    # "running" (and kills it).  Not in $(...): a subshell can't wait.
+    wait_app() {
+      n=0
+      while [ $n -lt "${2:-10}" ] && kill -0 "$1" 2>/dev/null; do sleep 1; n=$((n + 1)); done
+      if kill -0 "$1" 2>/dev/null; then kill -9 "$1"; wait "$1" 2>/dev/null; STATUS=running
+      else wait "$1"; STATUS=$?; fi
+    }
+    key() { DISPLAY=$DISP xdotool key --window "$1" "$2"; }
+
+    # Open a trace, Record from it, quit.
+    mkdir -p "$TRACES"; touch "$OUT/gui.mark"
+    DISPLAY=$DISP XAUTHORITY= "$APP" -GSFilePath "$SAMPLE" >"$OUT/gui.log" 2>&1 &
+    APID=$!
+    W=$(window_id "objcwork — Custom")
+    check "app: opens a trace" "[ -n '$W' ]"
+    [ -n "$W" ] && key "$W" ctrl+r
+    P=$(window_id "Choose a Profiling Template" 10)
+    check "app: Record on an opened trace shows the template chooser" "[ -n '$P' ]"
+    # Xvfb has no window manager, so the panel is not the key window and
+    # GNUstep takes the first click on it to activate it: click an empty
+    # spot, then Record (its centre is 29 points above the content's
+    # bottom edge, 656 from the left).
+    if [ -n "$P" ]; then
+      eval $(DISPLAY=$DISP xdotool getwindowgeometry --shell "$P")
+      DISPLAY=$DISP xdotool mousemove --window "$P" 360 $((HEIGHT - 60)) click 1
+      sleep 1
+      DISPLAY=$DISP xdotool mousemove --window "$P" 656 $((HEIGHT - 29)) click 1
+    fi
+    check "app: the chooser records into a new window" "window_id 'objcwork — Time Profiler' 10 >/dev/null"
+    sleep 3
+    NEW=$(find "$TRACES" -maxdepth 1 -name 'objcwork*.gstrace' -newer "$OUT/gui.mark" | head -1)
+    check "app: the new recording finished cleanly" "[ -n '$NEW' ] && '$GSTRACE' info '$NEW' 2>/dev/null | grep -q 'finished cleanly: yes'"
+    check "app: the opened trace stays open" "window_id 'objcwork — Custom' 1 >/dev/null"
+    [ -n "$W" ] && key "$W" ctrl+q
+    wait_app $APID
+    check "app: Quit exits with status 0 ($STATUS)" "[ $STATUS = 0 ]"
+    check "app: no selector type mismatches logged" "! grep -q 'incorrect signature' '$OUT/gui.log'"
+
+    # Quitting under each installed theme, by menu and by SIGTERM.
+    for theme in Adwaita Sombre; do
+      found=no
+      for lib in $(gnustep-config --variable=GNUSTEP_USER_LIBRARY) \
+                 $(gnustep-config --variable=GNUSTEP_LOCAL_LIBRARY) \
+                 $(gnustep-config --variable=GNUSTEP_SYSTEM_LIBRARY); do
+        [ -d "$lib/Themes/$theme.theme" ] && found=yes
+      done
+      if [ $found = no ]; then
+        echo "     ($theme theme not installed; skipped)"
+        continue
+      fi
+      DISPLAY=$DISP XAUTHORITY= "$APP" -GSFilePath "$SAMPLE" -GSTheme $theme >"$OUT/gui-$theme.log" 2>&1 &
+      APID=$!
+      W=$(window_id "objcwork — Custom")
+      [ -n "$W" ] && key "$W" ctrl+q
+      wait_app $APID
+      check "app ($theme): Quit exits with status 0 ($STATUS)" "[ $STATUS = 0 ]"
+      DISPLAY=$DISP XAUTHORITY= "$APP" -GSFilePath "$SAMPLE" -GSTheme $theme >>"$OUT/gui-$theme.log" 2>&1 &
+      APID=$!
+      window_id "objcwork — Custom" >/dev/null
+      sleep 2   # the handler is installed once launching has finished
+      kill -TERM $APID
+      wait_app $APID
+      check "app ($theme): SIGTERM exits with status 0 ($STATUS)" "[ $STATUS = 0 ]"
+    done
+  else
+    echo "== Performance Dashboard app skipped (needs xdotool)"
+  fi
   kill $XPID 2>/dev/null
 else
   echo "== AppKit fixture skipped"

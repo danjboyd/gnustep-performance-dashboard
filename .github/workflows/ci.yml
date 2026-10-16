@@ -22,7 +22,7 @@ jobs:
       - name: Install packages
         run: |
           sudo apt-get -q update
-          sudo apt-get -q -y install clang lld cmake ninja-build pkg-config xvfb \
+          sudo apt-get -q -y install clang lld cmake ninja-build pkg-config xvfb xdotool \
             libffi-dev libgnutls28-dev libxml2-dev libxslt1-dev libicu-dev zlib1g-dev \
             libcurl4-gnutls-dev libjpeg-dev libtiff-dev libpng-dev \
             libcairo2-dev libfreetype-dev libfontconfig-dev \
