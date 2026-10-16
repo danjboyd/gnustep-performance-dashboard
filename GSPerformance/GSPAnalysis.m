@@ -309,8 +309,10 @@ slot_for(addr_slot *slots, uint64_t mask, uint64_t address)
   for (NSUInteger i = 0; i <= ne; i++)
     {
       GSPTime now = i < ne ? ev[i].time : UINT64_MAX;
-      /* apply tags that happened before this event */
-      while (ti < nt && tags[ti].time <= now)
+      /* Apply tags that happened before this event.  A tag follows its
+         allocation but may share its timestamp (Windows counts in 100 ns
+         ticks), so a tag is applied only once time has moved past it.  */
+      while (ti < nt && (tags[ti].time < now || i == ne))
         {
           /* The tag names the object; libobjc2 allocates it with a
              refcount word in front, so the block may start 8 bytes

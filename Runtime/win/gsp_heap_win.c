@@ -165,19 +165,20 @@ gspw_intern_stack(const uint64_t *frames, unsigned n)
 
 static uintptr_t self_start, self_end;
 
-/* The stack of the code that called a hook, without the agent's frames.  */
+/* The stack of the code that called a hook.  The agent's frames are left
+   out wherever they are: a hook in the middle of a stack (an allocation
+   inside class_createInstance) is transparent.  */
 static uint32_t
 hook_caller_stack(void)
 {
   void *pcs[MAX_ALLOC_FRAMES];
   uint64_t frames[MAX_ALLOC_FRAMES];
   USHORT n = RtlCaptureStackBackTrace(0, alloc_frames, pcs, NULL);
-  USHORT skip = 0, k = 0;
+  USHORT k = 0;
 
-  while (skip < n && (uintptr_t)pcs[skip] >= self_start && (uintptr_t)pcs[skip] < self_end)
-    skip++;
-  for (USHORT i = skip; i < n; i++)
-    frames[k++] = (uint64_t)(uintptr_t)pcs[i];
+  for (USHORT i = 0; i < n; i++)
+    if ((uintptr_t)pcs[i] < self_start || (uintptr_t)pcs[i] >= self_end)
+      frames[k++] = (uint64_t)(uintptr_t)pcs[i];
   return k ? gspw_intern_stack(frames, k) : 0;
 }
 
