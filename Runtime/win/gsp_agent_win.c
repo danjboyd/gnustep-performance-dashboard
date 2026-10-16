@@ -57,7 +57,9 @@ static char out_dir[1024];
 static DWORD self_pid;
 static DWORD main_tid;
 static DWORD sampler_tid;
+static DWORD meta_thread_id;
 static HANDLE sampler_thread;
+static HANDLE meta_thread;
 static HANDLE stop_event;
 static volatile LONG recording;
 static volatile LONG finished;
@@ -288,27 +290,38 @@ resolve_objc(void)
   return p_getClassList != NULL;
 }
 
+/* open-addressing set of implementation addresses already written */
 static bool
 mark_imp(uint64_t imp)
 {
-  for (size_t i = 0; i < dumped_count; i++)
-    if (dumped_imps[i] == imp)
-      return false;
-  if (dumped_count == dumped_cap)
+  if ((dumped_count + 1) * 2 > dumped_cap)
     {
-      size_t ncap = dumped_cap ? dumped_cap * 2 : 4096;
-      uint64_t *n = HeapAlloc(GetProcessHeap(), 0, ncap * sizeof(uint64_t));
+      size_t ncap = dumped_cap ? dumped_cap * 2 : 16384;
+      uint64_t *n = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, ncap * sizeof(uint64_t));
       if (n == NULL)
         return true;
+      for (size_t i = 0; i < dumped_cap; i++)
+        if (dumped_imps[i])
+          {
+            size_t j = (size_t)((dumped_imps[i] * 0x9E3779B97F4A7C15ull) >> 20) & (ncap - 1);
+            while (n[j])
+              j = (j + 1) & (ncap - 1);
+            n[j] = dumped_imps[i];
+          }
       if (dumped_imps)
-        {
-          memcpy(n, dumped_imps, dumped_count * sizeof(uint64_t));
-          HeapFree(GetProcessHeap(), 0, dumped_imps);
-        }
+        HeapFree(GetProcessHeap(), 0, dumped_imps);
       dumped_imps = n;
       dumped_cap = ncap;
     }
-  dumped_imps[dumped_count++] = imp;
+  size_t j = (size_t)((imp * 0x9E3779B97F4A7C15ull) >> 20) & (dumped_cap - 1);
+  while (dumped_imps[j])
+    {
+      if (dumped_imps[j] == imp)
+        return false;
+      j = (j + 1) & (dumped_cap - 1);
+    }
+  dumped_imps[j] = imp;
+  dumped_count++;
   return true;
 }
 
@@ -384,7 +397,8 @@ refresh_threads(void)
   if (Thread32First(snap, &te))
     do
       {
-        if (te.th32OwnerProcessID != self_pid || te.th32ThreadID == sampler_tid)
+        if (te.th32OwnerProcessID != self_pid || te.th32ThreadID == sampler_tid
+            || te.th32ThreadID == meta_thread_id)
           continue;
         int i;
         for (i = 0; i < thread_count; i++)
@@ -514,9 +528,27 @@ calibrate(void)
     cycles_per_interval = 1;
 }
 
+/* Module list and Objective-C method table, once a second, on their own
+   thread: a large method dump must not stall sampling.  */
+static DWORD WINAPI
+meta_main(LPVOID arg)
+{
+  (void)arg;
+  SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
+  do
+    {
+      emit_new_modules();
+      dump_methods(false);
+    }
+  while (WaitForSingleObject(stop_event, 1000) == WAIT_TIMEOUT);
+  return 0;
+}
+
 static void
 finish(void)
 {
+  if (meta_thread)
+    WaitForSingleObject(meta_thread, 10000);
   if (InterlockedExchange(&finished, 1))
     return;
   InterlockedExchange(&recording, 0);
@@ -540,7 +572,7 @@ finish(void)
 static DWORD WINAPI
 sampler_main(LPVOID arg)
 {
-  uint64_t next_wall = 0, next_scan = 0, next_modules = 0, next_flush = 0;
+  uint64_t next_wall = 0, next_scan = 0, next_flush = 0;
 
   (void)arg;
   timeBeginPeriod(1);
@@ -557,12 +589,6 @@ sampler_main(LPVOID arg)
         {
           refresh_threads();
           next_scan = now + 100000000ull;
-        }
-      if (now >= next_modules)
-        {
-          emit_new_modules();
-          dump_methods(false);
-          next_modules = now + 1000000000ull;
         }
       bool wall = wall_sampling && now >= next_wall;
       if (wall)
@@ -750,6 +776,9 @@ start(void)
   emit(GSP_REC_MARK, GSP_MARK_START, 0, hdr.start_ns, self_pid, NULL, 0, NULL, 0);
   emit_new_modules();
   sampler_thread = CreateThread(NULL, 0, sampler_main, NULL, 0, &sampler_tid);
+  DWORD meta_tid = 0;
+  meta_thread = CreateThread(NULL, 0, meta_main, NULL, 0, &meta_tid);
+  meta_thread_id = meta_tid;
 }
 
 BOOL WINAPI
