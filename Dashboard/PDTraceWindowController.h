@@ -17,6 +17,8 @@
 
 - (void) startRecording: (id)sender;
 - (void) stopRecording: (id)sender;
+/* Stop a running recording and wait until its trace is complete.  */
+- (void) finishRecording;
 - (void) saveTraceAs: (id)sender;
 - (void) exportTrace: (id)sender;
 - (void) checkForLeaksNow: (id)sender;

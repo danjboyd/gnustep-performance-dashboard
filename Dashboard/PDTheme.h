@@ -31,3 +31,13 @@
 + (NSFont *) labelFont;
 + (NSFont *) boldLabelFont;
 @end
+
+/* Whether a check box is on.  Asks the cell: -[NSButton state] in libs-gui
+   sends -state to an untyped cell with NSSwitch's unsigned
+   NSControlStateValue signature, and libobjc2 logs a type mismatch for
+   every call (gnustep/libs-gui, NSButton.m).  */
+static inline BOOL
+PDIsOn(NSButton *button)
+{
+  return [(NSCell *)[button cell] state] == NSOnState;
+}

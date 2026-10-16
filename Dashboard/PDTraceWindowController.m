@@ -397,6 +397,15 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
   [_recordButton setEnabled: NO];
 }
 
+- (void) finishRecording
+{
+  if (_recorder.isRecording)
+    {
+      [_recorder stop];
+      [_recorder waitUntilFinished];
+    }
+}
+
 - (void) recorder: (GSPRecorder *)recorder didFinishWithError: (NSError *)error
 {
   [_timer invalidate];

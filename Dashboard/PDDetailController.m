@@ -380,9 +380,9 @@ check_box(NSString *title, NSRect frame, id target, SEL action)
 
 - (void) optionsChanged: (id)sender
 {
-  if (sender == _top && [_top state] == NSOnState)
+  if (sender == _top && PDIsOn(_top))
     [_invert setState: NSOffState];
-  if (sender == _invert && [_invert state] == NSOnState)
+  if (sender == _invert && PDIsOn(_invert))
     [_top setState: NSOffState];
   [self reload];
 }
@@ -437,15 +437,15 @@ col(NSString *ident, NSString *title, CGFloat width)
 - (GSPCallTreeOptions) treeOptions
 {
   GSPCallTreeOptions o = 0;
-  if ([_separate state] == NSOnState && ![_separate isHidden])
+  if (PDIsOn(_separate) && ![_separate isHidden])
     o |= GSPCallTreeSeparateByThread;
-  if ([_invert state] == NSOnState)
+  if (PDIsOn(_invert))
     o |= GSPCallTreeInvert;
-  if ([_hideSystem state] == NSOnState)
+  if (PDIsOn(_hideSystem))
     o |= GSPCallTreeHideSystemLibraries;
-  if ([_flatten state] == NSOnState)
+  if (PDIsOn(_flatten))
     o |= GSPCallTreeFlattenRecursion;
-  if ([_top state] == NSOnState)
+  if (PDIsOn(_top))
     o |= GSPCallTreeTopFunctions;
   return o;
 }

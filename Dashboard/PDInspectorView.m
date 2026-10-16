@@ -119,7 +119,7 @@
           [_addresses addObject: [addrs objectAtIndex: i]];
           [_lines addObject: [NSNull null]];
         }
-      if ([_sourceLines state] == NSOnState)
+      if (PDIsOn(_sourceLines))
         [self loadLines];
     }
   [_frames reloadData];
@@ -137,7 +137,7 @@
 
 - (void) toggleLines: (id)sender
 {
-  if ([_sourceLines state] == NSOnState)
+  if (PDIsOn(_sourceLines))
     [self loadLines];
   [_frames reloadData];
 }

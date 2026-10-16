@@ -4,10 +4,18 @@
 #import "PDTimelineView.h"
 #import <GSPerformance/GSPerformance.h>
 
+#if !defined(_WIN32)
+#  include <fcntl.h>
+#  include <signal.h>
+#  include <string.h>
+#  include <unistd.h>
+#endif
+
 @implementation PDAppController
 {
   NSMutableArray *_windows;
   BOOL _openedAtLaunch;
+  NSFileHandle *_terminationPipe;
 }
 
 - (instancetype) init
@@ -94,9 +102,59 @@ add_item(NSMenu *menu, NSString *title, SEL action, NSString *key, id target)
   [self buildMenus];
 }
 
+#if !defined(_WIN32)
+/* libs-back's SIGTERM handler calls -[NSApp terminate:] inside the signal
+   handler, which is not async-signal-safe: with the Sombre theme it
+   recurses in gnustep-base until the stack overflows.  Once the backend
+   is up, SIGTERM only writes to a pipe, and the run loop terminates the
+   app as Quit does.  */
+static int termination_fds[2] = { -1, -1 };
+
+static void
+termination_signal(int sig)
+{
+  char c = 0;
+  ssize_t n = write(termination_fds[1], &c, 1);
+  (void)n;
+}
+
+- (void) installTerminationHandler
+{
+  struct sigaction sa;
+
+  if (pipe(termination_fds) != 0)
+    return;
+  fcntl(termination_fds[0], F_SETFD, FD_CLOEXEC);
+  fcntl(termination_fds[1], F_SETFD, FD_CLOEXEC);
+  fcntl(termination_fds[1], F_SETFL, O_NONBLOCK);
+  _terminationPipe = [[NSFileHandle alloc] initWithFileDescriptor: termination_fds[0]
+                                                    closeOnDealloc: YES];
+  [[NSNotificationCenter defaultCenter] addObserver: self
+    selector: @selector(terminationRequested:)
+        name: NSFileHandleDataAvailableNotification object: _terminationPipe];
+  /* also while a modal panel or a mouse drag runs the loop */
+  [_terminationPipe waitForDataInBackgroundAndNotifyForModes:
+    [NSArray arrayWithObjects: NSDefaultRunLoopMode, NSModalPanelRunLoopMode,
+             NSEventTrackingRunLoopMode, nil]];
+  memset(&sa, 0, sizeof(sa));
+  sa.sa_handler = termination_signal;
+  sigemptyset(&sa.sa_mask);
+  sa.sa_flags = SA_RESTART;
+  sigaction(SIGTERM, &sa, NULL);
+}
+
+- (void) terminationRequested: (NSNotification *)n
+{
+  [NSApp terminate: self];
+}
+#endif
+
 - (void) applicationDidFinishLaunching: (NSNotification *)n
 {
   NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
+#if !defined(_WIN32)
+  [self installTerminationHandler];
+#endif
   /* Automation (tests, screenshots): -PDRecordTarget path
      [-PDRecordTemplate name] [-PDRecordArguments "a b"] [-PDRecordTimeLimit s] */
   NSString *target = [d stringForKey: @"PDRecordTarget"];
@@ -128,6 +186,20 @@ add_item(NSMenu *menu, NSString *title, SEL action, NSString *key, id target)
 {
   _openedAtLaunch = YES;
   return [self openTraceAtPath: file];
+}
+
+/* After this notification libs-gui closes every window and frees NSApp.
+   With the Sombre theme (libs-gui 0.32.0) that close cascades through the
+   image cache windows (GSCacheW) and autorelease pools until the stack
+   overflows.  Nothing needs closing when the process is about to end, so
+   finish here: stop recordings so their traces are complete, save the
+   defaults and exit.  */
+- (void) applicationWillTerminate: (NSNotification *)n
+{
+  for (PDTraceWindowController *wc in [_windows copy])
+    [wc finishRecording];
+  [[NSUserDefaults standardUserDefaults] synchronize];
+  exit(0);
 }
 
 - (BOOL) applicationShouldTerminateAfterLastWindowClosed: (NSApplication *)app
