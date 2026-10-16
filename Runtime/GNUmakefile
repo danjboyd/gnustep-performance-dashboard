@@ -42,7 +42,7 @@ $(OBJDIR)/gsperf-agent.dll: win/gsp_agent_win.c include/GSPerformance/gsp_format
 
 $(OBJDIR)/gsperf.dll: gsp_signpost_api.c include/GSPerformance/gsp_signpost.h | $(OBJDIR)
 	$(CC) $(CFLAGS) -std=gnu11 -Wall -Iinclude -DGSP_BUILDING_API -shared \
-	  -o $@ gsp_signpost_api.c -Wl,--out-implib,$(OBJDIR)/libgsperf.dll.a
+	  -o $@ gsp_signpost_api.c -Wl,--out-implib,$(OBJDIR)/libgsperf.dll.a -lpthread
 
 install: all
 	install -d $(DESTDIR)$(PREFIX) $(DESTDIR)$(HEADER_PREFIX)/GSPerformance \
