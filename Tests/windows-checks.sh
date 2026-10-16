@@ -31,6 +31,21 @@ check "two threads with CPU" "[ \$(grep -c 'CPU' '$OUT/spin-threads.txt') -ge 2 
 cat "$OUT/spin-sp.txt"
 check "4 Round signposts" "grep -E -q '^Round +PointsOfInterest +4 ' '$OUT/spin-sp.txt'"
 
+# File Activity and Network
+clang -O0 -g "$ROOT/Tests/fixtures/iofix_win.c" -o "$OUT/iofix.exe" -lws2_32 || exit 1
+rm -rf "$OUT/io.gstrace"
+"$GSTRACE" record --template "File Activity" --instrument file-activity --instrument network \
+  -o "$OUT/io.gstrace" --launch "$OUT/iofix.exe" "$OUT/iofix.dat" >"$OUT/io-record.log" 2>&1
+cat "$OUT/io-record.log"
+"$GSTRACE" report "$OUT/io.gstrace" files >"$OUT/io-files.txt" 2>&1
+"$GSTRACE" report "$OUT/io.gstrace" network >"$OUT/io-net.txt" 2>&1
+"$GSTRACE" report "$OUT/io.gstrace" files --by-stack --depth 6 >"$OUT/io-tree.txt" 2>&1
+cat "$OUT/io-files.txt" "$OUT/io-net.txt"
+check "files: 3 opens, 200 KiB read, 10 writes of 100 KiB" "grep -E -q 'iofix.dat +3 +[0-9]+ +200.00 KiB +10 +100.00 KiB' '$OUT/io-files.txt'"
+check "files: failed opens recorded as errors" "grep -E -q 'nonexistent/iofix +2 +0 +0 Bytes +0 +0 Bytes +2 ' '$OUT/io-files.txt'"
+check "files: call tree attributes I/O to write_file and read_file" "grep -q write_file '$OUT/io-tree.txt' && grep -q read_file '$OUT/io-tree.txt'"
+check "network: 5000 bytes sent and received over loopback" "grep -E -q '^127.0.0.1:[0-9]+ +1 +0 +0 Bytes +1 +4.88 KiB' '$OUT/io-net.txt' && grep -E -q '^127.0.0.1:[0-9]+ +1 +1 +4.88 KiB' '$OUT/io-net.txt'"
+
 # Objective-C: method names come from the runtime's method table
 if command -v gnustep-config >/dev/null 2>&1; then
   OBJCFLAGS=$(gnustep-config --objc-flags | sed 's/-MMD//; s/-MP//')

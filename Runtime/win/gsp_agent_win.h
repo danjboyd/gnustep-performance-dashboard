@@ -25,12 +25,32 @@ bool gspw_live_take(void *p, size_t *size, uint32_t *stack, uint32_t *class_name
 void gspw_live_put(void *p, size_t size, uint32_t stack, uint32_t class_name);
 void gspw_live_tag(void *obj, uint32_t class_name);
 
-/* gsp_heap_win.c */
+/* gsp_heap_win.c: import table hooks.  A hook applies to imports of
+   `name` from a DLL of the given kind; `real` receives the original.  */
+enum { GSPW_LIB_CRT, GSPW_LIB_OBJC, GSPW_LIB_KERNEL, GSPW_LIB_NET };
+
+typedef struct gspw_hook
+{
+  const char *name;
+  int lib;
+  void *hook;
+  void **real;
+} gspw_hook;
+
+bool gspw_guard_enter(void);
+void gspw_guard_leave(void);
+uint32_t gspw_caller_stack(void);
 void gspw_heap_start(bool allocations, bool refcounts, bool zombies, unsigned frames);
 void gspw_heap_patch_modules(void);
 void gspw_heap_exclude_thread(void);
 uint32_t gspw_intern_stack(const uint64_t *frames, unsigned n);
 void gspw_agent_image(uint64_t *lo, uint64_t *hi);
 bool gspw_exit_snapshot_taken(void);
+
+/* gsp_io_win.c */
+extern gspw_hook gspw_io_hooks[];
+extern const size_t gspw_io_hook_count;
+void gspw_io_start(bool files, bool network);
+bool gspw_io_enabled(void);
 
 #endif

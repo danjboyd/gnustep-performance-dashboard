@@ -43,10 +43,11 @@ static CRITICAL_SECTION patch_lock;
 /* ------------------------------------------------------------------ */
 /* re-entrancy guard                                                   */
 
-static inline bool
-enter(void)
+/* true when the calling thread may record (and is now marked busy) */
+bool
+gspw_guard_enter(void)
 {
-  if (!heap_on || guard_tls == TLS_OUT_OF_INDEXES || !gspw_recording())
+  if (guard_tls == TLS_OUT_OF_INDEXES || !gspw_recording())
     return false;
   DWORD e = GetLastError();
   bool busy = TlsGetValue(guard_tls) != NULL;
@@ -56,12 +57,24 @@ enter(void)
   return !busy;
 }
 
-static inline void
-leave(void)
+void
+gspw_guard_leave(void)
 {
   DWORD e = GetLastError();
   TlsSetValue(guard_tls, NULL);
   SetLastError(e);
+}
+
+static inline bool
+enter(void)
+{
+  return heap_on && gspw_guard_enter();
+}
+
+static inline void
+leave(void)
+{
+  gspw_guard_leave();
 }
 
 void
@@ -169,8 +182,8 @@ static uintptr_t self_start, self_end;
 /* The stack of the code that called a hook.  The agent's frames are left
    out wherever they are: a hook in the middle of a stack (an allocation
    inside class_createInstance) is transparent.  */
-static uint32_t
-hook_caller_stack(void)
+uint32_t
+gspw_caller_stack(void)
 {
   void *pcs[MAX_ALLOC_FRAMES];
   uint64_t frames[MAX_ALLOC_FRAMES];
@@ -193,7 +206,7 @@ record_alloc(void *p, size_t size, void *old)
 
   a.address = (uint64_t)(uintptr_t)p;
   a.size = size;
-  a.stack = hook_caller_stack();
+  a.stack = gspw_caller_stack();
   a.category = 0;
   a.old_address = (uint64_t)(uintptr_t)old;
   gspw_live_insert(p, size, a.stack);
@@ -447,7 +460,7 @@ record_refcount(id obj, int kind)
     return;
   gsp_refcount_payload p;
   p.address = (uint64_t)(uintptr_t)obj;
-  p.stack = hook_caller_stack();
+  p.stack = gspw_caller_stack();
   p.refcount = -1;
   gspw_emit(GSP_REC_REFCOUNT, (uint32_t)kind, 0, gspw_now(), GetCurrentThreadId(),
             &p, sizeof(p), NULL, 0);
@@ -561,7 +574,7 @@ zombie_forward(id self, SEL cmd, id invocation)
       memset(&z, 0, sizeof(z));
       z.address = (uint64_t)(uintptr_t)self;
       z.selector = sel && p_sel_getName ? gspw_intern(p_sel_getName(sel)) : 0;
-      z.stack = hook_caller_stack();
+      z.stack = gspw_caller_stack();
       gspw_emit(GSP_REC_ZOMBIE, 0, 0, gspw_now(), GetCurrentThreadId(),
                 &z, sizeof(z), NULL, 0);
       /* zombie messages often end in abort(): make sure it is written */
@@ -696,41 +709,31 @@ hook_LoadLibraryExW(LPCWSTR name, HANDLE file, DWORD flags)
 /* ------------------------------------------------------------------ */
 /* import table patching                                               */
 
-enum { LIB_CRT, LIB_OBJC, LIB_LOADER };
-
-typedef struct hook_def
-{
-  const char *name;
-  int lib;
-  void *hook;
-  void **real;
-} hook_def;
-
 #define HOOK(n, lib, fn, real) { n, lib, (void *)fn, (void **)&real }
-static hook_def hooks[] = {
-  HOOK("malloc", LIB_CRT, hook_malloc, real_malloc),
-  HOOK("calloc", LIB_CRT, hook_calloc, real_calloc),
-  HOOK("realloc", LIB_CRT, hook_realloc, real_realloc),
-  HOOK("free", LIB_CRT, hook_free, real_free),
-  HOOK("_recalloc", LIB_CRT, hook_recalloc, real_recalloc),
-  HOOK("_aligned_malloc", LIB_CRT, hook_aligned_malloc, real_aligned_malloc),
-  HOOK("_aligned_realloc", LIB_CRT, hook_aligned_realloc, real_aligned_realloc),
-  HOOK("_aligned_free", LIB_CRT, hook_aligned_free, real_aligned_free),
-  HOOK("_strdup", LIB_CRT, hook_strdup, real_strdup),
-  HOOK("strdup", LIB_CRT, hook_strdup2, real_strdup2),
-  HOOK("_wcsdup", LIB_CRT, hook_wcsdup, real_wcsdup),
-  HOOK("exit", LIB_CRT, hook_exit, real_exit),
-  HOOK("class_createInstance", LIB_OBJC, hook_class_createInstance, real_class_createInstance),
-  HOOK("objc_alloc", LIB_OBJC, hook_objc_alloc, real_objc_alloc),
-  HOOK("objc_allocWithZone", LIB_OBJC, hook_objc_allocWithZone, real_objc_allocWithZone),
-  HOOK("objc_alloc_init", LIB_OBJC, hook_objc_alloc_init, real_objc_alloc_init),
-  HOOK("objc_retain", LIB_OBJC, hook_objc_retain, real_objc_retain),
-  HOOK("objc_release", LIB_OBJC, hook_objc_release, real_objc_release),
-  HOOK("objc_autorelease", LIB_OBJC, hook_objc_autorelease, real_objc_autorelease),
-  HOOK("LoadLibraryA", LIB_LOADER, hook_LoadLibraryA, real_LoadLibraryA),
-  HOOK("LoadLibraryW", LIB_LOADER, hook_LoadLibraryW, real_LoadLibraryW),
-  HOOK("LoadLibraryExA", LIB_LOADER, hook_LoadLibraryExA, real_LoadLibraryExA),
-  HOOK("LoadLibraryExW", LIB_LOADER, hook_LoadLibraryExW, real_LoadLibraryExW),
+static gspw_hook hooks[] = {
+  HOOK("malloc", GSPW_LIB_CRT, hook_malloc, real_malloc),
+  HOOK("calloc", GSPW_LIB_CRT, hook_calloc, real_calloc),
+  HOOK("realloc", GSPW_LIB_CRT, hook_realloc, real_realloc),
+  HOOK("free", GSPW_LIB_CRT, hook_free, real_free),
+  HOOK("_recalloc", GSPW_LIB_CRT, hook_recalloc, real_recalloc),
+  HOOK("_aligned_malloc", GSPW_LIB_CRT, hook_aligned_malloc, real_aligned_malloc),
+  HOOK("_aligned_realloc", GSPW_LIB_CRT, hook_aligned_realloc, real_aligned_realloc),
+  HOOK("_aligned_free", GSPW_LIB_CRT, hook_aligned_free, real_aligned_free),
+  HOOK("_strdup", GSPW_LIB_CRT, hook_strdup, real_strdup),
+  HOOK("strdup", GSPW_LIB_CRT, hook_strdup2, real_strdup2),
+  HOOK("_wcsdup", GSPW_LIB_CRT, hook_wcsdup, real_wcsdup),
+  HOOK("exit", GSPW_LIB_CRT, hook_exit, real_exit),
+  HOOK("class_createInstance", GSPW_LIB_OBJC, hook_class_createInstance, real_class_createInstance),
+  HOOK("objc_alloc", GSPW_LIB_OBJC, hook_objc_alloc, real_objc_alloc),
+  HOOK("objc_allocWithZone", GSPW_LIB_OBJC, hook_objc_allocWithZone, real_objc_allocWithZone),
+  HOOK("objc_alloc_init", GSPW_LIB_OBJC, hook_objc_alloc_init, real_objc_alloc_init),
+  HOOK("objc_retain", GSPW_LIB_OBJC, hook_objc_retain, real_objc_retain),
+  HOOK("objc_release", GSPW_LIB_OBJC, hook_objc_release, real_objc_release),
+  HOOK("objc_autorelease", GSPW_LIB_OBJC, hook_objc_autorelease, real_objc_autorelease),
+  HOOK("LoadLibraryA", GSPW_LIB_KERNEL, hook_LoadLibraryA, real_LoadLibraryA),
+  HOOK("LoadLibraryW", GSPW_LIB_KERNEL, hook_LoadLibraryW, real_LoadLibraryW),
+  HOOK("LoadLibraryExA", GSPW_LIB_KERNEL, hook_LoadLibraryExA, real_LoadLibraryExA),
+  HOOK("LoadLibraryExW", GSPW_LIB_KERNEL, hook_LoadLibraryExW, real_LoadLibraryExW),
 };
 #define HOOK_COUNT (sizeof(hooks) / sizeof(hooks[0]))
 
@@ -738,17 +741,19 @@ static int
 lib_kind(const char *dll)
 {
   if (_stricmp(dll, "ucrtbase.dll") == 0 || _strnicmp(dll, "api-ms-win-crt-", 15) == 0)
-    return LIB_CRT;
+    return GSPW_LIB_CRT;
   if (_stricmp(dll, "kernel32.dll") == 0 || _stricmp(dll, "kernelbase.dll") == 0
-      || _strnicmp(dll, "api-ms-win-core-libraryloader-", 30) == 0)
-    return LIB_LOADER;
+      || _strnicmp(dll, "api-ms-win-core-", 16) == 0)
+    return GSPW_LIB_KERNEL;
+  if (_stricmp(dll, "ws2_32.dll") == 0)
+    return GSPW_LIB_NET;
   char lower[64];
   size_t i;
   for (i = 0; dll[i] && i < sizeof(lower) - 1; i++)
     lower[i] = (char)(dll[i] >= 'A' && dll[i] <= 'Z' ? dll[i] + 32 : dll[i]);
   lower[i] = 0;
   if (strstr(lower, "objc") != NULL)
-    return LIB_OBJC;
+    return GSPW_LIB_OBJC;
   return -1;
 }
 
@@ -769,7 +774,7 @@ resolve_objc(const char *dll)
 }
 
 static void
-patch_slot(ULONGLONG *slot, hook_def *h)
+patch_slot(ULONGLONG *slot, gspw_hook *h)
 {
   void *cur = (void *)(uintptr_t)*slot;
   DWORD old;
@@ -779,9 +784,10 @@ patch_slot(ULONGLONG *slot, hook_def *h)
   /* The real function comes from the first table that imports it; the
      same export resolves to the same address everywhere.  */
   InterlockedCompareExchangePointer(h->real, cur, NULL);
-  /* Bound to something else (a shim)?  Leave it alone; LoadLibrary may
-     come from kernel32 or kernelbase, which are equivalent.  */
-  if (*h->real != cur && h->lib != LIB_LOADER)
+  /* Bound to something else (a shim)?  Leave it alone.  Kernel and
+     winsock functions may come from kernel32 or kernelbase (or an API
+     set), which are equivalent.  */
+  if (*h->real != cur && h->lib != GSPW_LIB_KERNEL && h->lib != GSPW_LIB_NET)
     return;
   if (!VirtualProtect(slot, sizeof(*slot), PAGE_READWRITE, &old))
     return;
@@ -813,7 +819,7 @@ patch_module(HMODULE m)
       /* Without the name table the bound IAT cannot be matched by name. */
       if (lib < 0 || d->FirstThunk == 0 || d->OriginalFirstThunk == 0)
         continue;
-      if (lib == LIB_OBJC)
+      if (lib == GSPW_LIB_OBJC)
         resolve_objc(dll);
       IMAGE_THUNK_DATA64 *names = (IMAGE_THUNK_DATA64 *)(base + d->OriginalFirstThunk);
       IMAGE_THUNK_DATA64 *iat = (IMAGE_THUNK_DATA64 *)(base + d->FirstThunk);
@@ -829,10 +835,19 @@ patch_module(HMODULE m)
                 patch_slot(&iat->u1.Function, &hooks[k]);
                 break;
               }
+          if (gspw_io_enabled())
+            for (size_t k = 0; k < gspw_io_hook_count; k++)
+              if (gspw_io_hooks[k].lib == lib && strcmp(fn, gspw_io_hooks[k].name) == 0)
+                {
+                  patch_slot(&iat->u1.Function, &gspw_io_hooks[k]);
+                  break;
+                }
         }
     }
 }
 
+static HMODULE kernel32_module, kernelbase_module;
+static volatile LONG patching_on;
 static uintptr_t patched[2048];
 static int patched_count;
 
@@ -842,7 +857,7 @@ gspw_heap_patch_modules(void)
   HMODULE mods[2048];
   DWORD needed = 0;
 
-  if (!heap_on)
+  if (!patching_on)
     return;
   EnterCriticalSection(&patch_lock);
   if (K32EnumProcessModules(GetCurrentProcess(), mods, sizeof(mods), &needed))
@@ -852,7 +867,10 @@ gspw_heap_patch_modules(void)
         n = 2048;
       for (int i = 0; i < n; i++)
         {
-          bool done = mods[i] == self_module;
+          /* kernel32's exports are stubs calling kernelbase through its
+             own import table: patching those would count twice or loop */
+          bool done = mods[i] == self_module || mods[i] == kernel32_module
+            || mods[i] == kernelbase_module;
           for (int k = 0; k < patched_count && !done; k++)
             done = patched[k] == (uintptr_t)mods[i];
           if (done || patched_count >= 2048)
@@ -888,9 +906,13 @@ gspw_heap_start(bool allocations, bool refcounts, bool zombies, unsigned frames)
       self_start = (uintptr_t)mi.lpBaseOfDll;
       self_end = self_start + mi.SizeOfImage;
     }
+  kernel32_module = GetModuleHandleA("kernel32.dll");
+  kernelbase_module = GetModuleHandleA("kernelbase.dll");
   alloc_frames = frames == 0 ? 1 : (frames > MAX_ALLOC_FRAMES ? MAX_ALLOC_FRAMES : frames);
-  if (!allocations || guard_tls == TLS_OUT_OF_INDEXES)
+  if (guard_tls == TLS_OUT_OF_INDEXES || !(allocations || gspw_io_enabled()))
     return;
-  InterlockedExchange(&heap_on, 1);
+  if (allocations)
+    InterlockedExchange(&heap_on, 1);
+  InterlockedExchange(&patching_on, 1);
   gspw_heap_patch_modules();
 }

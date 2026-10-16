@@ -863,6 +863,7 @@ start(void)
   emit(GSP_REC_MARK, GSP_MARK_START, 0, hdr.start_ns, self_pid, NULL, 0, NULL, 0);
   emit_new_modules();
   gspw_leaks_start(env_flag("GSP_LEAKS", false));
+  gspw_io_start(env_flag("GSP_FILE_IO", false), env_flag("GSP_NETWORK", false));
   leak_interval_s = env_uint("GSP_LEAK_INTERVAL", 0);
   gspw_heap_start(env_flag("GSP_ALLOCATIONS", false) || env_flag("GSP_LEAKS", false),
                   env_flag("GSP_REFCOUNTS", false), env_flag("GSP_ZOMBIES", false),
