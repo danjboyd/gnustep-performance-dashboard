@@ -2,7 +2,8 @@
 
 Public releases go through the shared GNUstep release toolchain
 (gnustep-packager + gnustep-cli-new). No release has been made yet. This file
-records the conventions to follow so the design stays release-ready.
+records the conventions to follow so the design stays release-ready, and how
+the Linux AppImage is built.
 
 ## Conventions
 
@@ -20,6 +21,38 @@ records the conventions to follow so the design stays release-ready.
   `docs/consumer-setup.md`), using `themeInputs` for Adwaita (Linux) and
   WinUITheme (Windows) and `packagedDefaults.defaultTheme`.
 - Commits as `Daniel Boyd <danieljboyd@icloud.com>`.
+
+## Building the Linux AppImage
+
+```sh
+scripts/package-linux.sh --version 0.1.0-rc1   # dry run: any tree
+scripts/package-linux.sh --release --version 0.1.0-rc1   # clean tree, pinned inputs
+```
+
+It needs PowerShell 7, Xvfb, squashfs-tools, desktop-file-utils and a
+gnustep-cli-new install (`GNUSTEP_CLI_ROOT`, default
+`~/.local/share/gnustep-cli`). The pieces, adapted from LinDirStat's:
+
+- `packaging/package.manifest.json`: the gnustep-packager manifest.
+- `scripts/package-build.sh`, `scripts/package-stage.sh`: the build and
+  stage commands the packager runs. The stage holds the app (with the
+  recording agent, gstrace-helper and its polkit policy), `gstrace`, the
+  GNUstep runtime, the patched libs-back and the Adwaita theme, a relocatable
+  `GNUstep.conf` and the license notices.
+- `packaging/release-inputs.json`, `packaging/linux/libs-back/`: the pinned
+  inputs (Adwaita, gnustep-packager, appimagetool; libs-back with its
+  patches), checked out by `scripts/pinned-checkout.sh` into `out/`.
+- `scripts/check-appimage-record.sh`: the release check that the AppImage
+  records a program (Leaks template, a fixture with ten known leaks) and
+  quits on SIGTERM.
+
+The output goes to `dist/packages`: the AppImage, the packager's metadata,
+diagnostics and provenance files, and our provenance JSON (commit, pins,
+build IDs, checks).
+
+Not done yet: the Windows MSI (it needs a Windows host or CI runner), the
+update feed and in-app updates (`updates` is disabled in the manifest), and a
+release workflow.
 
 ## Design constraints that follow from packaging
 

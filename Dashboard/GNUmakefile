@@ -32,7 +32,8 @@ ADDITIONAL_INCLUDE_DIRS += -I../Runtime/include -I..
 ADDITIONAL_LIB_DIRS += -L../GSPerformance/obj
 ADDITIONAL_GUI_LIBS += -lGSPerformance
 ifeq (,$(WINDOWS))
-ADDITIONAL_LDFLAGS += -Wl,-rpath,'$$ORIGIN/../../GSPerformance/obj'
+# the build tree, and the packaged layout (app/ next to runtime/lib)
+ADDITIONAL_LDFLAGS += -Wl,-rpath,'$$ORIGIN/../../GSPerformance/obj:$$ORIGIN/../../runtime/lib'
 endif
 
 include $(GNUSTEP_MAKEFILES)/application.make

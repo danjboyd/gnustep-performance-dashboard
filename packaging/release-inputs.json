@@ -1,0 +1,26 @@
+{
+  "comment": "Inputs release builds take from other repositories, each pinned to a tag checked against its revision (scripts/pinned-checkout.sh). libs-back has its own lock file, with its patches (packaging/linux/libs-back). Local builds can still point at their own trees with ADWAITA_THEME and LIBS_BACK_BUNDLE. The same pins as LinDirStat's AppImage.",
+  "adwaita": {
+    "url": "https://github.com/danjboyd/plugins-themes-Adwaita.git",
+    "tag": "0.1.0-alpha13",
+    "revision": "b74231f84bc139a50ad50459acfaed10a07a4642"
+  },
+  "gnustep-packager": {
+    "comment": "The merge of #57 (the reusable workflow checks out its own commit). No tag yet: move to v0.1.1 when it is cut.",
+    "url": "https://github.com/danjboyd/gnustep-packager.git",
+    "tag": null,
+    "revision": "362f270baf442c57f0736522530b82dd6a164e2e"
+  },
+  "appimagetool": {
+    "comment": "gnustep-packager's default is appimagetool's moving continuous build; 0.1.3 was made with build 295 (8c8c91f). Release 1.9.1 is build 296 from the same commit. scripts/fetch-appimagetool.sh installs it where the packager looks, and the packager takes the AppImage runtime from it.",
+    "url": "https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage",
+    "version": "1.9.1",
+    "sha256": "ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0"
+  },
+  "powershell": {
+    "comment": "gnustep-packager runs on PowerShell; the release workflow's Debian container installs this (scripts/ci-release-linux.sh). The version used locally.",
+    "url": "https://github.com/PowerShell/PowerShell/releases/download/v7.4.6/powershell-7.4.6-linux-x64.tar.gz",
+    "version": "7.4.6",
+    "sha256": "6f6015203c47806c5cc444c19d8ed019695e610fbd948154264bf9ca8e157561"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "comment": "The libs-back the Linux AppImage ships (scripts/build-libs-back.sh). The revision is the one gnustep-cli-new's toolchain builds (0.1.1 shipped it unpatched); the configure settings reproduce that build's features (no GLX, RandR, Xcursor, Xfixes or Xmu). See docs/packaging.md.",
+  "url": "https://github.com/gnustep/libs-back.git",
+  "revision": "bf3b3ced525f08415a20d109f05be1f91492414c",
+  "configure": [
+    "--disable-glx",
+    "ac_cv_header_GL_glx_h=no",
+    "ac_cv_lib_GL_glXMakeContextCurrent=no",
+    "ac_cv_header_X11_extensions_Xrandr_h=no",
+    "ac_cv_lib_Xrandr_XRRUpdateConfiguration=no",
+    "ac_cv_lib_Xcursor_XcursorImageCreate=no",
+    "ac_cv_lib_Xfixes_XFixesSelectSelectionInput=no",
+    "ac_cv_lib_Xmu_main=no"
+  ],
+  "make": [
+    "ADDITIONAL_LDFLAGS=-Wl,--as-needed"
+  ],
+  "patches": [
+    {
+      "path": "0001-x11-reject-zero-frame-extents.patch",
+      "sha256": "6535715f413d9c86af7cd591786f1cd40e3bae2d1b421510248337002903644e",
+      "upstream": "libs-back#227 (170c643)"
+    },
+    {
+      "path": "0002-x11-wm-delete-window.patch",
+      "sha256": "a2f501b93ccf7d15e94b580fc03a9138d1a96a97f691c6fe1ecab8f0fe472c44",
+      "upstream": "danjboyd/libs-back x11-wm-delete-window (1ecd259), not yet sent upstream"
+    }
+  ]
+}

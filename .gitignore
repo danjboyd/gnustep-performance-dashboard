@@ -9,3 +9,5 @@ build/
 *.xctest/
 !Tests/data/*.gstrace/
 Tools/gstrace-helper/gstrace-helper
+out/
+dist/

@@ -1,0 +1,218 @@
+{
+  "$schema": "./../../gnustep/gnustep-packager/schemas/gnustep-packager.schema.json",
+  "schemaVersion": 1,
+  "profiles": [
+    "gnustep-gui"
+  ],
+  "package": {
+    "id": "org.gnustep.PerformanceDashboard",
+    "name": "PerformanceDashboard",
+    "displayName": "Performance Dashboard",
+    "version": "0.1.0",
+    "manufacturer": "Daniel Boyd",
+    "summary": "Performance analysis for GNUstep applications.",
+    "description": "Performance Dashboard records a GNUstep program and shows where its time and memory go: Time Profiler, Hangs, Allocations, Leaks, Zombies, File Activity, Network and signposts, on a timeline with call trees.",
+    "license": "LGPL-2.1-or-later",
+    "homepage": "https://github.com/danjboyd/gnustep-performance-dashboard"
+  },
+  "pipeline": {
+    "workingDirectory": "..",
+    "shell": {
+      "kind": "bash",
+      "bootstrapCommands": [],
+      "environment": {}
+    },
+    "build": {
+      "command": "./scripts/package-build.sh"
+    },
+    "stage": {
+      "command": "./scripts/package-stage.sh dist/stage",
+      "outputRoot": "../dist/stage"
+    }
+  },
+  "payload": {
+    "layoutVersion": 1,
+    "stageRoot": "../dist/stage",
+    "appRoot": "app",
+    "runtimeRoot": "runtime",
+    "metadataRoot": "metadata",
+    "runtimeSeedPaths": [
+      "runtime/bin/defaults"
+    ]
+  },
+  "launch": {
+    "entryRelativePath": "app/PerformanceDashboard.app/PerformanceDashboard",
+    "workingDirectory": "app/PerformanceDashboard.app",
+    "arguments": [],
+    "env": {
+      "GNUSTEP_CONFIG_FILE": "{@runtimeRoot}/etc/GNUstep/GNUstep.conf",
+      "LD_LIBRARY_PATH": "{@runtimeRoot}/lib",
+      "GSTheme": {
+        "value": "Adwaita",
+        "policy": "ifUnset"
+      }
+    }
+  },
+  "outputs": {
+    "root": "../dist",
+    "packageRoot": "../dist/packages",
+    "logRoot": "../dist/logs",
+    "tempRoot": "../dist/tmp",
+    "validationRoot": "../dist/validation"
+  },
+  "validation": {
+    "smoke": {
+      "enabled": true,
+      "kind": "staged-layout",
+      "requiredPaths": [
+        "app/PerformanceDashboard.app/PerformanceDashboard",
+        "app/PerformanceDashboard.app/Resources/Info-gnustep.plist",
+        "app/PerformanceDashboard.app/Resources/libgsperf-agent.so",
+        "app/PerformanceDashboard.app/Resources/gstrace-helper",
+        "app/PerformanceDashboard.app/Resources/org.gnustep.performancedashboard.policy",
+        "metadata/icons/PerformanceDashboard.png",
+        "metadata/licenses/PerformanceDashboard.txt",
+        "metadata/licenses/host-libraries.txt",
+        "runtime/bin/defaults",
+        "runtime/bin/make_services",
+        "runtime/bin/gstrace",
+        "runtime/etc/GNUstep/GNUstep.conf",
+        "runtime/etc/GNUstep/GlobalDefaults.plist",
+        "runtime/lib/libGSPerformance.so.0",
+        "runtime/lib/libgnustep-gui.so.0.32",
+        "runtime/System/Library/Bundles/libgnustep-back-032.bundle/libgnustep-back-032",
+        "runtime/System/Library/Themes/Adwaita.theme/Adwaita"
+      ],
+      "timeoutSeconds": 30
+    },
+    "logs": {
+      "retainOnSuccess": true
+    },
+    "packageContract": {
+      "requiredContent": [
+        {
+          "kind": "notice-report"
+        },
+        {
+          "kind": "bundled-theme",
+          "name": "Adwaita"
+        },
+        {
+          "kind": "metadata-file",
+          "path": "metadata/icons/PerformanceDashboard.png"
+        }
+      ]
+    },
+    "installedResult": {
+      "requiredContent": [
+        {
+          "kind": "notice-report"
+        },
+        {
+          "kind": "bundled-theme",
+          "name": "Adwaita"
+        }
+      ],
+      "requiredPaths": [
+        "usr/metadata/icons/PerformanceDashboard.png",
+        "usr/runtime/etc/GNUstep/GlobalDefaults.plist",
+        "usr/app/PerformanceDashboard.app/Resources/libgsperf-agent.so"
+      ]
+    }
+  },
+  "updates": {
+    "enabled": false
+  },
+  "integrations": {
+    "shortcutName": "Performance Dashboard",
+    "categories": [
+      "Development",
+      "Profiling"
+    ],
+    "fileAssociations": []
+  },
+  "compliance": {
+    "runtimeNotices": [
+      {
+        "name": "Performance Dashboard",
+        "version": "0.1.0",
+        "license": "LGPL-2.1-or-later",
+        "source": "Performance Dashboard application, framework, recording agent and gstrace",
+        "homepage": "https://github.com/danjboyd/gnustep-performance-dashboard",
+        "stageRelativePath": "metadata/licenses/PerformanceDashboard.txt"
+      },
+      {
+        "name": "GNUstep Base",
+        "license": "LGPL-2.1-or-later",
+        "source": "runtime/lib/libgnustep-base.so.1.31",
+        "homepage": "https://github.com/gnustep/libs-base",
+        "stageRelativePath": "metadata/licenses/GNUstep-base.txt"
+      },
+      {
+        "name": "GNUstep GUI",
+        "license": "LGPL-2.1-or-later",
+        "source": "runtime/lib/libgnustep-gui.so.0.32",
+        "homepage": "https://github.com/gnustep/libs-gui",
+        "stageRelativePath": "metadata/licenses/GNUstep-gui.txt"
+      },
+      {
+        "name": "GNUstep Back",
+        "version": "bf3b3ce with the patches in packaging/linux/libs-back",
+        "license": "LGPL-2.1-or-later",
+        "source": "runtime/System/Library/Bundles/libgnustep-back-032.bundle",
+        "homepage": "https://github.com/gnustep/libs-back",
+        "stageRelativePath": "metadata/licenses/GNUstep-back.txt"
+      },
+      {
+        "name": "GNUstep tools",
+        "license": "GPL-3.0-or-later AND GPL-2.0-or-later",
+        "source": "runtime/bin: defaults, make_services, gpbs (GPL-3.0-or-later), gdnc (GPL-2.0-or-later)",
+        "homepage": "https://github.com/gnustep",
+        "stageRelativePath": "metadata/licenses/GNUstep-tools.txt"
+      },
+      {
+        "name": "libobjc2",
+        "license": "MIT",
+        "source": "runtime/lib/libobjc.so.4.6",
+        "homepage": "https://github.com/gnustep/libobjc2",
+        "stageRelativePath": "metadata/licenses/libobjc2.txt"
+      },
+      {
+        "name": "libdispatch",
+        "license": "Apache-2.0",
+        "source": "runtime/lib/libdispatch.so",
+        "homepage": "https://github.com/swiftlang/swift-corelibs-libdispatch",
+        "stageRelativePath": "metadata/licenses/libdispatch.txt"
+      },
+      {
+        "name": "Adwaita GNUstep theme",
+        "license": "LGPL-2.1-or-later",
+        "source": "runtime/System/Library/Themes/Adwaita.theme",
+        "homepage": "https://github.com/danjboyd/plugins-themes-Adwaita",
+        "stageRelativePath": "metadata/licenses/Adwaita-theme.txt"
+      },
+      {
+        "name": "Bundled distribution libraries",
+        "license": "Various; see host-libraries/ copyright files",
+        "source": "Debian packages listed in host-libraries.txt",
+        "stageRelativePath": "metadata/licenses/host-libraries.txt"
+      }
+    ]
+  },
+  "backends": {
+    "msi": {
+      "enabled": false
+    },
+    "appimage": {
+      "enabled": true,
+      "desktopEntryName": "io.github.danjboyd.PerformanceDashboard.desktop",
+      "iconRelativePath": "metadata/icons/PerformanceDashboard.png",
+      "validation": {
+        "runtimeClosure": "strict"
+      },
+      "smoke": {
+        "mode": "launch-only"
+      }
+    }
+  }
+}
