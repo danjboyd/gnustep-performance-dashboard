@@ -31,6 +31,23 @@ check "two threads with CPU" "[ \$(grep -c 'CPU' '$OUT/spin-threads.txt') -ge 2 
 cat "$OUT/spin-sp.txt"
 check "4 Round signposts" "grep -E -q '^Round +PointsOfInterest +4 ' '$OUT/spin-sp.txt'"
 
+# Attaching to a running program
+"$OUT/spin.exe" 12 >"$OUT/spin-attached.log" 2>&1 &
+SPIN=$!
+WINPID=$(cat /proc/$SPIN/winpid 2>/dev/null || echo $SPIN)
+timeout 2 tail -f /dev/null 2>/dev/null
+rm -rf "$OUT/attach.gstrace"
+"$GSTRACE" record --template "Time Profiler" --attach "$WINPID" --time-limit 2s \
+  -o "$OUT/attach.gstrace" >"$OUT/attach-record.log" 2>&1
+cat "$OUT/attach-record.log"
+"$GSTRACE" info "$OUT/attach.gstrace" >"$OUT/attach-info.txt" 2>&1
+cat "$OUT/attach-info.txt"
+"$GSTRACE" report "$OUT/attach.gstrace" top --limit 3 >"$OUT/attach-top.txt" 2>&1
+cat "$OUT/attach-top.txt"
+check "attach: recorded and finished cleanly" "grep -q 'finished cleanly: yes' '$OUT/attach-info.txt'"
+check "attach: CPU time lands in spin_inner" "sed -n 4p '$OUT/attach-top.txt' | grep -q spin_inner"
+check "attach: the program keeps running and finishes" "kill -0 $SPIN 2>/dev/null && wait $SPIN && grep -q '^spin ' '$OUT/spin-attached.log'"
+
 # File Activity and Network
 clang -O0 -g "$ROOT/Tests/fixtures/iofix_win.c" -o "$OUT/iofix.exe" -lws2_32 || exit 1
 rm -rf "$OUT/io.gstrace"

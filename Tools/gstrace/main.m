@@ -184,12 +184,17 @@ cmd_record(NSArray *args)
 
   if (opts.attachPID)
     {
+#if defined(_WIN32)
+      /* Windows attaches by injecting the agent: every template works, and
+         the recorder finds the executable.  */
+#else
       templateName = @"System Time Profiler";
       if ([instruments count] == 0)
         [instruments addObject: GSPInstrumentSystemProfiler];
       opts.executablePath = [[NSFileManager defaultManager]
         pathContentOfSymbolicLinkAtPath: [NSString stringWithFormat: @"/proc/%d/exe",
                                           opts.attachPID]];
+#endif
     }
   else if (opts.executablePath == nil)
     {

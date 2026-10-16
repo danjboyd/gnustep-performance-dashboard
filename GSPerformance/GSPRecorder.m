@@ -10,9 +10,9 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #if defined(_WIN32)
-/* Recording is not implemented on Windows yet (see docs/windows.md); the
-   framework still reads, analyses and exports traces there.  */
+/* Windows: the agent DLL is injected (docs/windows.md).  */
 #  include <windows.h>
+#  include <psapi.h>
 #else
 #  include <dlfcn.h>
 #  include <signal.h>
@@ -797,6 +797,64 @@ wide(NSString *s)
   return w;
 }
 
+/* Loads the agent DLL into a process with a remote LoadLibraryW thread.  */
+static BOOL
+load_agent(HANDLE process, NSString *agent)
+{
+  WCHAR *agentw = wide([agent stringByReplacingOccurrencesOfString: @"/" withString: @"\\"]);
+  SIZE_T bytes = (wcslen(agentw) + 1) * sizeof(WCHAR);
+  LPVOID remote = VirtualAllocEx(process, NULL, bytes, MEM_COMMIT | MEM_RESERVE,
+                                 PAGE_READWRITE);
+  BOOL injected = NO;
+  if (remote && WriteProcessMemory(process, remote, agentw, bytes, NULL))
+    {
+      LPTHREAD_START_ROUTINE load = (LPTHREAD_START_ROUTINE)(void *)
+        GetProcAddress(GetModuleHandleA("kernel32.dll"), "LoadLibraryW");
+      HANDLE t = CreateRemoteThread(process, NULL, 0, load, remote, 0, NULL);
+      if (t)
+        {
+          DWORD code = 0;
+          WaitForSingleObject(t, 30000);
+          GetExitCodeThread(t, &code);
+          injected = code != 0;
+          CloseHandle(t);
+        }
+    }
+  free(agentw);
+  if (remote)
+    VirtualFreeEx(process, remote, 0, MEM_RELEASE);
+  return injected;
+}
+
+/* Address of an agent export inside another process: the agent's base
+   there plus the export's offset in a local, uninitialised copy.  */
+static LPTHREAD_START_ROUTINE
+remote_agent_export(HANDLE process, NSString *agent, const char *name)
+{
+  HMODULE mods[1024];
+  DWORD needed = 0;
+  uintptr_t remoteBase = 0;
+  WCHAR path[MAX_PATH];
+
+  if (!K32EnumProcessModulesEx(process, mods, sizeof(mods), &needed, LIST_MODULES_64))
+    return NULL;
+  for (DWORD i = 0; i < needed / sizeof(HMODULE) && i < 1024; i++)
+    if (K32GetModuleBaseNameW(process, mods[i], path, MAX_PATH)
+        && _wcsicmp(path, L"gsperf-agent.dll") == 0)
+      remoteBase = (uintptr_t)mods[i];
+  if (remoteBase == 0)
+    return NULL;
+  WCHAR *agentw = wide([agent stringByReplacingOccurrencesOfString: @"/" withString: @"\\"]);
+  HMODULE local = LoadLibraryExW(agentw, NULL, DONT_RESOLVE_DLL_REFERENCES);
+  free(agentw);
+  if (local == NULL)
+    return NULL;
+  FARPROC f = GetProcAddress(local, name);
+  uintptr_t offset = f ? (uintptr_t)f - (uintptr_t)local : 0;
+  FreeLibrary(local);
+  return offset ? (LPTHREAD_START_ROUTINE)(remoteBase + offset) : NULL;
+}
+
 - (BOOL) launch: (NSError **)error
 {
   NSString *agent = [GSPRecorder agentLibraryPath];
@@ -873,28 +931,7 @@ wide(NSString *s)
   WCHAR readyName[64];
   swprintf(readyName, 64, L"Local\\gsperf-ready-%lu", (unsigned long)pi.dwProcessId);
   HANDLE ready = CreateEventW(NULL, TRUE, FALSE, readyName);
-  WCHAR *agentw = wide([agent stringByReplacingOccurrencesOfString: @"/" withString: @"\\"]);
-  SIZE_T bytes = (wcslen(agentw) + 1) * sizeof(WCHAR);
-  LPVOID remote = VirtualAllocEx(pi.hProcess, NULL, bytes, MEM_COMMIT | MEM_RESERVE,
-                                 PAGE_READWRITE);
-  BOOL injected = NO;
-  if (remote && WriteProcessMemory(pi.hProcess, remote, agentw, bytes, NULL))
-    {
-      LPTHREAD_START_ROUTINE load = (LPTHREAD_START_ROUTINE)(void *)
-        GetProcAddress(GetModuleHandleA("kernel32.dll"), "LoadLibraryW");
-      HANDLE t = CreateRemoteThread(pi.hProcess, NULL, 0, load, remote, 0, NULL);
-      if (t)
-        {
-          DWORD code = 0;
-          WaitForSingleObject(t, 30000);
-          GetExitCodeThread(t, &code);
-          injected = code != 0;
-          CloseHandle(t);
-        }
-    }
-  free(agentw);
-  if (remote)
-    VirtualFreeEx(pi.hProcess, remote, 0, MEM_RELEASE);
+  BOOL injected = load_agent(pi.hProcess, agent);
   if (!injected)
     {
       if (ready)
@@ -920,17 +957,104 @@ wide(NSString *s)
   return YES;
 }
 
-- (BOOL) start: (NSError **)error
+/* Attaching to a running program of the same user: the configuration
+   goes into shared memory the agent reads, the agent is loaded with
+   LoadLibraryW and started with its gsp_agent_attach export.  The agent
+   stays loaded (its hooks are in the program's import tables) and goes
+   quiet when the recording stops.  */
+- (BOOL) attach: (NSError **)error
 {
-  if (_options.attachPID)
+  NSString *agent = [GSPRecorder agentLibraryPath];
+  if (agent == nil)
     {
       if (error)
-        *error = make_error(12, @"Attaching to running processes is not supported on Windows yet.");
+        *error = make_error(3, @"Cannot find gsperf-agent.dll. Set GSP_AGENT_PATH or install the runtime.");
       return NO;
     }
+  DWORD pid = (DWORD)_options.attachPID;
+  HANDLE proc = OpenProcess(PROCESS_CREATE_THREAD | PROCESS_QUERY_INFORMATION
+                            | PROCESS_VM_OPERATION | PROCESS_VM_WRITE | PROCESS_VM_READ
+                            | SYNCHRONIZE, FALSE, pid);
+  if (proc == NULL)
+    {
+      if (error)
+        *error = make_error(5, [NSString stringWithFormat:
+          @"Cannot open process %lu (error %lu). Only your own, non-elevated programs can be attached to.",
+          (unsigned long)pid, (unsigned long)GetLastError()]);
+      return NO;
+    }
+  if (_options.executablePath == nil)
+    {
+      WCHAR exe[MAX_PATH * 2];
+      DWORD n = MAX_PATH * 2;
+      if (QueryFullProcessImageNameW(proc, 0, exe, &n))
+        _options.executablePath = [[NSString stringWithCharacters: (unichar *)exe length: n]
+                                    stringByReplacingOccurrencesOfString: @"\\" withString: @"/"];
+    }
+
+  NSMutableDictionary *cfg = [NSMutableDictionary dictionary];
+  [cfg addEntriesFromDictionary: GSPAgentEnvironmentForInstruments(
+     _options.instrumentIdentifiers, _options.sampleIntervalMicroseconds,
+     _options.leakIntervalSeconds)];
+  [cfg setObject: [_tracePath stringByStandardizingPath] forKey: @"GSP_OUTPUT"];
+  NSMutableString *text = [NSMutableString string];
+  for (NSString *k in cfg)
+    [text appendFormat: @"%@=%@\n", k, [cfg objectForKey: k]];
+  NSData *bytes = [text dataUsingEncoding: NSUTF8StringEncoding];
+
+  WCHAR name[64];
+  swprintf(name, 64, L"Local\\gsperf-config-%lu", (unsigned long)pid);
+  HANDLE map = CreateFileMappingW(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0,
+                                  (DWORD)[bytes length] + 1, name);
+  void *view = map ? MapViewOfFile(map, FILE_MAP_WRITE, 0, 0, 0) : NULL;
+  if (view)
+    {
+      memcpy(view, [bytes bytes], [bytes length]);
+      ((char *)view)[[bytes length]] = 0;
+      UnmapViewOfFile(view);
+    }
+  swprintf(name, 64, L"Local\\gsperf-ready-%lu", (unsigned long)pid);
+  HANDLE ready = CreateEventW(NULL, TRUE, FALSE, name);
+
+  _startDate = [NSDate date];
+  DWORD code = 1;
+  BOOL loaded = view != NULL && load_agent(proc, agent);
+  LPTHREAD_START_ROUTINE entry = loaded ? remote_agent_export(proc, agent, "gsp_agent_attach") : NULL;
+  if (entry)
+    {
+      HANDLE t = CreateRemoteThread(proc, NULL, 0, entry, NULL, 0, NULL);
+      if (t)
+        {
+          WaitForSingleObject(t, 30000);
+          GetExitCodeThread(t, &code);
+          CloseHandle(t);
+        }
+    }
+  if (code == 0 && ready)
+    WaitForSingleObject(ready, 5000);
+  if (ready)
+    CloseHandle(ready);
+  if (map)
+    CloseHandle(map);
+  if (code != 0)
+    {
+      CloseHandle(proc);
+      if (error)
+        *error = make_error(13, code == 2
+          ? @"This process was already recorded once; the agent records a process only once. Restart the program to record it again."
+          : @"Cannot load the recording agent into the process.");
+      return NO;
+    }
+  _process = proc;
+  _pid = (int)pid;
+  return YES;
+}
+
+- (BOOL) start: (NSError **)error
+{
   if (![self prepareBundle: error])
     return NO;
-  if (![self launch: error])
+  if (!(_options.attachPID ? [self attach: error] : [self launch: error]))
     {
       [[NSFileManager defaultManager] removeItemAtPath: _tracePath error: NULL];
       return NO;
@@ -981,6 +1105,9 @@ wide(NSString *s)
             }
           if (stopSent && ([self doneFileExistsFor: _pid] || -[stopSentAt timeIntervalSinceNow] > 30))
             {
+              /* an attached program keeps running */
+              if (_options.attachPID)
+                break;
               TerminateProcess(proc, 0);
               WaitForSingleObject(proc, 5000);
               break;
@@ -988,7 +1115,7 @@ wide(NSString *s)
         }
       DWORD code = 0;
       GetExitCodeProcess(proc, &code);
-      _exitStatus = (int)code;
+      _exitStatus = code == STILL_ACTIVE ? 0 : (int)code;
       CloseHandle(proc);
       _recording = NO;
       [self writeInfo: YES];
@@ -1013,7 +1140,11 @@ wide(NSString *s)
       anyStream = n;
   if (anyStream == nil)
     error = make_error(7, _options.attachPID
+#if defined(_WIN32)
+      ? @"The agent did not record anything in the attached process."
+#else
       ? @"The profiling helper did not record anything (authentication cancelled or perf_event unavailable)."
+#endif
       : @"The target did not record anything. It may have exited immediately, been statically linked, or ignored LD_PRELOAD.");
   if ([_delegate respondsToSelector: @selector(recorder:didFinishWithError:)])
     [_delegate recorder: self didFinishWithError: error];

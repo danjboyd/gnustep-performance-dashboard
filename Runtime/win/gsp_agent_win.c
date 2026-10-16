@@ -2,7 +2,9 @@
 
    The recorder starts the target suspended and loads this DLL into it
    with a remote LoadLibraryW thread.  When GSP_OUTPUT is set, DllMain
-   opens events-<pid>.bin and starts one sampler thread, which:
+   opens events-<pid>.bin and starts one sampler thread.  To attach to a
+   running program the recorder loads the DLL the same way and then calls
+   gsp_agent_attach in another remote thread.  The sampler thread:
 
    - every interval (1 ms), for each thread whose CPU cycle count moved,
      suspends it, unwinds its stack with RtlVirtualUnwind and resumes it
@@ -744,11 +746,40 @@ gsp_agent_signpost(int record_type, int kind, uint64_t spid, const char *subsyst
 /* ------------------------------------------------------------------ */
 /* start-up                                                            */
 
+/* Settings come from the environment when the recorder launched the
+   program, and from the text the recorder put in the shared memory
+   Local\gsperf-config-<pid> ("NAME=value" lines) when it attached.  */
+static char *attach_config;
+
+static DWORD
+config_get(const char *name, char *out, DWORD cap)
+{
+  if (attach_config == NULL)
+    return GetEnvironmentVariableA(name, out, cap);
+  size_t nl = strlen(name);
+  for (const char *line = attach_config; *line;)
+    {
+      const char *end = strchr(line, '\n');
+      size_t len = end ? (size_t)(end - line) : strlen(line);
+      if (len > nl && line[nl] == '=' && strncmp(line, name, nl) == 0)
+        {
+          size_t vlen = len - nl - 1;
+          if (vlen + 1 > cap)
+            return (DWORD)(vlen + 1);
+          memcpy(out, line + nl + 1, vlen);
+          out[vlen] = 0;
+          return (DWORD)vlen;
+        }
+      line = end ? end + 1 : line + len;
+    }
+  return 0;
+}
+
 static bool
 env_flag(const char *name, bool fallback)
 {
   char v[16];
-  DWORD n = GetEnvironmentVariableA(name, v, sizeof(v));
+  DWORD n = config_get(name, v, sizeof(v));
   if (n == 0 || n >= sizeof(v))
     return fallback;
   return !(strcmp(v, "0") == 0 || _stricmp(v, "no") == 0 || _stricmp(v, "false") == 0);
@@ -758,7 +789,7 @@ static unsigned
 env_uint(const char *name, unsigned fallback)
 {
   char v[32];
-  DWORD n = GetEnvironmentVariableA(name, v, sizeof(v));
+  DWORD n = config_get(name, v, sizeof(v));
   return (n == 0 || n >= sizeof(v)) ? fallback : (unsigned)strtoul(v, NULL, 10);
 }
 
@@ -807,11 +838,12 @@ start(void)
   gsp_file_header hdr;
   char path[1200];
 
-  DWORD n = GetEnvironmentVariableA("GSP_OUTPUT", out_dir, sizeof(out_dir));
+  DWORD n = config_get("GSP_OUTPUT", out_dir, sizeof(out_dir));
   if (n == 0 || n >= sizeof(out_dir))
     return;
   /* Children do not inherit recording.  */
-  SetEnvironmentVariableA("GSP_OUTPUT", NULL);
+  if (attach_config == NULL)
+    SetEnvironmentVariableA("GSP_OUTPUT", NULL);
   cpu_sampling = env_flag("GSP_CPU_SAMPLING", true);
   wall_sampling = env_flag("GSP_WALL_SAMPLING", true);
   signposts_on = env_flag("GSP_SIGNPOSTS", true);
@@ -874,6 +906,43 @@ start(void)
   DWORD meta_tid = 0;
   meta_thread = CreateThread(NULL, 0, meta_main, NULL, 0, &meta_tid);
   meta_thread_id = meta_tid;
+}
+
+/* Attaching: the recorder loads the DLL into the running program, then
+   runs this in a remote thread (outside the loader lock).  Returns 0 when
+   recording started, 1 without a configuration, 2 when this process was
+   already recorded (the agent's state is per process; the program must
+   be restarted to record it again).  */
+GSP_EXPORT DWORD WINAPI
+gsp_agent_attach(LPVOID arg)
+{
+  static volatile LONG attached;
+  char name[64];
+
+  (void)arg;
+  if (recording || finished || InterlockedExchange(&attached, 1))
+    return 2;
+  snprintf(name, sizeof(name), "Local\\gsperf-config-%lu", (unsigned long)GetCurrentProcessId());
+  HANDLE m = OpenFileMappingA(FILE_MAP_READ, FALSE, name);
+  if (m == NULL)
+    return 1;
+  const char *view = MapViewOfFile(m, FILE_MAP_READ, 0, 0, 0);
+  if (view == NULL)
+    {
+      CloseHandle(m);
+      return 1;
+    }
+  MEMORY_BASIC_INFORMATION mbi;
+  size_t cap = VirtualQuery(view, &mbi, sizeof(mbi)) ? mbi.RegionSize : 4096;
+  attach_config = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, cap + 1);
+  if (attach_config)
+    memcpy(attach_config, view, strnlen(view, cap));
+  UnmapViewOfFile(view);
+  CloseHandle(m);
+  if (attach_config == NULL)
+    return 1;
+  start();
+  return recording ? 0 : 1;
 }
 
 BOOL WINAPI
