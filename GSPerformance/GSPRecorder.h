@@ -59,6 +59,10 @@
 + (NSString *) helperInstallLocation;   /* /usr/local/libexec/gstrace-helper */
 /* The helper shipped next to gstrace / inside the app (not root-owned). */
 + (NSString *) bundledHelperPath;
+/* Copies the helper and its polkit policy into a fresh private directory
+   (mkdtemp, mode 0700) for `pkexec <dir>/gstrace-helper install --source
+   <dir>`; nil with an error if anything fails.  Remove it afterwards. */
++ (NSString *) stageHelperForInstall: (NSError **)error;
 /* kernel.perf_event_paranoid, or 3 if unreadable. */
 + (int) perfEventParanoid;
 /* YES when attaching can run without pkexec (paranoid <= 2). */

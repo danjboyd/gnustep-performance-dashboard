@@ -175,6 +175,64 @@ make_error(NSInteger code, NSString *message)
   return nil;
 }
 
+static BOOL
+copy_private(NSString *from, NSString *to, mode_t mode)
+{
+  int in = open([from fileSystemRepresentation], O_RDONLY | O_CLOEXEC);
+  int out = open([to fileSystemRepresentation],
+                 O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, mode);
+  char buf[65536];
+  ssize_t n;
+  BOOL ok = in >= 0 && out >= 0;
+
+  while (ok && (n = read(in, buf, sizeof(buf))) > 0)
+    if (write(out, buf, (size_t)n) != n)
+      ok = NO;
+  if (out >= 0 && fchmod(out, mode) != 0)
+    ok = NO;
+  if (in >= 0)
+    close(in);
+  if (out >= 0)
+    close(out);
+  return ok;
+}
+
++ (NSString *) stageHelperForInstall: (NSError **)error
+{
+  NSString *helper = [self bundledHelperPath];
+  if (helper == nil)
+    {
+      if (error)
+        *error = make_error(8, @"Cannot find gstrace-helper next to gstrace or in the app.");
+      return nil;
+    }
+  NSString *policy = [[helper stringByDeletingLastPathComponent]
+    stringByAppendingPathComponent: @"org.gnustep.instruments.policy"];
+  /* A fresh directory only this user can write: the root installer will
+     copy whatever it finds there.  */
+  char templ[PATH_MAX];
+  snprintf(templ, sizeof(templ), "%s/gstrace-helper-XXXXXX",
+           [NSTemporaryDirectory() fileSystemRepresentation]);
+  if (mkdtemp(templ) == NULL)
+    {
+      if (error)
+        *error = make_error(9, [NSString stringWithFormat:
+          @"Cannot create a staging directory: %s", strerror(errno)]);
+      return nil;
+    }
+  NSString *dir = [NSString stringWithUTF8String: templ];
+  if (!copy_private(helper, [dir stringByAppendingPathComponent: @"gstrace-helper"], 0755)
+      || !copy_private(policy, [dir stringByAppendingPathComponent:
+                                     @"org.gnustep.instruments.policy"], 0644))
+    {
+      [[NSFileManager defaultManager] removeItemAtPath: dir error: NULL];
+      if (error)
+        *error = make_error(10, @"Cannot copy the helper or its policy for installation.");
+      return nil;
+    }
+  return dir;
+}
+
 + (NSString *) installedHelperPath
 {
   NSString *p = [self helperInstallLocation];

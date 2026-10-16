@@ -169,6 +169,10 @@ GSP_HIDDEN uint32_t gsp_intern_stack(const uint64_t *frames, unsigned n);
 /* ---- raw memory ---- */
 
 GSP_HIDDEN void *gsp_map(size_t size);       /* zeroed, page aligned */
+GSP_HIDDEN void *gsp_map_raw(size_t size);   /* not registered; writer only */
+/* The agent's own writable segments (.data/.bss): never leak-scan roots. */
+GSP_HIDDEN extern uintptr_t gsp_agent_data_ranges[4][2];
+GSP_HIDDEN extern int gsp_agent_data_count;
 GSP_HIDDEN void gsp_unmap(void *p, size_t size);
 GSP_HIDDEN void *gsp_arena_alloc(size_t size); /* never freed */
 GSP_HIDDEN bool gsp_is_agent_memory(uintptr_t lo, uintptr_t hi);

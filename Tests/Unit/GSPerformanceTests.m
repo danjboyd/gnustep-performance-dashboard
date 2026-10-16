@@ -378,6 +378,28 @@ child(GSPCallTreeNode *n, NSString *name)
   XCTAssertEqualObjects([env objectForKey: @"NSZombieEnabled"], @"YES");
 }
 
+- (void) testHelperStagingIsPrivate
+{
+  NSError *error = nil;
+  NSString *dir = [GSPRecorder stageHelperForInstall: &error];
+  XCTAssertNotNil(dir, @"%@", error);
+  if (dir == nil)
+    return;
+  NSFileManager *fm = [NSFileManager defaultManager];
+  NSDictionary *a = [fm attributesOfItemAtPath: dir error: NULL];
+  XCTAssertEqual([a filePosixPermissions] & 077, (NSUInteger)0);
+  NSDictionary *h = [fm attributesOfItemAtPath:
+    [dir stringByAppendingPathComponent: @"gstrace-helper"] error: NULL];
+  XCTAssertEqual([h filePosixPermissions], (NSUInteger)0755);
+  XCTAssertTrue([fm fileExistsAtPath:
+    [dir stringByAppendingPathComponent: @"org.gnustep.instruments.policy"]]);
+  /* two stagings never share a directory */
+  NSString *again = [GSPRecorder stageHelperForInstall: NULL];
+  XCTAssertFalse([again isEqual: dir]);
+  [fm removeItemAtPath: dir error: NULL];
+  [fm removeItemAtPath: again error: NULL];
+}
+
 - (void) testAppImageEnvironmentIsScrubbed
 {
   NSDictionary *in = [NSDictionary dictionaryWithObjectsAndKeys:

@@ -64,6 +64,7 @@ usage(void)
       @"Other\n"
       @"  list <templates|instruments>\n"
       @"  install-helper               install the privileged sampling helper (asks for a password)\n"
+      @"  uninstall-helper             remove it again\n"
       @"  version\n");
 }
 
@@ -899,33 +900,44 @@ cmd_list(NSArray *args)
 }
 
 static int
+cmd_uninstall_helper(void)
+{
+  NSError *error = nil;
+  NSString *staging = [GSPRecorder stageHelperForInstall: &error];
+  if (staging == nil)
+    {
+      err([error localizedDescription]);
+      return 1;
+    }
+  out(@"Removing the profiling helper (you will be asked for an administrator password)\n");
+  NSTask *task = [NSTask launchedTaskWithLaunchPath: @"/usr/bin/pkexec"
+    arguments: [NSArray arrayWithObjects:
+      [staging stringByAppendingPathComponent: @"gstrace-helper"], @"uninstall", nil]];
+  [task waitUntilExit];
+  [[NSFileManager defaultManager] removeItemAtPath: staging error: NULL];
+  return [task terminationStatus];
+}
+
+static int
 cmd_install_helper(NSArray *args)
 {
   /* Find the helper and policy next to this tool (build tree or install),
      copy them somewhere root can read, then run the helper's installer
      through pkexec.  */
   NSFileManager *fm = [NSFileManager defaultManager];
-  NSString *helper = [GSPRecorder bundledHelperPath];
-  if (helper == nil)
+  NSError *error = nil;
+  NSString *staging = [GSPRecorder stageHelperForInstall: &error];
+  if (staging == nil)
     {
-      err(@"cannot find gstrace-helper (expected next to gstrace or in libexec/gnustep-instruments)");
+      err([error localizedDescription]);
       return 1;
     }
-  NSString *policy = [[helper stringByDeletingLastPathComponent]
-    stringByAppendingPathComponent: @"org.gnustep.instruments.policy"];
-  NSString *staging = [NSTemporaryDirectory() stringByAppendingPathComponent:
-    [NSString stringWithFormat: @"gstrace-helper-%d", getpid()]];
-  [fm createDirectoryAtPath: staging withIntermediateDirectories: YES attributes:
-    [NSDictionary dictionaryWithObject: [NSNumber numberWithShort: 0755]
-                                forKey: NSFilePosixPermissions] error: NULL];
-  NSString *h2 = [staging stringByAppendingPathComponent: @"gstrace-helper"];
-  NSString *p2 = [staging stringByAppendingPathComponent: @"org.gnustep.instruments.policy"];
-  [fm copyItemAtPath: helper toPath: h2 error: NULL];
-  [fm copyItemAtPath: policy toPath: p2 error: NULL];
   out([NSString stringWithFormat: @"Installing %@ (you will be asked for an administrator password)\n",
        [GSPRecorder helperInstallLocation]]);
   NSTask *task = [NSTask launchedTaskWithLaunchPath: @"/usr/bin/pkexec"
-    arguments: [NSArray arrayWithObjects: h2, @"install", @"--source", staging, nil]];
+    arguments: [NSArray arrayWithObjects:
+      [staging stringByAppendingPathComponent: @"gstrace-helper"], @"install",
+      @"--source", staging, nil]];
   [task waitUntilExit];
   [fm removeItemAtPath: staging error: NULL];
   (void)args;
@@ -968,6 +980,8 @@ main(int argc, const char **argv)
         return cmd_list(args);
       if ([cmd isEqual: @"install-helper"])
         return cmd_install_helper(args);
+      if ([cmd isEqual: @"uninstall-helper"])
+        return cmd_uninstall_helper();
       err([NSString stringWithFormat: @"unknown command \"%@\"", cmd]);
       usage();
       return 2;

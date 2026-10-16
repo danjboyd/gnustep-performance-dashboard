@@ -11,6 +11,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 
 extern void *__libc_malloc(size_t);
 extern void *__libc_calloc(size_t, size_t);
@@ -190,7 +191,9 @@ live_enabled(void)
     {
       const char *out = getenv("GSP_OUTPUT");
       const char *leaks = getenv("GSP_LEAKS");
-      live_state = out && *out && leaks && leaks[0] == '1';
+      live_state = out && *out && leaks
+        && (leaks[0] == '1' || strcasecmp(leaks, "yes") == 0
+            || strcasecmp(leaks, "true") == 0);
     }
   return live_state > 0;
 }
@@ -307,7 +310,28 @@ realloc(void *old, size_t size)
   if (!should_track())
     {
       if (gsp_in_agent && live_enabled())
-        forget_block(old);
+        {
+          /* Inside the agent (e.g. ld.so growing a table during our
+             dlopen): keep a tracked block tracked at its new address.  */
+          gsp_block saved = { 0, 0, 0, 0 };
+          pthread_mutex_lock(&live_mutex);
+          gsp_block *b = live_find((uint64_t)(uintptr_t)old);
+          if (b)
+            saved = *b;
+          live_remove((uint64_t)(uintptr_t)old);
+          pthread_mutex_unlock(&live_mutex);
+          p = __libc_realloc(old, size);
+          if (saved.address)
+            {
+              pthread_mutex_lock(&live_mutex);
+              if (p)
+                live_insert((uint64_t)(uintptr_t)p, size, saved.stack);
+              else
+                live_insert(saved.address, saved.size, saved.stack);
+              pthread_mutex_unlock(&live_mutex);
+            }
+          return p;
+        }
       return __libc_realloc(old, size);
     }
   if (size == 0)
@@ -315,18 +339,27 @@ realloc(void *old, size_t size)
       free(old);
       return NULL;
     }
+  gsp_block saved = { 0, 0, 0, 0 };
   gsp_in_agent++;
-  forget_block(old);
+  if (live_enabled())
+    {
+      pthread_mutex_lock(&live_mutex);
+      gsp_block *b = live_find((uint64_t)(uintptr_t)old);
+      if (b)
+        saved = *b;
+      live_remove((uint64_t)(uintptr_t)old);
+      pthread_mutex_unlock(&live_mutex);
+    }
   gsp_in_agent--;
   p = __libc_realloc(old, size);
   if (p == NULL)
     {
-      /* The old block is still valid.  */
-      if (live_enabled())
+      /* The old block is still valid: put it back as it was.  */
+      if (saved.address)
         {
           gsp_in_agent++;
           pthread_mutex_lock(&live_mutex);
-          live_insert((uint64_t)(uintptr_t)old, 0, 0);
+          live_insert(saved.address, saved.size, saved.stack);
           pthread_mutex_unlock(&live_mutex);
           gsp_in_agent--;
         }

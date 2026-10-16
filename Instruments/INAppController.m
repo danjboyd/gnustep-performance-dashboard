@@ -234,18 +234,16 @@ add_item(NSMenu *menu, NSString *title, SEL action, NSString *key, id target)
     return;
 
   /* Stage the files where root can read them (an AppImage mount is not
-     readable by root), then run the installer through pkexec.  */
+     readable by root) and nobody else can change them, then run the
+     installer through pkexec.  */
   NSFileManager *fm = [NSFileManager defaultManager];
-  NSString *staging = [NSTemporaryDirectory() stringByAppendingPathComponent:
-    [NSString stringWithFormat: @"gstrace-helper-%d", [[NSProcessInfo processInfo] processIdentifier]]];
-  [fm removeItemAtPath: staging error: NULL];
-  [fm createDirectoryAtPath: staging withIntermediateDirectories: YES attributes: nil error: NULL];
-  NSString *policy = [[helper stringByDeletingLastPathComponent]
-    stringByAppendingPathComponent: @"org.gnustep.instruments.policy"];
-  [fm copyItemAtPath: helper toPath: [staging stringByAppendingPathComponent: @"gstrace-helper"]
-               error: NULL];
-  [fm copyItemAtPath: policy toPath: [staging stringByAppendingPathComponent:
-                                       @"org.gnustep.instruments.policy"] error: NULL];
+  NSError *error = nil;
+  NSString *staging = [GSPRecorder stageHelperForInstall: &error];
+  if (staging == nil)
+    {
+      NSRunAlertPanel(@"Installation Failed", @"%@", @"OK", nil, nil, [error localizedDescription]);
+      return;
+    }
   NSTask *task = [NSTask new];
   [task setLaunchPath: @"/usr/bin/pkexec"];
   [task setArguments: [NSArray arrayWithObjects:

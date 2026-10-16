@@ -28,7 +28,9 @@ gsp_agent_signpost(int record_type, int kind, uint64_t spid,
   gsp_signpost_payload p;
   uint64_t now = gsp_now();
 
-  if (!gsp_agent_signposts_enabled() || gsp_is_internal)
+  /* gsp_in_agent: a signal handler interrupted the agent while it was
+     writing to this thread's ring; a second producer would corrupt it.  */
+  if (!gsp_agent_signposts_enabled() || gsp_is_internal || gsp_in_agent)
     return;
   gsp_in_agent++;
   t = gsp_thread_current();

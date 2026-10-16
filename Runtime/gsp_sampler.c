@@ -77,6 +77,12 @@ gsp_thread_start_timers(gsp_thread *t)
 {
   if (!atomic_load(&sampling_on))
     return;
+  /* libunwind's per-thread cache lives in dynamic TLS that is allocated on
+     first use; make that happen here, not inside the first SIGPROF.  */
+  {
+    uint64_t frames[4];
+    gsp_unwind_here(t, frames, 4);
+  }
   if (gsp_cfg.cpu_sampling && !t->has_cpu_timer)
     t->has_cpu_timer = make_thread_timer(t, CLOCK_THREAD_CPUTIME_ID,
                                          GSP_SIG_CPU,
@@ -111,24 +117,10 @@ gsp_sampler_init(void)
 void
 gsp_sampler_stop(void)
 {
-  int n = atomic_load(&gsp_thread_count);
-
+  /* Handlers ignore signals from now on.  Timers belong to their threads
+     (which may be deleting them right now), so they are not touched from
+     here; they go away with the thread or the process.  */
   atomic_store(&sampling_on, 0);
-  /* Timers are owned by their threads but timer_settime works from any
-     thread; disarm them so no more signals arrive.  */
-  for (int i = 0; i < n; i++)
-    {
-      gsp_thread *t = gsp_threads[i];
-      struct itimerspec off;
-
-      if (t == NULL || atomic_load(&t->state) != GSP_SLOT_ACTIVE)
-        continue;
-      memset(&off, 0, sizeof(off));
-      if (t->has_cpu_timer)
-        timer_settime(t->cpu_timer, 0, &off, NULL);
-      if (t->has_wall_timer)
-        timer_settime(t->wall_timer, 0, &off, NULL);
-    }
 }
 
 /* ------------------------------------------------------------------ */

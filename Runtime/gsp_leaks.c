@@ -28,6 +28,7 @@
 #include <asm/prctl.h>
 #include <sys/syscall.h>
 #include <sys/uio.h>
+#include <sys/mman.h>
 
 static sem_t suspend_ack;
 static uint64_t explain_size;
@@ -179,12 +180,12 @@ static bool
 read_maps(regions *rs)
 {
   int fd = open("/proc/self/maps", O_RDONLY | O_CLOEXEC);
-  size_t cap = 1 << 20, used = 0;
+  size_t cap = 16u << 20, used = 0;
   char *text;
 
   if (fd < 0)
     return false;
-  text = gsp_map(cap);
+  text = gsp_map_raw(cap);
   if (text == NULL)
     {
       close(fd);
@@ -207,11 +208,11 @@ read_maps(regions *rs)
     if (text[i] == '\n')
       rs->cap++;
   rs->bytes = rs->cap * sizeof(region);
-  rs->items = gsp_map(rs->bytes);
+  rs->items = gsp_map_raw(rs->bytes);
   rs->count = 0;
   if (rs->items == NULL)
     {
-      gsp_unmap(text, cap);
+      munmap(text, cap);
       return false;
     }
 
@@ -394,13 +395,13 @@ push_work(scan_state *s, uint32_t index)
     {
       size_t ncap = s->work_cap ? s->work_cap * 2 : 65536;
       size_t nbytes = ncap * sizeof(uint32_t);
-      uint32_t *nw = gsp_map(nbytes);
+      uint32_t *nw = gsp_map_raw(nbytes);
       if (nw == NULL)
         return;
       if (s->work)
         {
           memcpy(nw, s->work, s->work_count * sizeof(uint32_t));
-          gsp_unmap(s->work, s->work_bytes);
+          munmap(s->work, s->work_bytes);
         }
       s->work = nw;
       s->work_cap = ncap;
@@ -655,6 +656,12 @@ gsp_leaks_snapshot(void)
 
   memset(&s, 0, sizeof(s));
   gsp_live_lock();
+  /* Everything mapped from here on uses unregistered mmaps: a stopped
+     thread may hold the agent's mapping lock.  */
+  s.bytes = (gsp_live_count() + 1) * sizeof(mblock);
+  s.blocks = gsp_map_raw(s.bytes);
+  while (sem_trywait(&suspend_ack) == 0)
+    ;   /* acknowledgements that arrived after the previous scan */
   stop_world();
 
   if (explain_size)
@@ -670,8 +677,6 @@ gsp_leaks_snapshot(void)
       if (mfd >= 0)
         close(mfd);
     }
-  s.bytes = (gsp_live_count() + 1) * sizeof(mblock);
-  s.blocks = gsp_map(s.bytes);
   if (s.blocks == NULL || !read_maps(&s.maps))
     goto done;
   gsp_live_foreach(collect_block, &s);
@@ -696,7 +701,7 @@ gsp_leaks_snapshot(void)
      buffers, thread stacks or large mmap'd blocks: those ranges are cut
      out and the rest is scanned.  Blocks are scanned only when reached.  */
   {
-    static uintptr_t cuts[GSP_MAX_THREADS + 16400][2];
+    static uintptr_t cuts[GSP_MAX_THREADS + 16400 + 8][2];
     int ncuts = gsp_agent_mappings(cuts, 16384);
     int nthreads = atomic_load(&gsp_thread_count);
     /* Exited threads too: glibc keeps their stacks mapped for reuse, and
@@ -724,6 +729,24 @@ gsp_leaks_snapshot(void)
       {
         cuts[ncuts][0] = gsp_writer_stack_lo;
         cuts[ncuts][1] = gsp_writer_stack_hi;
+        ncuts++;
+      }
+    /* The agent's own .data/.bss (its output buffer holds the previous
+       snapshot's leak addresses) and this scan's buffers.  */
+    for (int i = 0; i < gsp_agent_data_count; i++)
+      {
+        cuts[ncuts][0] = gsp_agent_data_ranges[i][0];
+        cuts[ncuts][1] = gsp_agent_data_ranges[i][1];
+        ncuts++;
+      }
+    uintptr_t own[3][2] = {
+      { (uintptr_t)s.blocks, (uintptr_t)s.blocks + s.bytes },
+      { (uintptr_t)s.maps.items, (uintptr_t)s.maps.items + s.maps.bytes },
+      { (uintptr_t)s.maps.text, (uintptr_t)s.maps.text + s.maps.text_bytes } };
+    for (int i = 0; i < 3; i++)
+      {
+        cuts[ncuts][0] = own[i][0];
+        cuts[ncuts][1] = own[i][1];
         ncuts++;
       }
     /* sort cuts by start (insertion sort: few hundred entries) */
@@ -868,11 +891,11 @@ done:
   gsp_live_unlock();
 cleanup:
   if (s.blocks)
-    gsp_unmap(s.blocks, s.bytes);
+    munmap(s.blocks, s.bytes);
   if (s.work)
-    gsp_unmap(s.work, s.work_bytes);
+    munmap(s.work, s.work_bytes);
   if (s.maps.items)
-    gsp_unmap(s.maps.items, s.maps.bytes);
+    munmap(s.maps.items, s.maps.bytes);
   if (s.maps.text)
-    gsp_unmap(s.maps.text, s.maps.text_bytes);
+    munmap(s.maps.text, s.maps.text_bytes);
 }

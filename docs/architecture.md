@@ -91,8 +91,21 @@ its parent is the recorder (`GSP_RECORDER_PID`) unless children are followed.
 as method-name records), and writes the same stream format. It stops at the
 time limit, when the target exits, or when a `stop` file appears in the bundle
 (the recorder cannot signal a root process). As root it only accepts targets
-owned by `PKEXEC_UID`, an output directory owned by that user, and creates
-files with `O_NOFOLLOW|O_EXCL` before handing them to the user.
+whose real, effective, saved and filesystem user and group ids are all
+`PKEXEC_UID`'s (re-checked every 100 ms, together with the executable's
+identity, so an exec or a credential change ends the recording), an output
+directory owned by that user, and creates files with `O_NOFOLLOW|O_EXCL`,
+mode 0600, before handing them to the user. Image files are inspected
+through `/proc/<pid>/map_files` with `O_NONBLOCK` and a regular-file check.
+Installation stages the helper and policy in a fresh `mkdtemp` directory;
+the installer only accepts sources owned by root or the invoking user and
+not writable by others, and the installed copy (which runs under the
+`auth_admin_keep` sampling policy) refuses `install` and `uninstall`.
+
+During a leak scan the writer allocates only with unregistered `mmap`s (a
+stopped thread may hold the agent's mapping lock). A stop requested from a
+signal handler skips every finalisation step that takes a lock and waits at
+most five seconds; fork children turn all tracking off.
 
 ## libGSPerformance
 

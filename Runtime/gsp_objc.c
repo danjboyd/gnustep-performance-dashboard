@@ -258,7 +258,7 @@ GSLogZombie(id obj, SEL sel)
                           &p, sizeof(p), NULL, 0);
           /* Make sure it reaches the file: zombie messages often abort.  */
           gsp_writer_wake();
-          struct timespec ts = { 0, 50000000 };
+          struct timespec ts = { 0, 5000000 };
           nanosleep(&ts, NULL);
         }
       gsp_in_agent--;

@@ -133,8 +133,12 @@ restricts (`kernel.perf_event_paranoid` = 3). Either
 - set `kernel.perf_event_paranoid` to 2 or lower to sample your own processes
   without the helper (user-space stacks only).
 
-The helper only samples processes owned by the user who invoked it and writes
-only into a trace bundle that user owns.
+The helper only samples processes whose user and group ids are all the
+invoking user's (so not setuid programs), stops if the target execs another
+program, writes only into a trace bundle that user owns (mode 0600, since it
+contains kernel addresses), and never records for more than an hour. The
+installed copy cannot reinstall or remove itself; `gstrace uninstall-helper`
+removes it (again through an administrator password).
 
 ## How it works
 

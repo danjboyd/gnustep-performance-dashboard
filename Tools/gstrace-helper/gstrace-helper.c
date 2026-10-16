@@ -121,7 +121,7 @@ static int
 create_in_dir(const char *name)
 {
   int fd = openat(dir_fd, name, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC,
-                  0644);
+                  0600);
   if (fd < 0)
     die("cannot create %s: %s", name, strerror(errno));
   if (geteuid() == 0 && fchown(fd, invoking_uid, invoking_gid) != 0)
@@ -132,27 +132,44 @@ create_in_dir(const char *name)
 /* ------------------------------------------------------------------ */
 /* process inspection                                                  */
 
-static uid_t
-process_uid(int pid)
+/* A process may be sampled only if every one of its user and group ids
+   (real, effective, saved, filesystem) is the invoking user's: this rules
+   out setuid/setgid programs the user started.  */
+static int
+process_owned_by(int pid, uid_t uid, gid_t gid)
 {
   char path[64], line[256];
   FILE *f;
-  uid_t uid = (uid_t)-1;
+  int uid_ok = 0, gid_ok = 0;
 
   snprintf(path, sizeof(path), "/proc/%d/status", pid);
   f = fopen(path, "r");
   if (f == NULL)
-    return uid;
+    return -1;
   while (fgets(line, sizeof(line), f))
-    if (strncmp(line, "Uid:", 4) == 0)
-      {
-        unsigned long real = 0, eff = 0;
-        if (sscanf(line + 4, "%lu %lu", &real, &eff) == 2)
-          uid = (uid_t)real;
-        break;
-      }
+    {
+      unsigned long a, b, c, d;
+      if (strncmp(line, "Uid:", 4) == 0 && sscanf(line + 4, "%lu %lu %lu %lu", &a, &b, &c, &d) == 4)
+        uid_ok = a == uid && b == uid && c == uid && d == uid;
+      else if (strncmp(line, "Gid:", 4) == 0 && sscanf(line + 4, "%lu %lu %lu %lu", &a, &b, &c, &d) == 4)
+        gid_ok = a == gid && b == gid && c == gid && d == gid;
+    }
   fclose(f);
-  return uid;
+  return uid_ok && gid_ok;
+}
+
+/* Identity of the target's executable, to notice an exec.  */
+static int
+exe_identity(int pid, dev_t *dev, ino_t *ino)
+{
+  char path[64];
+  struct stat st;
+  snprintf(path, sizeof(path), "/proc/%d/exe", pid);
+  if (stat(path, &st) != 0)
+    return -1;
+  *dev = st.st_dev;
+  *ino = st.st_ino;
+  return 0;
 }
 
 static void
@@ -177,6 +194,7 @@ typedef struct image
 {
   char path[512];
   uint64_t base, start, end;
+  uint64_t first_lo, first_hi;   /* one mapping of the file, for map_files */
   int have_base;
 } image;
 
@@ -208,6 +226,8 @@ emit_images(int pid, uint64_t t)
           memset(&images[i], 0, sizeof(image));
           snprintf(images[i].path, sizeof(images[i].path), "%s", file);
           images[i].start = UINT64_MAX;
+          images[i].first_lo = lo;
+          images[i].first_hi = hi;
           count++;
         }
       if (off == 0 && !images[i].have_base)
@@ -230,11 +250,19 @@ emit_images(int pid, uint64_t t)
         continue;
       /* ET_EXEC executables load at their link address: base 0 */
       gsp_image_payload p = { images[i].base, images[i].start, images[i].end };
-      int fd = open(images[i].path, O_RDONLY | O_CLOEXEC);
+      /* Read the ELF type through map_files (the file actually mapped, not
+         whatever the path names from root's point of view), never
+         blocking and only from regular files.  */
+      char mf[96];
+      snprintf(mf, sizeof(mf), "/proc/%d/map_files/%lx-%lx", pid,
+               (unsigned long)images[i].first_lo, (unsigned long)images[i].first_hi);
+      int fd = open(mf, O_RDONLY | O_NONBLOCK | O_NOCTTY | O_CLOEXEC);
       if (fd >= 0)
         {
+          struct stat st;
           unsigned char eh[18];
-          if (read(fd, eh, sizeof(eh)) == sizeof(eh) && eh[16] == 2 /* ET_EXEC */)
+          if (fstat(fd, &st) == 0 && S_ISREG(st.st_mode)
+              && read(fd, eh, sizeof(eh)) == sizeof(eh) && eh[16] == 2 /* ET_EXEC */)
             p.base = 0;
           close(fd);
         }
@@ -457,8 +485,13 @@ drain(tevent *ev)
       size_t off = tail % ev->data_size;
       for (size_t i = 0; i < sizeof(hdr); i++)
         ((uint8_t *)&hdr)[i] = ev->data[(off + i) % ev->data_size];
-      if (hdr.size == 0 || hdr.size > sizeof(buf))
+      if (hdr.size == 0)
         break;
+      if (hdr.size > sizeof(buf))
+        {
+          tail += hdr.size;   /* not a sample we can use; skip it */
+          continue;
+        }
       for (size_t i = 0; i < hdr.size; i++)
         buf[i] = ev->data[(off + i) % ev->data_size];
       tail += hdr.size;
@@ -518,6 +551,26 @@ drain(tevent *ev)
   __atomic_store_n(&ev->meta->data_tail, tail, __ATOMIC_RELEASE);
 }
 
+static void
+close_exited_threads(int pid)
+{
+  for (int i = 0; i < event_count;)
+    {
+      char path[96];
+      struct stat st;
+      snprintf(path, sizeof(path), "/proc/%d/task/%d", pid, events[i].tid);
+      if (stat(path, &st) == 0)
+        {
+          i++;
+          continue;
+        }
+      drain(&events[i]);
+      munmap(events[i].meta, (size_t)sysconf(_SC_PAGESIZE) * (RING_PAGES + 1));
+      close(events[i].fd);
+      events[i] = events[--event_count];
+    }
+}
+
 static int
 cmd_record(int argc, char **argv)
 {
@@ -544,11 +597,17 @@ cmd_record(int argc, char **argv)
   if (frequency < 10 || frequency > 10000)
     frequency = 1000;
 
-  uid_t owner = process_uid(pid);
-  if (owner == (uid_t)-1)
+  int owned = process_owned_by(pid, invoking_uid, invoking_gid);
+  if (owned < 0)
     die("no process %d", pid);
-  if (invoking_uid != 0 && owner != invoking_uid)
-    die("process %d belongs to another user", pid);
+  if (invoking_uid != 0 && !owned)
+    die("process %d belongs to another user or runs with other privileges (setuid/setgid)", pid);
+  dev_t exe_dev;
+  ino_t exe_ino;
+  if (exe_identity(pid, &exe_dev, &exe_ino) != 0)
+    die("cannot inspect process %d", pid);
+  if (duration <= 0 || duration > 3600)
+    duration = 3600;   /* bounded: root writes can use reserved disk space */
 
   dir_fd = open(output, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
   if (dir_fd < 0 || fstat(dir_fd, &st) != 0)
@@ -621,6 +680,14 @@ cmd_record(int argc, char **argv)
         break;
       if (t >= next_scan)
         {
+          /* The target must still be the same program run by the same
+             user: stop at an exec or a change of credentials.  */
+          dev_t d;
+          ino_t ino;
+          if (exe_identity(pid, &d, &ino) != 0 || d != exe_dev || ino != exe_ino
+              || (invoking_uid != 0 && process_owned_by(pid, invoking_uid, invoking_gid) != 1))
+            break;
+          close_exited_threads(pid);
           scan_threads(pid, t);
           next_scan = t + 100000000ull;
         }
@@ -649,6 +716,19 @@ cmd_record(int argc, char **argv)
 /* ------------------------------------------------------------------ */
 /* install                                                             */
 
+/* The installed copy runs under the polkit policy's auth_admin_keep for
+   sampling; it must not also be able to replace itself or the policy.  */
+static int
+running_installed_copy(void)
+{
+  char self[PATH_MAX];
+  ssize_t n = readlink("/proc/self/exe", self, sizeof(self) - 1);
+  if (n <= 0)
+    return 1;
+  self[n] = 0;
+  return strcmp(self, INSTALL_PATH) == 0;
+}
+
 static void
 copy_file(int src_dir, const char *name, const char *dest, mode_t mode)
 {
@@ -658,6 +738,8 @@ copy_file(int src_dir, const char *name, const char *dest, mode_t mode)
 
   if (in < 0 || fstat(in, &st) != 0 || !S_ISREG(st.st_mode))
     die("source %s is missing or not a regular file", name);
+  if ((st.st_uid != 0 && st.st_uid != invoking_uid) || (st.st_mode & 022))
+    die("source %s must be owned by you or root and not writable by others", name);
   snprintf(tmp, sizeof(tmp), "%s.new", dest);
   unlink(tmp);
   int out = open(tmp, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, mode);
@@ -685,11 +767,17 @@ cmd_install(int argc, char **argv)
       source = argv[++i];
   if (geteuid() != 0)
     die("install must run as root (use `gstrace install-helper`)");
+  if (running_installed_copy())
+    die("the installed helper cannot reinstall itself; run `gstrace install-helper`");
   if (source == NULL)
     die("install needs --source DIR");
-  int src = open(source, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
-  if (src < 0)
+  int src = open(source, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+  struct stat dst;
+  if (src < 0 || fstat(src, &dst) != 0)
     die("cannot open %s", source);
+  /* Only a staging directory nobody else can change.  */
+  if ((dst.st_uid != 0 && dst.st_uid != invoking_uid) || (dst.st_mode & 022))
+    die("%s must be owned by you or root and not writable by others", source);
   mkdir("/usr/local/libexec", 0755);
   mkdir(POLICY_DIR, 0755);
   copy_file(src, "gstrace-helper", INSTALL_PATH, 0755);
@@ -703,6 +791,8 @@ cmd_uninstall(void)
 {
   if (geteuid() != 0)
     die("uninstall must run as root");
+  if (running_installed_copy())
+    die("run uninstall from a copy of the helper (e.g. the one next to gstrace) through pkexec");
   unlink(INSTALL_PATH);
   unlink(POLICY_DIR "/" POLICY_NAME);
   printf("Removed %s and the polkit policy\n", INSTALL_PATH);

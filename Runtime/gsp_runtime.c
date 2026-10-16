@@ -43,6 +43,11 @@ static atomic_int stop_requested;
 static atomic_int leak_requested;
 static atomic_int mark_requested;
 static atomic_int finished;
+/* Set when the stop comes from a signal handler: the interrupted thread
+   may hold any lock (the live table, the loader, libobjc), so the writer
+   skips every finalisation step that takes one.  */
+static atomic_int stop_from_signal;
+static atomic_int gave_up_waiting;
 static pid_t traced_pid;
 static uint64_t start_ns;
 static char events_path[1100];
@@ -79,6 +84,16 @@ gsp_map(size_t size)
     }
   atomic_flag_clear_explicit(&mapping_lock, memory_order_release);
   return p;
+}
+
+/* Raw mapping, not registered: for the writer while other threads are
+   stopped (one of them may hold mapping_lock).  */
+void *
+gsp_map_raw(size_t size)
+{
+  void *p = mmap(NULL, size, PROT_READ | PROT_WRITE,
+                 MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  return p == MAP_FAILED ? NULL : p;
 }
 
 void
@@ -532,7 +547,8 @@ gsp_thread_finish(gsp_thread *t)
       t->has_wall_timer = false;
       timer_delete(t->wall_timer);
     }
-  gsp_emit_normal(t, GSP_REC_THREAD_END, 0, 0, gsp_now(), NULL, 0, NULL, 0);
+  if (!gsp_in_agent)
+    gsp_emit_normal(t, GSP_REC_THREAD_END, 0, 0, gsp_now(), NULL, 0, NULL, 0);
   gsp_self_thread = NULL;
   atomic_store(&t->state, GSP_SLOT_EXITED);
   gsp_writer_wake();
@@ -759,12 +775,30 @@ gsp_intern_stack(const uint64_t *frames, unsigned n)
 static void
 finish_recording(void)
 {
+  bool from_signal = atomic_load(&stop_from_signal);
   gsp_sampler_stop();
   drain_all();
-  gsp_images_emit_new_writer();
-  gsp_objc_dump_methods();
-  if (gsp_cfg.leaks)
-    gsp_leaks_snapshot();
+  if (!from_signal)
+    {
+      gsp_images_emit_new_writer();
+      gsp_objc_dump_methods();
+      if (gsp_cfg.leaks)
+        gsp_leaks_snapshot();
+    }
+  /* samples dropped by threads that are still alive */
+  {
+    int n = atomic_load(&gsp_thread_count);
+    for (int i = 0; i < n; i++)
+      {
+        gsp_thread *t = gsp_threads[i];
+        if (t && atomic_load(&t->state) == GSP_SLOT_ACTIVE && t->dropped_signal)
+          {
+            uint64_t d = t->dropped_signal;
+            gsp_writer_emit(GSP_REC_DROPPED, GSP_REC_SAMPLE, gsp_now(),
+                            (uint32_t)t->tid, &d, sizeof(d), NULL, 0);
+          }
+      }
+  }
   atomic_store(&gsp_alloc_on, 0);
   gsp_alloc_stop_live();
   atomic_store(&finished, 1);
@@ -887,13 +921,16 @@ static int fatal_signals[] = { SIGINT, SIGTERM, SIGHUP };
 
 static void stop_and_wait(void);
 
+static void stop_and_wait_for(int seconds);
+
 static void
 fatal_handler(int sig)
 {
   struct sigaction dfl;
 
   gsp_in_agent++;
-  stop_and_wait();
+  atomic_store(&stop_from_signal, 1);
+  stop_and_wait_for(5);
   memset(&dfl, 0, sizeof(dfl));
   dfl.sa_handler = SIG_DFL;
   sigemptyset(&dfl.sa_mask);
@@ -918,16 +955,23 @@ install_fatal_handlers(void)
 }
 
 static void
-stop_and_wait(void)
+stop_and_wait_for(int seconds)
 {
-  if (!atomic_load(&writer_running))
+  if (!atomic_load(&writer_running) || atomic_load(&gave_up_waiting))
     return;
   atomic_store(&stop_requested, 1);
   gsp_writer_wake();
   struct timespec deadline;
   clock_gettime(CLOCK_REALTIME, &deadline);
-  deadline.tv_sec += 60;
-  pthread_timedjoin_np(writer_thread, NULL, &deadline);
+  deadline.tv_sec += seconds;
+  if (pthread_timedjoin_np(writer_thread, NULL, &deadline) != 0)
+    atomic_store(&gave_up_waiting, 1);   /* never wait twice */
+}
+
+static void
+stop_and_wait(void)
+{
+  stop_and_wait_for(60);
 }
 
 /* exit() runs atexit handlers (GNUstep releases many globals there)
@@ -962,7 +1006,10 @@ at_exit_handler(void)
 static void
 fork_child(void)
 {
-  /* The child is not traced: its copy of the rings has no writer.  */
+  /* The child is not traced: its copy of the rings has no writer.  Stop
+     live-block tracking too, so no hook ever takes a lock that another
+     parent thread may have held at fork time.  */
+  gsp_alloc_stop_live();
   atomic_store(&gsp_recording, 0);
   atomic_store(&gsp_alloc_on, 0);
   atomic_store(&writer_running, 0);
@@ -973,7 +1020,42 @@ fork_child(void)
   out_fd = -1;
 }
 
+uintptr_t gsp_agent_data_ranges[4][2];
+int gsp_agent_data_count;
+
 static void find_agent_text(void);
+
+static int
+find_agent_data_cb(struct dl_phdr_info *pi, size_t size, void *data)
+{
+  uintptr_t probe = (uintptr_t)find_agent_text;
+  bool ours = false;
+  (void)size;
+  (void)data;
+  for (int i = 0; i < pi->dlpi_phnum; i++)
+    {
+      const ElfW(Phdr) *ph = &pi->dlpi_phdr[i];
+      uintptr_t lo = pi->dlpi_addr + ph->p_vaddr;
+      if (ph->p_type == PT_LOAD && lo <= probe && probe < lo + ph->p_memsz)
+        ours = true;
+    }
+  if (!ours)
+    return 0;
+  for (int i = 0; i < pi->dlpi_phnum && gsp_agent_data_count < 4; i++)
+    {
+      const ElfW(Phdr) *ph = &pi->dlpi_phdr[i];
+      if (ph->p_type == PT_LOAD && (ph->p_flags & PF_W))
+        {
+          uintptr_t lo = (pi->dlpi_addr + ph->p_vaddr) & ~(uintptr_t)4095;
+          uintptr_t hi = (pi->dlpi_addr + ph->p_vaddr + ph->p_memsz + 4095)
+            & ~(uintptr_t)4095;
+          gsp_agent_data_ranges[gsp_agent_data_count][0] = lo;
+          gsp_agent_data_ranges[gsp_agent_data_count][1] = hi;
+          gsp_agent_data_count++;
+        }
+    }
+  return 1;
+}
 
 static int
 find_agent_text_cb(struct dl_phdr_info *pi, size_t size, void *data)
@@ -1004,6 +1086,7 @@ find_agent_text(void)
   dl_iterate_phdr(find_agent_text_cb, range);
   gsp_agent_text_lo = range[0];
   gsp_agent_text_hi = range[1];
+  dl_iterate_phdr(find_agent_data_cb, NULL);
 }
 
 __attribute__((constructor(101))) static void
@@ -1050,6 +1133,10 @@ gsp_init(void)
     {
       fprintf(stderr, "gsperf: cannot write %s: %s\n", events_path,
               strerror(errno));
+      if (out_fd >= 0)
+        close(out_fd);
+      out_fd = -1;
+      gsp_alloc_stop_live();
       gsp_in_agent--;
       return;
     }
