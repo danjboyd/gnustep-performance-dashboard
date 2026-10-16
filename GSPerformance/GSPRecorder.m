@@ -66,6 +66,7 @@ make_error(NSInteger code, NSString *message)
   NSCondition *_done;
   BOOL _finished;
   int _exitStatus;
+  void *_process;   /* Windows process handle */
 }
 
 - (instancetype) initWithOptions: (GSPRecordingOptions *)options
@@ -92,6 +93,33 @@ make_error(NSInteger code, NSString *message)
 + (NSString *) agentLibraryPath
 {
 #if defined(_WIN32)
+  /* gsperf-agent.dll next to the GSPerformance DLL, the app's resources,
+     the build tree, or GSP_AGENT_PATH.  */
+  NSFileManager *fm = [NSFileManager defaultManager];
+  NSMutableArray *candidates = [NSMutableArray array];
+  const char *env = getenv("GSP_AGENT_PATH");
+  HMODULE self = NULL;
+  WCHAR wpath[MAX_PATH];
+
+  if (env && *env)
+    [candidates addObject: [NSString stringWithUTF8String: env]];
+  if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS
+                         | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                         (LPCWSTR)(void *)GSPAgentEnvironmentForInstruments, &self)
+      && GetModuleFileNameW(self, wpath, MAX_PATH))
+    {
+      NSString *dir = [[NSString stringWithCharacters: (const unichar *)wpath
+                                               length: wcslen(wpath)]
+                        stringByDeletingLastPathComponent];
+      [candidates addObject: [dir stringByAppendingPathComponent: @"gsperf-agent.dll"]];
+      [candidates addObject: [[dir stringByAppendingPathComponent:
+        @"../../Runtime/obj/gsperf-agent.dll"] stringByStandardizingPath]];
+    }
+  [candidates addObject: [[[NSBundle mainBundle] resourcePath]
+    stringByAppendingPathComponent: @"gsperf-agent.dll"]];
+  for (NSString *c in candidates)
+    if ([fm isReadableFileAtPath: c])
+      return c;
   return nil;
 #else
   NSFileManager *fm = [NSFileManager defaultManager];
@@ -291,7 +319,10 @@ copy_private(NSString *from, NSString *to, mode_t mode)
 
 + (NSString *) preloadProblemForExecutable: (NSString *)path
 {
-  return @"Recording is not supported on Windows yet; traces recorded on Linux can be opened and analysed.";
+  if (![[NSFileManager defaultManager] isExecutableFileAtPath: path]
+      && ![[NSFileManager defaultManager] fileExistsAtPath: path])
+    return [NSString stringWithFormat: @"%@ does not exist.", path];
+  return nil;
 }
 
 #endif
@@ -727,11 +758,235 @@ send_control(int pid, int request)
 }
 
 #else
+/* Windows: start the target suspended, load gsperf-agent.dll into it with
+   a remote LoadLibraryW thread, then let it run.  */
+
+static NSString *
+quote_argument(NSString *a)
+{
+  if ([a length] && [a rangeOfCharacterFromSet:
+        [NSCharacterSet characterSetWithCharactersInString: @" \t\""]].location == NSNotFound)
+    return a;
+  NSMutableString *q = [NSMutableString stringWithString: @"\""];
+  NSUInteger backslashes = 0;
+  for (NSUInteger i = 0; i < [a length]; i++)
+    {
+      unichar c = [a characterAtIndex: i];
+      if (c == '\\')
+        {
+          backslashes++;
+          continue;
+        }
+      for (NSUInteger k = 0; k < (c == '"' ? backslashes * 2 + 1 : backslashes); k++)
+        [q appendString: @"\\"];
+      backslashes = 0;
+      [q appendFormat: @"%C", c];
+    }
+  for (NSUInteger k = 0; k < backslashes * 2; k++)
+    [q appendString: @"\\"];
+  [q appendString: @"\""];
+  return q;
+}
+
+static WCHAR *
+wide(NSString *s)
+{
+  NSUInteger n = [s length];
+  WCHAR *w = calloc(n + 1, sizeof(WCHAR));
+  [s getCharacters: (unichar *)w range: NSMakeRange(0, n)];
+  return w;
+}
+
+- (BOOL) launch: (NSError **)error
+{
+  NSString *agent = [GSPRecorder agentLibraryPath];
+  if (agent == nil)
+    {
+      if (error)
+        *error = make_error(3, @"Cannot find gsperf-agent.dll. Set GSP_AGENT_PATH or install the runtime.");
+      return NO;
+    }
+  NSMutableDictionary *add = [NSMutableDictionary dictionary];
+  [add addEntriesFromDictionary: GSPAgentEnvironmentForInstruments(
+     _options.instrumentIdentifiers, _options.sampleIntervalMicroseconds,
+     _options.leakIntervalSeconds)];
+  [add setObject: [_tracePath stringByStandardizingPath] forKey: @"GSP_OUTPUT"];
+  NSMutableDictionary *env = [[GSPRecorder targetEnvironmentWithAdditions: add] mutableCopy];
+  [env addEntriesFromDictionary: _options.environment];
+
+  /* environment block: sorted NAME=value\0 ... \0 */
+  NSMutableString *block = [NSMutableString string];
+  unichar zero = 0;
+  NSString *nul = [NSString stringWithCharacters: &zero length: 1];
+  for (NSString *k in [[env allKeys] sortedArrayUsingSelector: @selector(caseInsensitiveCompare:)])
+    {
+      [block appendFormat: @"%@=%@", k, [env objectForKey: k]];
+      [block appendString: nul];
+    }
+  [block appendString: nul];
+
+  NSMutableArray *parts = [NSMutableArray arrayWithObject: quote_argument(_options.executablePath)];
+  for (NSString *a in _options.arguments)
+    [parts addObject: quote_argument(a)];
+  WCHAR *cmd = wide([parts componentsJoinedByString: @" "]);
+  WCHAR *app = wide(_options.executablePath);
+  WCHAR *envw = calloc([block length] + 1, sizeof(WCHAR));
+  [block getCharacters: (unichar *)envw range: NSMakeRange(0, [block length])];
+  WCHAR *cwd = _options.workingDirectory ? wide(_options.workingDirectory) : NULL;
+
+  STARTUPINFOW si;
+  PROCESS_INFORMATION pi;
+  HANDLE outh = INVALID_HANDLE_VALUE;
+  memset(&si, 0, sizeof(si));
+  si.cb = sizeof(si);
+  if (_options.captureOutput)
+    {
+      SECURITY_ATTRIBUTES sa = { sizeof(sa), NULL, TRUE };
+      WCHAR *outp = wide([_tracePath stringByAppendingPathComponent: @"output.txt"]);
+      outh = CreateFileW(outp, GENERIC_WRITE, FILE_SHARE_READ, &sa, CREATE_ALWAYS,
+                         FILE_ATTRIBUTE_NORMAL, NULL);
+      free(outp);
+      si.dwFlags = STARTF_USESTDHANDLES;
+      si.hStdOutput = si.hStdError = outh;
+      si.hStdInput = NULL;
+    }
+  _startDate = [NSDate date];
+  BOOL ok = CreateProcessW(app, cmd, NULL, NULL, _options.captureOutput,
+                           CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT, envw, cwd,
+                           &si, &pi);
+  DWORD lastError = GetLastError();
+  free(cmd);
+  free(app);
+  free(envw);
+  free(cwd);
+  if (outh != INVALID_HANDLE_VALUE)
+    CloseHandle(outh);
+  if (!ok)
+    {
+      if (error)
+        *error = make_error(4, [NSString stringWithFormat: @"Cannot launch %@ (error %lu)",
+                                _options.executablePath, (unsigned long)lastError]);
+      return NO;
+    }
+
+  /* inject the agent */
+  WCHAR *agentw = wide([agent stringByReplacingOccurrencesOfString: @"/" withString: @"\\"]);
+  SIZE_T bytes = (wcslen(agentw) + 1) * sizeof(WCHAR);
+  LPVOID remote = VirtualAllocEx(pi.hProcess, NULL, bytes, MEM_COMMIT | MEM_RESERVE,
+                                 PAGE_READWRITE);
+  BOOL injected = NO;
+  if (remote && WriteProcessMemory(pi.hProcess, remote, agentw, bytes, NULL))
+    {
+      LPTHREAD_START_ROUTINE load = (LPTHREAD_START_ROUTINE)(void *)
+        GetProcAddress(GetModuleHandleA("kernel32.dll"), "LoadLibraryW");
+      HANDLE t = CreateRemoteThread(pi.hProcess, NULL, 0, load, remote, 0, NULL);
+      if (t)
+        {
+          DWORD code = 0;
+          WaitForSingleObject(t, 30000);
+          GetExitCodeThread(t, &code);
+          injected = code != 0;
+          CloseHandle(t);
+        }
+    }
+  free(agentw);
+  if (remote)
+    VirtualFreeEx(pi.hProcess, remote, 0, MEM_RELEASE);
+  if (!injected)
+    {
+      TerminateProcess(pi.hProcess, 1);
+      CloseHandle(pi.hThread);
+      CloseHandle(pi.hProcess);
+      if (error)
+        *error = make_error(13, @"Cannot load the recording agent into the target.");
+      return NO;
+    }
+  ResumeThread(pi.hThread);
+  CloseHandle(pi.hThread);
+  _process = pi.hProcess;
+  _pid = (int)pi.dwProcessId;
+  return YES;
+}
+
 - (BOOL) start: (NSError **)error
 {
-  if (error)
-    *error = make_error(12, @"Recording is not supported on Windows yet; traces recorded on Linux can be opened and analysed.");
-  return NO;
+  if (_options.attachPID)
+    {
+      if (error)
+        *error = make_error(12, @"Attaching to running processes is not supported on Windows yet.");
+      return NO;
+    }
+  if (![self prepareBundle: error])
+    return NO;
+  if (![self launch: error])
+    {
+      [[NSFileManager defaultManager] removeItemAtPath: _tracePath error: NULL];
+      return NO;
+    }
+  _recording = YES;
+  [self writeInfo: NO];
+  [NSThread detachNewThreadSelector: @selector(monitor) toTarget: self withObject: nil];
+  if ([_delegate respondsToSelector: @selector(recorderDidStart:)])
+    [_delegate recorderDidStart: self];
+  return YES;
+}
+
+- (BOOL) doneFileExistsFor: (int)pid
+{
+  NSString *p = [_tracePath stringByAppendingPathComponent:
+    [NSString stringWithFormat: @"events-%d.done", pid]];
+  return [[NSFileManager defaultManager] fileExistsAtPath: p];
+}
+
+- (void) monitor
+{
+  @autoreleasepool
+    {
+      NSDate *deadline = _options.timeLimit > 0
+        ? [_startDate dateByAddingTimeInterval: _options.timeLimit] : nil;
+      BOOL stopSent = NO;
+      NSDate *stopSentAt = nil;
+      HANDLE proc = (HANDLE)_process;
+
+      for (;;)
+        {
+          if (WaitForSingleObject(proc, 20) == WAIT_OBJECT_0)
+            break;
+          BOOL wantStop = _stopRequested
+            || (deadline && [deadline timeIntervalSinceNow] <= 0);
+          if (wantStop && !stopSent)
+            {
+              WCHAR name[64];
+              swprintf(name, 64, L"Local\\gsperf-stop-%d", _pid);
+              HANDLE ev = OpenEventW(EVENT_MODIFY_STATE, FALSE, name);
+              if (ev)
+                {
+                  SetEvent(ev);
+                  CloseHandle(ev);
+                }
+              stopSent = YES;
+              stopSentAt = [NSDate date];
+            }
+          if (stopSent && ([self doneFileExistsFor: _pid] || -[stopSentAt timeIntervalSinceNow] > 30))
+            {
+              TerminateProcess(proc, 0);
+              WaitForSingleObject(proc, 5000);
+              break;
+            }
+        }
+      DWORD code = 0;
+      GetExitCodeProcess(proc, &code);
+      _exitStatus = (int)code;
+      CloseHandle(proc);
+      _recording = NO;
+      [self writeInfo: YES];
+      [_done lock];
+      _finished = YES;
+      [_done broadcast];
+      [_done unlock];
+      [self performSelectorOnMainThread: @selector(notifyFinished)
+                             withObject: nil waitUntilDone: NO];
+    }
 }
 
 #endif

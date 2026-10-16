@@ -22,6 +22,30 @@ AGENT_SRCS = gsp_runtime.c gsp_unwind.c gsp_sampler.c gsp_alloc.c \
 AGENT_OBJS = $(AGENT_SRCS:%.c=$(OBJDIR)/%.o)
 API_OBJS = $(OBJDIR)/gsp_signpost_api.o
 
+UNAME := $(shell uname -s 2>/dev/null)
+WINDOWS := $(findstring MINGW,$(UNAME))$(findstring MSYS,$(UNAME))
+
+ifneq (,$(WINDOWS))
+# Windows: gsperf-agent.dll (injected by the recorder) and gsperf.dll with
+# its import library for applications that emit signposts.
+all: $(OBJDIR)/gsperf-agent.dll $(OBJDIR)/gsperf.dll
+
+$(OBJDIR)/gsperf-agent.dll: win/gsp_agent_win.c include/GSPerformance/gsp_format.h | $(OBJDIR)
+	$(CC) $(CFLAGS) -std=gnu11 -Wall -Wno-unused-parameter -Iinclude -shared \
+	  -o $@ win/gsp_agent_win.c -lwinmm
+
+$(OBJDIR)/gsperf.dll: gsp_signpost_api.c include/GSPerformance/gsp_signpost.h | $(OBJDIR)
+	$(CC) $(CFLAGS) -std=gnu11 -Wall -Iinclude -DGSP_BUILDING_API -shared \
+	  -o $@ gsp_signpost_api.c -Wl,--out-implib,$(OBJDIR)/libgsperf.dll.a
+
+install: all
+	install -d $(DESTDIR)$(PREFIX) $(DESTDIR)$(HEADER_PREFIX)/GSPerformance \
+	  $(DESTDIR)$(HEADER_PREFIX)/os
+	install -m 755 $(OBJDIR)/gsperf-agent.dll $(OBJDIR)/gsperf.dll $(DESTDIR)$(PREFIX)/
+	install -m 644 $(OBJDIR)/libgsperf.dll.a $(DESTDIR)$(PREFIX)/
+	install -m 644 include/GSPerformance/*.h $(DESTDIR)$(HEADER_PREFIX)/GSPerformance/
+	install -m 644 include/os/*.h $(DESTDIR)$(HEADER_PREFIX)/os/
+else
 all: $(OBJDIR)/libgsperf-agent.so $(OBJDIR)/libgsperf.so
 
 $(OBJDIR):
@@ -50,6 +74,8 @@ install: all
 	install -m 644 include/GSPerformance/*.h \
 	  $(DESTDIR)$(HEADER_PREFIX)/GSPerformance/
 	install -m 644 include/os/*.h $(DESTDIR)$(HEADER_PREFIX)/os/
+
+endif
 
 clean:
 	rm -rf $(OBJDIR)

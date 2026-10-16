@@ -8,7 +8,12 @@
 #include "GSPerformance/gsp_signpost.h"
 #include "GSPerformance/gsp_format.h"
 
-#include <dlfcn.h>
+#if defined(_WIN32)
+#  define WIN32_LEAN_AND_MEAN
+#  include <windows.h>
+#else
+#  include <dlfcn.h>
+#endif
 #include <pthread.h>
 #include <stdatomic.h>
 #include <stdio.h>
@@ -35,8 +40,14 @@ static _Atomic uint64_t next_id = 1;
 static void
 resolve(void)
 {
+#if defined(_WIN32)
+  HMODULE agent = GetModuleHandleA("gsperf-agent.dll");
+  agent_enabled = agent ? (enabled_fn)GetProcAddress(agent, "gsp_agent_signposts_enabled") : NULL;
+  agent_signpost = agent ? (signpost_fn)GetProcAddress(agent, "gsp_agent_signpost") : NULL;
+#else
   agent_enabled = (enabled_fn)dlsym(RTLD_DEFAULT, "gsp_agent_signposts_enabled");
   agent_signpost = (signpost_fn)dlsym(RTLD_DEFAULT, "gsp_agent_signpost");
+#endif
   if (agent_enabled == NULL || agent_signpost == NULL)
     agent_enabled = NULL;
 }

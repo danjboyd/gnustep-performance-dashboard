@@ -15,7 +15,9 @@
 extern "C" {
 #endif
 
-#if defined(_WIN32)
+#if defined(_WIN32) && defined(GSP_BUILDING_API)
+#  define GSP_API __declspec(dllexport)
+#elif defined(_WIN32)
 #  define GSP_API __declspec(dllimport)
 #else
 #  define GSP_API __attribute__((visibility("default")))

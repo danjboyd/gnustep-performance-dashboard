@@ -127,10 +127,157 @@ cmp_u64(const void *a, const void *b)
   return YES;
 }
 
+static uint16_t rd16(const uint8_t *p) { uint16_t v; memcpy(&v, p, 2); return v; }
+static uint32_t rd32(const uint8_t *p) { uint32_t v; memcpy(&v, p, 4); return v; }
+
+- (void) addSymbol: (const char *)name length: (size_t)nlen start: (uint64_t)start
+          capacity: (NSUInteger *)cap
+{
+  if (count == *cap)
+    {
+      *cap = *cap ? *cap * 2 : 1024;
+      syms = realloc(syms, *cap * sizeof(elf_sym));
+    }
+  syms[count].start = start;
+  syms[count].size = 0;
+  syms[count].name = (uint32_t)[names length];
+  syms[count].pad = 0;
+  [names appendBytes: name length: nlen];
+  [names appendBytes: "" length: 1];
+  count++;
+}
+
+/* PE/COFF images (Windows): function names from the COFF symbol table
+   (MinGW keeps it unless stripped) and the export table; function bounds
+   from .pdata.  Addresses are RVAs, matching (address - module base).  */
+- (BOOL) loadPE: (const uint8_t *)b length: (NSUInteger)len
+{
+  NSUInteger cap = 0;
+  if (len < 0x40)
+    return NO;
+  uint32_t pe = rd32(b + 0x3c);
+  if (pe + 24 > len || memcmp(b + pe, "PE\0\0", 4) != 0)
+    return NO;
+  const uint8_t *fh = b + pe + 4;
+  uint16_t nsections = rd16(fh + 2);
+  uint32_t symtab = rd32(fh + 8), nsyms = rd32(fh + 12);
+  uint16_t optsize = rd16(fh + 16);
+  const uint8_t *opt = fh + 20;
+  if (opt + optsize > b + len || rd16(opt) != 0x20b)   /* PE32+ only */
+    return NO;
+  uint32_t ndirs = rd32(opt + 108);
+  const uint8_t *dirs = opt + 112;
+  const uint8_t *sec = opt + optsize;
+  if (sec + nsections * 40 > b + len)
+    return NO;
+  names = [NSMutableData data];
+
+  /* RVA -> file offset */
+  uint32_t (^offset)(uint32_t) = ^uint32_t(uint32_t rva) {
+    for (uint16_t i = 0; i < nsections; i++)
+      {
+        const uint8_t *s = sec + i * 40;
+        uint32_t va = rd32(s + 12), vsize = rd32(s + 8), raw = rd32(s + 20), rsize = rd32(s + 16);
+        if (rva >= va && rva < va + (vsize ? vsize : rsize))
+          return raw + (rva - va);
+      }
+    return 0;
+  };
+
+  /* COFF symbol table */
+  if (symtab && nsyms && symtab + (uint64_t)nsyms * 18 <= len)
+    {
+      const uint8_t *strtab = b + symtab + nsyms * 18;
+      uint32_t strsize = (strtab + 4 <= b + len) ? rd32(strtab) : 0;
+      for (uint32_t i = 0; i < nsyms; i++)
+        {
+          const uint8_t *e = b + symtab + i * 18;
+          int16_t secnum = (int16_t)rd16(e + 12);
+          uint16_t type = rd16(e + 14);
+          uint8_t naux = e[17];
+          if (secnum > 0 && secnum <= nsections && (type & 0x30) == 0x20)
+            {
+              const char *nm;
+              size_t nl;
+              char shortname[9];
+              if (rd32(e) == 0)
+                {
+                  uint32_t o = rd32(e + 4);
+                  if (o >= strsize || strtab + o >= b + len)
+                    goto next;
+                  nm = (const char *)strtab + o;
+                  nl = strnlen(nm, (size_t)(b + len - (const uint8_t *)nm));
+                }
+              else
+                {
+                  memcpy(shortname, e, 8);
+                  shortname[8] = 0;
+                  nm = shortname;
+                  nl = strlen(shortname);
+                }
+              uint32_t va = rd32(sec + (secnum - 1) * 40 + 12);
+              [self addSymbol: nm length: nl start: va + rd32(e + 8) capacity: &cap];
+            }
+        next:
+          i += naux;
+        }
+      if (count > 0)
+        hasSymtab = YES;
+    }
+
+  /* exports */
+  if (ndirs > 0)
+    {
+      uint32_t erva = rd32(dirs), esize = rd32(dirs + 4);
+      uint32_t eoff = erva ? offset(erva) : 0;
+      if (eoff && esize && eoff + 40 <= len)
+        {
+          uint32_t nnames = rd32(b + eoff + 24);
+          uint32_t funcs = offset(rd32(b + eoff + 28));
+          uint32_t namesp = offset(rd32(b + eoff + 32));
+          uint32_t ords = offset(rd32(b + eoff + 36));
+          for (uint32_t i = 0; funcs && namesp && ords && i < nnames; i++)
+            {
+              if (namesp + i * 4 + 4 > len || ords + i * 2 + 2 > len)
+                break;
+              uint32_t noff = offset(rd32(b + namesp + i * 4));
+              uint16_t ord = rd16(b + ords + i * 2);
+              if (noff == 0 || noff >= len || funcs + ord * 4 + 4 > len)
+                continue;
+              uint32_t frva = rd32(b + funcs + ord * 4);
+              if (frva >= erva && frva < erva + esize)
+                continue;   /* forwarder */
+              const char *nm = (const char *)b + noff;
+              [self addSymbol: nm length: strnlen(nm, len - noff) start: frva capacity: &cap];
+            }
+        }
+    }
+
+  /* .pdata: function starts */
+  if (ndirs > 3)
+    {
+      uint32_t prva = rd32(dirs + 24), psize = rd32(dirs + 28);
+      uint32_t poff = prva ? offset(prva) : 0;
+      if (poff && psize && poff + psize <= len)
+        {
+          NSUInteger n = psize / 12;
+          funcStarts = malloc((n + 1) * sizeof(uint64_t));
+          for (NSUInteger i = 0; i < n; i++)
+            funcStarts[funcCount++] = rd32(b + poff + i * 12);
+          qsort(funcStarts, funcCount, sizeof(uint64_t), cmp_u64);
+        }
+    }
+  if (count > 1)
+    qsort(syms, count, sizeof(elf_sym), compare_elf_syms);
+  return YES;
+}
+
 - (BOOL) loadData: (NSData *)data
 {
   const uint8_t *b = [data bytes];
   NSUInteger len = [data length];
+  if (len >= 2 && b[0] == 'M' && b[1] == 'Z')
+    return [self loadPE: b length: len];
   const Elf64_Ehdr *eh = (const Elf64_Ehdr *)b;
   const Elf64_Shdr *sh;
   NSUInteger cap = 0;
@@ -472,6 +619,12 @@ static char *(*cxa_demangle)(const char *, char *, size_t *, int *);
   for (NSString *p in prefixes)
     if ([path hasPrefix: p])
       return YES;
+  /* Windows: the system directory and MSYS2's runtime DLLs */
+  NSString *lower = [path lowercaseString];
+  if ([lower hasPrefix: @"c:/windows/"] || [lower rangeOfString: @"/clang64/bin/"].location != NSNotFound
+      || [lower rangeOfString: @"/mingw64/bin/"].location != NSNotFound
+      || [lower rangeOfString: @"/ucrt64/bin/"].location != NSNotFound)
+    return YES;
   NSString *name = [path lastPathComponent];
   return [name hasPrefix: @"libgnustep-"] || [name hasPrefix: @"libobjc"]
     || [name hasPrefix: @"libgsperf"];

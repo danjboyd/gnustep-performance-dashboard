@@ -1,0 +1,793 @@
+/* gsp_agent_win.c - the recording agent on Windows (gsperf-agent.dll).
+
+   The recorder starts the target suspended and loads this DLL into it
+   with a remote LoadLibraryW thread.  When GSP_OUTPUT is set, DllMain
+   opens events-<pid>.bin and starts one sampler thread, which:
+
+   - every interval (1 ms), for each thread whose CPU cycle count moved,
+     suspends it, unwinds its stack with RtlVirtualUnwind and resumes it
+     (Windows has no asynchronous signals, so sampling is done from
+     outside the thread, as Windows profilers do);
+   - every wall interval (10 ms) samples the main thread regardless of
+     state, for the Hangs analysis;
+   - records loaded modules and, when the Objective-C class list grows,
+     the method table (GNUstep's DLLs carry no symbols for methods);
+   - stops when the recorder signals the named event
+     Local\gsperf-stop-<pid>, then writes END and events-<pid>.done.
+
+   While another thread is suspended the sampler must not take any lock
+   that thread could hold (heap, loader): the walk uses only stack memory
+   and RtlLookupFunctionEntry, and records are written after resuming.
+
+   Signposts and os_log go through the same entry points as on Linux
+   (gsp_agent_signpost, called by gsperf.dll); there are no signal
+   handlers here, so a critical section protects the output.  */
+
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <tlhelp32.h>
+#include <psapi.h>
+#include <mmsystem.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "GSPerformance/gsp_format.h"
+
+#define GSP_EXPORT __declspec(dllexport)
+#define MAX_FRAMES 128
+#define MAX_THREADS 1024
+
+typedef struct sampled_thread
+{
+  DWORD tid;
+  HANDLE handle;
+  ULONG64 cycles;
+  bool named;
+  bool alive;
+} sampled_thread;
+
+static HANDLE out_file = INVALID_HANDLE_VALUE;
+static CRITICAL_SECTION out_lock;
+static uint8_t out_buf[256 * 1024];
+static size_t out_used;
+static char out_dir[1024];
+static DWORD self_pid;
+static DWORD main_tid;
+static DWORD sampler_tid;
+static HANDLE sampler_thread;
+static HANDLE stop_event;
+static volatile LONG recording;
+static volatile LONG finished;
+static LARGE_INTEGER qpc_freq;
+static unsigned sample_interval_us = 1000;
+static unsigned wall_interval_us = 10000;
+static bool cpu_sampling = true, wall_sampling = true, signposts_on = true;
+static double cycles_per_interval;
+static sampled_thread threads[MAX_THREADS];
+static int thread_count;
+
+/* ------------------------------------------------------------------ */
+/* time and output                                                     */
+
+static uint64_t
+now_ns(void)
+{
+  LARGE_INTEGER c;
+  QueryPerformanceCounter(&c);
+  return (uint64_t)((double)c.QuadPart * 1e9 / (double)qpc_freq.QuadPart);
+}
+
+static void
+write_all(const void *p, size_t len)
+{
+  const uint8_t *c = p;
+  while (len > 0 && out_file != INVALID_HANDLE_VALUE)
+    {
+      DWORD n = 0;
+      if (!WriteFile(out_file, c, (DWORD)(len > 1u << 30 ? 1u << 30 : len), &n, NULL) || n == 0)
+        return;
+      c += n;
+      len -= n;
+    }
+}
+
+static void
+flush_locked(void)
+{
+  if (out_used)
+    {
+      write_all(out_buf, out_used);
+      out_used = 0;
+    }
+}
+
+static void
+emit(uint16_t type, uint32_t aux, uint16_t flags, uint64_t time, uint32_t tid,
+     const void *a, size_t alen, const void *b, size_t blen)
+{
+  static const uint8_t zeros[8];
+  size_t raw = sizeof(gsp_record) + alen + blen;
+  size_t total = GSP_RECORD_ALIGN(raw);
+  gsp_record h = { type, flags, (uint32_t)total, time, tid, aux };
+
+  EnterCriticalSection(&out_lock);
+  if (out_file == INVALID_HANDLE_VALUE)
+    {
+      LeaveCriticalSection(&out_lock);
+      return;
+    }
+  if (total > sizeof(out_buf) - out_used)
+    flush_locked();
+  if (total > sizeof(out_buf))
+    {
+      write_all(&h, sizeof(h));
+      write_all(a, alen);
+      write_all(b, blen);
+      write_all(zeros, total - raw);
+    }
+  else
+    {
+      memcpy(out_buf + out_used, &h, sizeof(h));
+      if (alen)
+        memcpy(out_buf + out_used + sizeof(h), a, alen);
+      if (blen)
+        memcpy(out_buf + out_used + sizeof(h) + alen, b, blen);
+      memset(out_buf + out_used + raw, 0, total - raw);
+      out_used += total;
+    }
+  LeaveCriticalSection(&out_lock);
+}
+
+/* ------------------------------------------------------------------ */
+/* strings                                                             */
+
+typedef struct str_node
+{
+  struct str_node *next;
+  uint32_t id;
+  uint32_t len;
+  char text[];
+} str_node;
+
+static str_node *str_buckets[4096];
+static uint32_t next_string = 1;
+static CRITICAL_SECTION str_lock;
+
+static uint32_t
+intern(const char *s)
+{
+  uint32_t h = 2166136261u, len = (uint32_t)strlen(s);
+  for (uint32_t i = 0; i < len; i++)
+    h = (h ^ (uint8_t)s[i]) * 16777619u;
+  EnterCriticalSection(&str_lock);
+  for (str_node *n = str_buckets[h & 4095]; n; n = n->next)
+    if (n->len == len && memcmp(n->text, s, len) == 0)
+      {
+        uint32_t id = n->id;
+        LeaveCriticalSection(&str_lock);
+        return id;
+      }
+  str_node *n = HeapAlloc(GetProcessHeap(), 0, sizeof(*n) + len + 1);
+  if (n == NULL)
+    {
+      LeaveCriticalSection(&str_lock);
+      return 0;
+    }
+  n->id = next_string++;
+  n->len = len;
+  memcpy(n->text, s, len + 1);
+  n->next = str_buckets[h & 4095];
+  str_buckets[h & 4095] = n;
+  LeaveCriticalSection(&str_lock);
+  emit(GSP_REC_STRING, n->id, 0, now_ns(), GetCurrentThreadId(), s, len + 1, NULL, 0);
+  return n->id;
+}
+
+/* ------------------------------------------------------------------ */
+/* modules                                                             */
+
+static uintptr_t emitted_modules[2048];
+static int emitted_module_count;
+
+static void
+emit_new_modules(void)
+{
+  HMODULE mods[2048];
+  DWORD needed = 0;
+
+  if (!K32EnumProcessModules(GetCurrentProcess(), mods, sizeof(mods), &needed))
+    return;
+  int n = (int)(needed / sizeof(HMODULE));
+  if (n > 2048)
+    n = 2048;
+  for (int i = 0; i < n; i++)
+    {
+      bool known = false;
+      for (int k = 0; k < emitted_module_count; k++)
+        if (emitted_modules[k] == (uintptr_t)mods[i])
+          known = true;
+      if (known || emitted_module_count >= 2048)
+        continue;
+      MODULEINFO mi;
+      WCHAR wpath[MAX_PATH];
+      char path[MAX_PATH * 3];
+      if (!K32GetModuleInformation(GetCurrentProcess(), mods[i], &mi, sizeof(mi)))
+        continue;
+      DWORD len = GetModuleFileNameW(mods[i], wpath, MAX_PATH);
+      if (len == 0)
+        continue;
+      WideCharToMultiByte(CP_UTF8, 0, wpath, (int)len + 1, path, sizeof(path), NULL, NULL);
+      for (char *c = path; *c; c++)
+        if (*c == '\\')
+          *c = '/';
+      gsp_image_payload p = { (uint64_t)(uintptr_t)mi.lpBaseOfDll,
+                              (uint64_t)(uintptr_t)mi.lpBaseOfDll,
+                              (uint64_t)(uintptr_t)mi.lpBaseOfDll + mi.SizeOfImage };
+      emit(GSP_REC_IMAGE, 0, 0, now_ns(), GetCurrentThreadId(), &p, sizeof(p),
+           path, strlen(path) + 1);
+      emitted_modules[emitted_module_count++] = (uintptr_t)mods[i];
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/* Objective-C method table                                            */
+
+typedef void *Class;
+typedef void *Method;
+typedef void *SEL;
+static int (*p_getClassList)(Class *, int);
+static Method *(*p_copyMethodList)(Class, unsigned *);
+static SEL (*p_methodName)(Method);
+static void *(*p_methodImp)(Method);
+static const char *(*p_className)(Class);
+static const char *(*p_selName)(SEL);
+static Class (*p_objectGetClass)(void *);
+static void (*p_free)(void *);
+static int last_class_count = -1;
+static uint64_t *dumped_imps;
+static size_t dumped_count, dumped_cap;
+
+static bool
+resolve_objc(void)
+{
+  if (p_getClassList)
+    return true;
+  HMODULE mods[2048];
+  DWORD needed = 0;
+  if (!K32EnumProcessModules(GetCurrentProcess(), mods, sizeof(mods), &needed))
+    return false;
+  for (DWORD i = 0; i < needed / sizeof(HMODULE) && i < 2048; i++)
+    {
+      FARPROC f = GetProcAddress(mods[i], "objc_getClassList");
+      if (f == NULL)
+        continue;
+      p_copyMethodList = (void *)GetProcAddress(mods[i], "class_copyMethodList");
+      p_methodName = (void *)GetProcAddress(mods[i], "method_getName");
+      p_methodImp = (void *)GetProcAddress(mods[i], "method_getImplementation");
+      p_className = (void *)GetProcAddress(mods[i], "class_getName");
+      p_selName = (void *)GetProcAddress(mods[i], "sel_getName");
+      p_objectGetClass = (void *)GetProcAddress(mods[i], "object_getClass");
+      if (p_copyMethodList && p_methodName && p_methodImp && p_className
+          && p_selName && p_objectGetClass)
+        {
+          p_getClassList = (void *)f;
+          break;
+        }
+    }
+  if (p_getClassList)
+    {
+      HMODULE crt = GetModuleHandleA("ucrtbase.dll");
+      if (crt == NULL)
+        crt = GetModuleHandleA("msvcrt.dll");
+      if (crt)
+        p_free = (void *)GetProcAddress(crt, "free");
+    }
+  return p_getClassList != NULL;
+}
+
+static bool
+mark_imp(uint64_t imp)
+{
+  for (size_t i = 0; i < dumped_count; i++)
+    if (dumped_imps[i] == imp)
+      return false;
+  if (dumped_count == dumped_cap)
+    {
+      size_t ncap = dumped_cap ? dumped_cap * 2 : 4096;
+      uint64_t *n = HeapAlloc(GetProcessHeap(), 0, ncap * sizeof(uint64_t));
+      if (n == NULL)
+        return true;
+      if (dumped_imps)
+        {
+          memcpy(n, dumped_imps, dumped_count * sizeof(uint64_t));
+          HeapFree(GetProcessHeap(), 0, dumped_imps);
+        }
+      dumped_imps = n;
+      dumped_cap = ncap;
+    }
+  dumped_imps[dumped_count++] = imp;
+  return true;
+}
+
+static void
+dump_class(Class cls, char prefix)
+{
+  unsigned count = 0;
+  Method *list = p_copyMethodList(cls, &count);
+  const char *cname = p_className(cls);
+  char name[1024];
+
+  if (list == NULL)
+    return;
+  for (unsigned i = 0; i < count; i++)
+    {
+      void *imp = p_methodImp(list[i]);
+      SEL sel = p_methodName(list[i]);
+      if (imp == NULL || sel == NULL || !mark_imp((uint64_t)(uintptr_t)imp))
+        continue;
+      int n = snprintf(name, sizeof(name), "%c[%s %s]", prefix, cname ? cname : "?",
+                       p_selName(sel));
+      if (n <= 0)
+        continue;
+      if ((size_t)n >= sizeof(name))
+        n = sizeof(name) - 1;
+      gsp_method_payload p = { (uint64_t)(uintptr_t)imp };
+      emit(GSP_REC_METHOD, 0, 0, now_ns(), 0, &p, sizeof(p), name, (size_t)n + 1);
+    }
+  if (p_free)
+    p_free(list);
+}
+
+static void
+dump_methods(bool force)
+{
+  if (!resolve_objc())
+    return;
+  int count = p_getClassList(NULL, 0);
+  if (count <= 0 || (!force && count == last_class_count))
+    return;
+  last_class_count = count;
+  Class *classes = HeapAlloc(GetProcessHeap(), 0, sizeof(Class) * (size_t)count);
+  if (classes == NULL)
+    return;
+  /* exactly `count`: libobjc2 2.x double-frees its enumerator otherwise */
+  count = p_getClassList(classes, count);
+  for (int i = 0; i < count; i++)
+    {
+      dump_class(classes[i], '-');
+      Class meta = p_objectGetClass(classes[i]);
+      if (meta)
+        dump_class(meta, '+');
+    }
+  HeapFree(GetProcessHeap(), 0, classes);
+}
+
+/* ------------------------------------------------------------------ */
+/* threads and sampling                                                */
+
+static HRESULT (WINAPI *p_GetThreadDescription)(HANDLE, PWSTR *);
+
+static void
+refresh_threads(void)
+{
+  HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+  THREADENTRY32 te;
+
+  if (snap == INVALID_HANDLE_VALUE)
+    return;
+  for (int i = 0; i < thread_count; i++)
+    threads[i].alive = false;
+  te.dwSize = sizeof(te);
+  if (Thread32First(snap, &te))
+    do
+      {
+        if (te.th32OwnerProcessID != self_pid || te.th32ThreadID == sampler_tid)
+          continue;
+        int i;
+        for (i = 0; i < thread_count; i++)
+          if (threads[i].tid == te.th32ThreadID)
+            break;
+        if (i == thread_count)
+          {
+            if (thread_count >= MAX_THREADS)
+              continue;
+            HANDLE h = OpenThread(THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT
+                                  | THREAD_QUERY_INFORMATION, FALSE, te.th32ThreadID);
+            if (h == NULL)
+              continue;
+            threads[i].tid = te.th32ThreadID;
+            threads[i].handle = h;
+            threads[i].cycles = 0;
+            QueryThreadCycleTime(h, &threads[i].cycles);
+            threads[i].named = false;
+            thread_count++;
+          }
+        threads[i].alive = true;
+      }
+    while (Thread32Next(snap, &te));
+  CloseHandle(snap);
+
+  for (int i = 0; i < thread_count;)
+    {
+      if (threads[i].alive)
+        {
+          if (!threads[i].named)
+            {
+              char name[128] = "";
+              PWSTR w = NULL;
+              if (p_GetThreadDescription
+                  && SUCCEEDED(p_GetThreadDescription(threads[i].handle, &w)) && w)
+                {
+                  WideCharToMultiByte(CP_UTF8, 0, w, -1, name, sizeof(name), NULL, NULL);
+                  LocalFree(w);
+                }
+              emit(GSP_REC_THREAD, threads[i].tid == main_tid ? GSP_THREAD_MAIN : 0, 0,
+                   now_ns(), threads[i].tid, name, strlen(name) + 1, NULL, 0);
+              threads[i].named = true;
+            }
+          i++;
+          continue;
+        }
+      emit(GSP_REC_THREAD_END, 0, 0, now_ns(), threads[i].tid, NULL, 0, NULL, 0);
+      CloseHandle(threads[i].handle);
+      threads[i] = threads[--thread_count];
+    }
+}
+
+/* Walks a suspended thread's stack.  No locks, no allocation.  */
+static unsigned
+walk(HANDLE h, uint64_t *frames, unsigned max)
+{
+  CONTEXT ctx;
+  unsigned n = 0;
+
+  memset(&ctx, 0, sizeof(ctx));
+  ctx.ContextFlags = CONTEXT_FULL;
+  if (!GetThreadContext(h, &ctx))
+    return 0;
+  while (n < max && ctx.Rip != 0)
+    {
+      frames[n++] = ctx.Rip;
+      DWORD64 image = 0;
+      PRUNTIME_FUNCTION fe = RtlLookupFunctionEntry(ctx.Rip, &image, NULL);
+      if (fe != NULL)
+        {
+          PVOID handler_data = NULL;
+          DWORD64 establisher = 0;
+          RtlVirtualUnwind(UNW_FLAG_NHANDLER, image, ctx.Rip, fe, &ctx,
+                           &handler_data, &establisher, NULL);
+        }
+      else
+        {
+          /* leaf function without unwind data: return address on top */
+          if (ctx.Rsp == 0 || (ctx.Rsp & 7))
+            break;
+          MEMORY_BASIC_INFORMATION mbi;
+          if (VirtualQuery((LPCVOID)ctx.Rsp, &mbi, sizeof(mbi)) == 0
+              || mbi.State != MEM_COMMIT)
+            break;
+          ctx.Rip = *(DWORD64 *)ctx.Rsp;
+          ctx.Rsp += 8;
+        }
+    }
+  return n;
+}
+
+static void
+sample_thread(sampled_thread *t, uint32_t kind, uint16_t weight)
+{
+  uint64_t buf[2 + MAX_FRAMES];
+  gsp_frames_payload *fp = (gsp_frames_payload *)buf;
+  uint64_t when;
+  unsigned n;
+
+  if (SuspendThread(t->handle) == (DWORD)-1)
+    return;
+  when = now_ns();
+  n = walk(t->handle, buf + 1, MAX_FRAMES);
+  ResumeThread(t->handle);
+  if (n == 0)
+    return;
+  fp->count = n;
+  fp->kernel_count = 0;
+  fp->weight = weight;
+  emit(GSP_REC_SAMPLE, kind, n >= MAX_FRAMES ? GSP_FRAMES_TRUNCATED : 0, when, t->tid,
+       buf, sizeof(*fp) + n * 8, NULL, 0);
+}
+
+static void
+calibrate(void)
+{
+  /* cycles per sampling interval, measured on this thread */
+  ULONG64 c0 = 0, c1 = 0;
+  uint64_t t0 = now_ns();
+  QueryThreadCycleTime(GetCurrentThread(), &c0);
+  while (now_ns() - t0 < 20000000)
+    ;
+  QueryThreadCycleTime(GetCurrentThread(), &c1);
+  double per_ns = (double)(c1 - c0) / (double)(now_ns() - t0);
+  cycles_per_interval = per_ns * sample_interval_us * 1000.0;
+  if (cycles_per_interval < 1)
+    cycles_per_interval = 1;
+}
+
+static void
+finish(void)
+{
+  if (InterlockedExchange(&finished, 1))
+    return;
+  InterlockedExchange(&recording, 0);
+  emit_new_modules();
+  dump_methods(true);
+  emit(GSP_REC_END, 0, 0, now_ns(), self_pid, NULL, 0, NULL, 0);
+  EnterCriticalSection(&out_lock);
+  flush_locked();
+  FlushFileBuffers(out_file);
+  CloseHandle(out_file);
+  out_file = INVALID_HANDLE_VALUE;
+  LeaveCriticalSection(&out_lock);
+
+  char done[1100];
+  snprintf(done, sizeof(done), "%s/events-%lu.done", out_dir, (unsigned long)self_pid);
+  HANDLE d = CreateFileA(done, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+  if (d != INVALID_HANDLE_VALUE)
+    CloseHandle(d);
+}
+
+static DWORD WINAPI
+sampler_main(LPVOID arg)
+{
+  uint64_t next_wall = 0, next_scan = 0, next_modules = 0, next_flush = 0;
+
+  (void)arg;
+  timeBeginPeriod(1);
+  calibrate();
+  refresh_threads();
+  for (;;)
+    {
+      DWORD w = WaitForSingleObject(stop_event, sample_interval_us >= 2000
+                                    ? sample_interval_us / 1000 : 1);
+      if (w == WAIT_OBJECT_0)
+        break;
+      uint64_t now = now_ns();
+      if (now >= next_scan)
+        {
+          refresh_threads();
+          next_scan = now + 100000000ull;
+        }
+      if (now >= next_modules)
+        {
+          emit_new_modules();
+          dump_methods(false);
+          next_modules = now + 1000000000ull;
+        }
+      bool wall = wall_sampling && now >= next_wall;
+      if (wall)
+        next_wall = now + (uint64_t)wall_interval_us * 1000;
+      for (int i = 0; i < thread_count; i++)
+        {
+          sampled_thread *t = &threads[i];
+          ULONG64 c = 0;
+          if (cpu_sampling && QueryThreadCycleTime(t->handle, &c) && c > t->cycles)
+            {
+              double intervals = (double)(c - t->cycles) / cycles_per_interval;
+              uint16_t weight = intervals < 1 ? 1
+                : (intervals > 65535 ? 65535 : (uint16_t)(intervals + 0.5));
+              t->cycles = c;
+              sample_thread(t, GSP_SAMPLE_CPU, weight);
+            }
+          if (wall && t->tid == main_tid)
+            sample_thread(t, GSP_SAMPLE_WALL, 1);
+        }
+      if (now >= next_flush)
+        {
+          EnterCriticalSection(&out_lock);
+          flush_locked();
+          LeaveCriticalSection(&out_lock);
+          next_flush = now + 50000000ull;
+        }
+    }
+  timeEndPeriod(1);
+  finish();
+  return 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* signposts (called by gsperf.dll)                                    */
+
+GSP_EXPORT int
+gsp_agent_signposts_enabled(void)
+{
+  return recording && signposts_on && !finished;
+}
+
+GSP_EXPORT void
+gsp_agent_signpost(int record_type, int kind, uint64_t spid, const char *subsystem,
+                   const char *category, const char *name, const char *message,
+                   size_t length)
+{
+  gsp_signpost_payload p;
+  char buf[1100];
+
+  if (!gsp_agent_signposts_enabled())
+    return;
+  p.signpost_id = spid;
+  p.subsystem = intern(subsystem ? subsystem : "");
+  p.category = intern(category ? category : "");
+  p.name = intern(name ? name : "");
+  if (length > sizeof(buf) - 1)
+    length = sizeof(buf) - 1;
+  if (length)
+    memcpy(buf, message, length);
+  buf[length] = 0;
+  p.message_length = (uint32_t)length;
+  emit((uint16_t)record_type, (uint32_t)kind, 0, now_ns(), GetCurrentThreadId(),
+       &p, sizeof(p), buf, length + 1);
+}
+
+/* ------------------------------------------------------------------ */
+/* start-up                                                            */
+
+static bool
+env_flag(const char *name, bool fallback)
+{
+  char v[16];
+  DWORD n = GetEnvironmentVariableA(name, v, sizeof(v));
+  if (n == 0 || n >= sizeof(v))
+    return fallback;
+  return !(strcmp(v, "0") == 0 || _stricmp(v, "no") == 0 || _stricmp(v, "false") == 0);
+}
+
+static unsigned
+env_uint(const char *name, unsigned fallback)
+{
+  char v[32];
+  DWORD n = GetEnvironmentVariableA(name, v, sizeof(v));
+  return (n == 0 || n >= sizeof(v)) ? fallback : (unsigned)strtoul(v, NULL, 10);
+}
+
+/* The main thread is the oldest thread of the process (at injection time
+   it is still suspended, and the loader thread running DllMain is newer). */
+static DWORD
+find_main_thread(void)
+{
+  HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+  THREADENTRY32 te;
+  DWORD best = 0;
+  ULONGLONG best_time = ~0ull;
+
+  if (snap == INVALID_HANDLE_VALUE)
+    return 0;
+  te.dwSize = sizeof(te);
+  if (Thread32First(snap, &te))
+    do
+      {
+        if (te.th32OwnerProcessID != self_pid)
+          continue;
+        HANDLE h = OpenThread(THREAD_QUERY_LIMITED_INFORMATION, FALSE, te.th32ThreadID);
+        FILETIME c, e, k, u;
+        if (h && GetThreadTimes(h, &c, &e, &k, &u))
+          {
+            ULONGLONG t = ((ULONGLONG)c.dwHighDateTime << 32) | c.dwLowDateTime;
+            if (t < best_time)
+              {
+                best_time = t;
+                best = te.th32ThreadID;
+              }
+          }
+        if (h)
+          CloseHandle(h);
+      }
+    while (Thread32Next(snap, &te));
+  CloseHandle(snap);
+  return best;
+}
+
+static void
+start(void)
+{
+  char exe[MAX_PATH * 3] = "";
+  WCHAR wexe[MAX_PATH];
+  gsp_file_header hdr;
+  char path[1200];
+
+  DWORD n = GetEnvironmentVariableA("GSP_OUTPUT", out_dir, sizeof(out_dir));
+  if (n == 0 || n >= sizeof(out_dir))
+    return;
+  /* Children do not inherit recording.  */
+  SetEnvironmentVariableA("GSP_OUTPUT", NULL);
+  cpu_sampling = env_flag("GSP_CPU_SAMPLING", true);
+  wall_sampling = env_flag("GSP_WALL_SAMPLING", true);
+  signposts_on = env_flag("GSP_SIGNPOSTS", true);
+  sample_interval_us = env_uint("GSP_SAMPLE_INTERVAL_US", 1000);
+  if (sample_interval_us < 1000)
+    sample_interval_us = 1000;
+  wall_interval_us = env_uint("GSP_WALL_INTERVAL_US", 10000);
+
+  QueryPerformanceFrequency(&qpc_freq);
+  InitializeCriticalSection(&out_lock);
+  InitializeCriticalSection(&str_lock);
+  self_pid = GetCurrentProcessId();
+  main_tid = find_main_thread();
+  p_GetThreadDescription = (void *)GetProcAddress(GetModuleHandleA("kernel32.dll"),
+                                                  "GetThreadDescription");
+
+  snprintf(path, sizeof(path), "%s/events-%lu.bin", out_dir, (unsigned long)self_pid);
+  out_file = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_ALWAYS,
+                         FILE_ATTRIBUTE_NORMAL, NULL);
+  if (out_file == INVALID_HANDLE_VALUE)
+    return;
+
+  memset(&hdr, 0, sizeof(hdr));
+  memcpy(hdr.magic, GSP_MAGIC, 8);
+  hdr.version = GSP_FORMAT_VERSION;
+  hdr.header_size = sizeof(hdr);
+  hdr.pid = self_pid;
+  hdr.start_ns = now_ns();
+  FILETIME ft;
+  GetSystemTimeAsFileTime(&ft);
+  hdr.start_realtime_ns = ((((uint64_t)ft.dwHighDateTime << 32) | ft.dwLowDateTime)
+                           - 116444736000000000ull) * 100;
+  hdr.pointer_size = sizeof(void *);
+  hdr.flags = GSP_STREAM_FROM_AGENT;
+  hdr.sample_interval_us = cpu_sampling ? sample_interval_us : 0;
+  hdr.wall_interval_us = wall_sampling ? wall_interval_us : 0;
+  DWORD len = GetModuleFileNameW(NULL, wexe, MAX_PATH);
+  WideCharToMultiByte(CP_UTF8, 0, wexe, (int)len + 1, exe, sizeof(exe), NULL, NULL);
+  for (char *c = exe; *c; c++)
+    if (*c == '\\')
+      *c = '/';
+  snprintf(hdr.exe, sizeof(hdr.exe), "%s", exe);
+  write_all(&hdr, sizeof(hdr));
+
+  WCHAR ename[64];
+  swprintf(ename, 64, L"Local\\gsperf-stop-%lu", (unsigned long)self_pid);
+  stop_event = CreateEventW(NULL, TRUE, FALSE, ename);
+  InterlockedExchange(&recording, 1);
+  emit(GSP_REC_MARK, GSP_MARK_START, 0, hdr.start_ns, self_pid, NULL, 0, NULL, 0);
+  emit_new_modules();
+  sampler_thread = CreateThread(NULL, 0, sampler_main, NULL, 0, &sampler_tid);
+}
+
+BOOL WINAPI
+DllMain(HINSTANCE dll, DWORD reason, LPVOID reserved)
+{
+  (void)dll;
+  if (reason == DLL_PROCESS_ATTACH)
+    {
+      DisableThreadLibraryCalls(dll);
+      start();
+    }
+  else if (reason == DLL_PROCESS_DETACH && recording && !finished)
+    {
+      /* Process exit: other threads (the sampler too) are gone and may have
+         died holding the output lock; finish without waiting on it.  */
+      if (reserved != NULL)
+        {
+          if (TryEnterCriticalSection(&out_lock))
+            {
+              LeaveCriticalSection(&out_lock);
+              emit(GSP_REC_END, 0, 0, now_ns(), self_pid, NULL, 0, NULL, 0);
+              EnterCriticalSection(&out_lock);
+              flush_locked();
+              CloseHandle(out_file);
+              out_file = INVALID_HANDLE_VALUE;
+              LeaveCriticalSection(&out_lock);
+              char done[1100];
+              snprintf(done, sizeof(done), "%s/events-%lu.done", out_dir,
+                       (unsigned long)self_pid);
+              HANDLE d = CreateFileA(done, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS,
+                                     FILE_ATTRIBUTE_NORMAL, NULL);
+              if (d != INVALID_HANDLE_VALUE)
+                CloseHandle(d);
+              InterlockedExchange(&finished, 1);
+            }
+        }
+      else
+        finish();
+    }
+  return TRUE;
+}

@@ -15,7 +15,9 @@ Instruments_OBJC_FILES = \
 WINDOWS = $(findstring mingw,$(GNUSTEP_HOST_OS))$(findstring windows,$(GNUSTEP_HOST_OS))
 
 Instruments_RESOURCE_FILES = Resources/Instruments.png
-ifeq (,$(WINDOWS))
+ifneq (,$(WINDOWS))
+Instruments_RESOURCE_FILES += ../Runtime/obj/gsperf-agent.dll
+else
 Instruments_RESOURCE_FILES += \
   ../Runtime/obj/libgsperf-agent.so \
   ../Tools/gstrace-helper/gstrace-helper \

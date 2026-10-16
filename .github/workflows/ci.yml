@@ -61,7 +61,7 @@ jobs:
           if-no-files-found: ignore
 
   windows:
-    name: Windows viewer (MSYS2 clang64)
+    name: Windows (MSYS2 clang64)
     runs-on: windows-latest
     timeout-minutes: 60
     defaults:
@@ -118,3 +118,17 @@ jobs:
           . /clang64/share/GNUstep/Makefiles/GNUstep.sh
           export PATH="$PWD/GSPerformance/obj:$PATH"
           sh Tests/viewer-checks.sh "$PWD/Tools/gstrace/obj/gstrace.exe"
+
+      - name: Recording checks
+        run: |
+          . /clang64/share/GNUstep/Makefiles/GNUstep.sh
+          export PATH="$PWD/GSPerformance/obj:$PWD/Runtime/obj:$PATH"
+          sh Tests/windows-checks.sh
+
+      - name: Keep Windows test output
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-test-output
+          path: Tests/out
+          if-no-files-found: ignore
