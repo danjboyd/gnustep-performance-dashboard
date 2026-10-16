@@ -201,10 +201,13 @@ if [ "${SKIP_GUI:-0}" != 1 ] && command -v Xvfb >/dev/null 2>&1; then
       else wait "$1"; STATUS=$?; fi
     }
     key() { DISPLAY=$DISP xdotool key --window "$1" "$2"; }
+    # Ctrl+R and Ctrl+Q are the shortcuts only when Control is GNUstep's
+    # Command key; its default is Alt (CI has no user defaults).
+    KEYS="-GSFirstCommandKey Control_L -GSSecondCommandKey Control_R"
 
     # Open a trace, Record from it, quit.
     mkdir -p "$TRACES"; touch "$OUT/gui.mark"
-    DISPLAY=$DISP XAUTHORITY= "$APP" -GSFilePath "$SAMPLE" >"$OUT/gui.log" 2>&1 &
+    DISPLAY=$DISP XAUTHORITY= "$APP" $KEYS -GSFilePath "$SAMPLE" >"$OUT/gui.log" 2>&1 &
     APID=$!
     W=$(window_id "objcwork — Custom")
     check "app: opens a trace" "[ -n '$W' ]"
@@ -248,13 +251,13 @@ if [ "${SKIP_GUI:-0}" != 1 ] && command -v Xvfb >/dev/null 2>&1; then
         echo "     ($theme theme not installed; skipped)"
         continue
       fi
-      DISPLAY=$DISP XAUTHORITY= "$APP" -GSFilePath "$SAMPLE" -GSTheme $theme >"$OUT/gui-$theme.log" 2>&1 &
+      DISPLAY=$DISP XAUTHORITY= "$APP" $KEYS -GSFilePath "$SAMPLE" -GSTheme $theme >"$OUT/gui-$theme.log" 2>&1 &
       APID=$!
       W=$(window_id "objcwork — Custom")
       [ -n "$W" ] && key "$W" ctrl+q
       wait_app $APID
       check "app ($theme): Quit exits with status 0 ($STATUS)" "[ $STATUS = 0 ]"
-      DISPLAY=$DISP XAUTHORITY= "$APP" -GSFilePath "$SAMPLE" -GSTheme $theme >>"$OUT/gui-$theme.log" 2>&1 &
+      DISPLAY=$DISP XAUTHORITY= "$APP" $KEYS -GSFilePath "$SAMPLE" -GSTheme $theme >>"$OUT/gui-$theme.log" 2>&1 &
       APID=$!
       window_id "objcwork — Custom" >/dev/null
       sleep 2   # the handler is installed once launching has finished
