@@ -33,9 +33,7 @@
 - **CI** records C and Objective-C fixtures on `windows-latest` with every
   template and with attach (`Tests/windows-checks.sh`).
 - **Not yet:** the System Time Profiler (ETW kernel sampling through a
-  UAC-elevated helper), DWARF/PDB source lines, ARM64. Signposts emitted
-  by a program that was attached to are not recorded (`gsperf.dll` looks
-  for the agent once).
+  UAC-elevated helper), DWARF/PDB source lines, ARM64.
 
 ## Plan for recording
 

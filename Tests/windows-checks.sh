@@ -46,6 +46,8 @@ cat "$OUT/attach-info.txt"
 cat "$OUT/attach-top.txt"
 check "attach: recorded and finished cleanly" "grep -q 'finished cleanly: yes' '$OUT/attach-info.txt'"
 check "attach: CPU time lands in spin_inner" "sed -n 4p '$OUT/attach-top.txt' | grep -q spin_inner"
+"$GSTRACE" report "$OUT/attach.gstrace" signposts >"$OUT/attach-sp.txt" 2>&1
+check "attach: signposts after attaching are recorded" "grep -E -q '^Round +PointsOfInterest +[1-4] ' '$OUT/attach-sp.txt'"
 check "attach: the program keeps running and finishes" "kill -0 $SPIN 2>/dev/null && wait $SPIN && grep -q '^spin ' '$OUT/spin-attached.log'"
 
 # File Activity and Network

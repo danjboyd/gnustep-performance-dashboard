@@ -56,6 +56,20 @@ static inline int
 active(void)
 {
   pthread_once(&resolve_once, resolve);
+#if defined(_WIN32)
+  /* The agent may be loaded later, when a recorder attaches: look again
+     at most twice a second.  */
+  if (agent_enabled == NULL)
+    {
+      static _Atomic uint64_t next_look;
+      uint64_t now = GetTickCount64();
+      if (now >= atomic_load(&next_look))
+        {
+          atomic_store(&next_look, now + 500);
+          resolve();
+        }
+    }
+#endif
   return agent_enabled != NULL && agent_enabled();
 }
 
