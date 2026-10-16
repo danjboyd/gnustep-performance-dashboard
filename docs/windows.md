@@ -2,20 +2,40 @@
 
 ## Status
 
-- **Done — viewer.** `libGSPerformance`, `gstrace` (info, report, export,
-  diff, symbolicate) and Instruments.app build with MSYS2 clang64 and open
-  traces recorded on Linux. CI builds them on `windows-latest`, runs the
-  unit tests with tools-xctest and runs `Tests/viewer-checks.sh` against a
-  Linux-recorded sample trace.
-- **Done — Time Profiler, Hangs (main-thread wall samples), Points of
-  Interest and os_log.** `gsperf-agent.dll` is injected at launch; a sampler
-  thread suspends threads whose cycle count moved and unwinds them with
-  `RtlVirtualUnwind`; PE images are symbolicated from COFF symbols,
-  exports and `.pdata`, Objective-C methods from the runtime. CI records a
-  C fixture and an Objective-C fixture on `windows-latest`.
-- **Next:** Allocations/Leaks/Zombies (CRT heap hooks via import-table
-  patching), File Activity/Network, attaching (ETW, UAC helper), DWARF/PDB
-  source lines.
+- **Viewer.** `libGSPerformance`, `gstrace` and Instruments.app build with
+  MSYS2 clang64 and read traces from either platform.
+- **Recording** with `gsperf-agent.dll`:
+  - *Time Profiler, Hangs*: a sampler thread suspends threads whose cycle
+    count moved and unwinds them with `RtlVirtualUnwind`; the main thread
+    is sampled every 10 ms regardless of state.
+  - *Points of Interest, os_log*: `gsperf.dll` forwards to the agent.
+  - *Allocations*: the UCRT heap functions and libobjc2's allocation entry
+    points are hooked in every module's import table (and in modules
+    loaded later, through a LoadLibrary hook); stacks come from
+    `RtlCaptureStackBackTrace`.
+  - *Leaks*: a live-block table and a stop-the-world conservative scan of
+    writable memory and thread registers, at `exit()` (before atexit
+    handlers), on stop and every leak interval.
+  - *Zombies, retain/release*: `objc_retain`/`objc_release` hooks plus
+    `-[NSObject retain/release/autorelease]` replaced through the runtime
+    (clang on Windows sends them as messages);
+    `-[NSZombie forwardInvocation:]` is replaced to catch messages to
+    deallocated objects (GSLogZombie is an internal call in gnustep-base).
+  - *File Activity, Network*: kernel32 file calls and winsock calls,
+    hooked in import tables; the CRT's stdio is caught through ucrtbase's
+    imports.
+  - *Attach*: `gstrace record --attach <pid>` (or the app) injects the
+    agent into a running program of the same user; the configuration is
+    passed in shared memory. The program keeps running afterwards; the
+    agent stays loaded and idle, so a process can be recorded once.
+  - Symbolication: COFF symbol tables, exports and `.pdata` function
+    bounds, plus the Objective-C method table the agent dumps.
+- **CI** records C and Objective-C fixtures on `windows-latest` with every
+  template and with attach (`Tests/windows-checks.sh`).
+- **Not yet:** the System Time Profiler (ETW kernel sampling through a
+  UAC-elevated helper), DWARF/PDB source lines, ARM64. Signposts emitted
+  by a program that was attached to are not recorded (`gsperf.dll` looks
+  for the agent once).
 
 ## Plan for recording
 
