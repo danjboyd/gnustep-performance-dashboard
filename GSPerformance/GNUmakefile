@@ -30,6 +30,9 @@ libGSPerformance_HEADER_FILES_INSTALL_DIR = GSPerformance
 
 ADDITIONAL_OBJCFLAGS += -fobjc-arc -Wall -Wno-unused-function
 ADDITIONAL_INCLUDE_DIRS += -I../Runtime/include -I..
-libGSPerformance_LIBRARIES_DEPEND_UPON += -lgnustep-base -lobjc -ldl
+libGSPerformance_LIBRARIES_DEPEND_UPON += -lgnustep-base -lobjc
+ifeq (,$(findstring mingw,$(GNUSTEP_HOST_OS))$(findstring windows,$(GNUSTEP_HOST_OS)))
+libGSPerformance_LIBRARIES_DEPEND_UPON += -ldl
+endif
 
 include $(GNUSTEP_MAKEFILES)/library.make
