@@ -36,7 +36,7 @@ endif
 # its import library for applications that emit signposts.
 all: $(OBJDIR)/gsperf-agent.dll $(OBJDIR)/gsperf.dll
 
-WIN_AGENT_SRCS = win/gsp_agent_win.c win/gsp_heap_win.c
+WIN_AGENT_SRCS = win/gsp_agent_win.c win/gsp_heap_win.c win/gsp_leaks_win.c
 
 $(OBJDIR)/gsperf-agent.dll: $(WIN_AGENT_SRCS) win/gsp_agent_win.h \
                             include/GSPerformance/gsp_format.h | $(OBJDIR)

@@ -195,6 +195,7 @@ record_alloc(void *p, size_t size, void *old)
   a.stack = hook_caller_stack();
   a.category = 0;
   a.old_address = (uint64_t)(uintptr_t)old;
+  gspw_live_insert(p, size, a.stack);
   gspw_emit(GSP_REC_ALLOC, 0, 0, gspw_now(), GetCurrentThreadId(),
             &a, sizeof(a), NULL, 0);
 }
@@ -202,6 +203,7 @@ record_alloc(void *p, size_t size, void *old)
 static void
 record_free(void *p)
 {
+  gspw_live_take(p, NULL, NULL, NULL);
   gsp_free_payload f = { (uint64_t)(uintptr_t)p, 0, 0 };
   gspw_emit(GSP_REC_FREE, 0, 0, gspw_now(), GetCurrentThreadId(),
             &f, sizeof(f), NULL, 0);
@@ -257,14 +259,27 @@ hook_free(void *p)
   real_free(p);
 }
 
-/* realloc(p, 0) frees p and returns NULL in the UCRT.  */
+/* realloc, _recalloc (a = count, b = size) and _aligned_realloc.  A size
+   of 0 frees the block and returns NULL in the UCRT; on failure the old
+   block stays valid, so it goes back into the live table.  */
 static void *
-hook_realloc(void *old, size_t size)
+realloc_common(void *old, size_t a, size_t b, size_t align, int kind)
 {
+  size_t size = kind == 1 ? a * b : a;
   bool rec = enter();
+  size_t osize = 0;
+  uint32_t ostack = 0, oclass = 0;
+  bool had = false;
+
   if (rec && old && size == 0)
     record_free(old);
-  void *p = real_realloc(old, size);
+  else if (rec && old)
+    had = gspw_live_take(old, &osize, &ostack, &oclass);
+  void *p = kind == 0 ? real_realloc(old, a)
+    : kind == 1 ? real_recalloc(old, a, b)
+    : real_aligned_realloc(old, a, align);
+  if (had && p == NULL)
+    gspw_live_put(old, osize, ostack, oclass);
   if (rec && p)
     record_alloc(p, size, old);
   if (rec)
@@ -273,17 +288,15 @@ hook_realloc(void *old, size_t size)
 }
 
 static void *
+hook_realloc(void *old, size_t size)
+{
+  return realloc_common(old, size, size, 0, 0);
+}
+
+static void *
 hook_recalloc(void *old, size_t n, size_t size)
 {
-  bool rec = enter();
-  if (rec && old && n * size == 0)
-    record_free(old);
-  void *p = real_recalloc(old, n, size);
-  if (rec && p)
-    record_alloc(p, n * size, old);
-  if (rec)
-    leave();
-  return p;
+  return realloc_common(old, n, size, 0, 1);
 }
 
 static void *
@@ -301,15 +314,7 @@ hook_aligned_malloc(size_t size, size_t align)
 static void *
 hook_aligned_realloc(void *old, size_t size, size_t align)
 {
-  bool rec = enter();
-  if (rec && old && size == 0)
-    record_free(old);
-  void *p = real_aligned_realloc(old, size, align);
-  if (rec && p)
-    record_alloc(p, size, old);
-  if (rec)
-    leave();
-  return p;
+  return realloc_common(old, size, size, align, 2);
 }
 
 static void
@@ -386,6 +391,7 @@ tag_object(id obj)
       t.stack = 0;
       gspw_emit(GSP_REC_OBJC_TAG, 0, 0, gspw_now(), GetCurrentThreadId(),
                 &t, sizeof(t), NULL, 0);
+      gspw_live_tag(obj, t.class_name);
     }
   leave();
 }
@@ -420,6 +426,31 @@ hook_objc_alloc_init(Class cls)
   id obj = real_objc_alloc_init(cls);
   tag_object(obj);
   return obj;
+}
+
+/* ------------------------------------------------------------------ */
+/* exit: the final leak check, before atexit handlers release globals  */
+
+static void (*real_exit)(int);
+static volatile LONG exit_snapshot;
+
+static void
+hook_exit(int status)
+{
+  volatile char top = 0;
+  if (gspw_leaks_enabled() && InterlockedExchange(&exit_snapshot, 1) == 0)
+    {
+      gspw_heap_exclude_thread();
+      gspw_leaks_snapshot((const void *)&top);
+      leave();
+    }
+  real_exit(status);
+}
+
+bool
+gspw_exit_snapshot_taken(void)
+{
+  return exit_snapshot != 0;
 }
 
 /* ------------------------------------------------------------------ */
@@ -492,6 +523,7 @@ static hook_def hooks[] = {
   HOOK("_strdup", LIB_CRT, hook_strdup, real_strdup),
   HOOK("strdup", LIB_CRT, hook_strdup2, real_strdup2),
   HOOK("_wcsdup", LIB_CRT, hook_wcsdup, real_wcsdup),
+  HOOK("exit", LIB_CRT, hook_exit, real_exit),
   HOOK("class_createInstance", LIB_OBJC, hook_class_createInstance, real_class_createInstance),
   HOOK("objc_alloc", LIB_OBJC, hook_objc_alloc, real_objc_alloc),
   HOOK("objc_allocWithZone", LIB_OBJC, hook_objc_allocWithZone, real_objc_allocWithZone),
@@ -627,6 +659,13 @@ gspw_heap_patch_modules(void)
         }
     }
   LeaveCriticalSection(&patch_lock);
+}
+
+void
+gspw_agent_image(uint64_t *lo, uint64_t *hi)
+{
+  *lo = self_start;
+  *hi = self_end;
 }
 
 void

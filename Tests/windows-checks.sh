@@ -64,6 +64,18 @@ if command -v gnustep-config >/dev/null 2>&1; then
     >"$OUT/objalloc-stacks.txt" 2>&1
   check "Allocations: stacks reach make_leaks, without agent frames" \
     "grep -q make_leaks '$OUT/objalloc-stacks.txt' && ! grep -q hook_ '$OUT/objalloc-stacks.txt'"
+
+  # Leaks: the conservative scan at exit()
+  rm -rf "$OUT/objleaks.gstrace"
+  "$GSTRACE" record --template Leaks -o "$OUT/objleaks.gstrace" --launch "$OUT/objcwork.exe" \
+    >"$OUT/objleaks-record.log" 2>&1
+  cat "$OUT/objleaks-record.log"
+  "$GSTRACE" info "$OUT/objleaks.gstrace" 2>&1 | tail -6
+  "$GSTRACE" report "$OUT/objleaks.gstrace" leaks >"$OUT/objleaks.txt" 2>&1
+  head -40 "$OUT/objleaks.txt"
+  check "Leaks: all 5 Leaky objects (incl. a retain cycle) found" "grep -E -q '^Leaky +5 ' '$OUT/objleaks.txt'"
+  check "Leaks: leak stack names make_leaks" "grep -q make_leaks '$OUT/objleaks.txt'"
+  check "Leaks: few other reports (< 50 blocks)" "[ \$(sed -n 2p '$OUT/objleaks.txt' | cut -d' ' -f1) -lt 50 ]"
 fi
 
 echo

@@ -22,7 +22,7 @@
    and RtlLookupFunctionEntry, and records are written after resuming.
 
    Allocations (heap and Objective-C allocation hooks) are in
-   gsp_heap_win.c.
+   gsp_heap_win.c, the Leaks scan in gsp_leaks_win.c.
 
    Signposts and os_log go through the same entry points as on Linux
    (gsp_agent_signpost, called by gsperf.dll); there are no signal
@@ -72,6 +72,7 @@ static volatile LONG finished;
 static LARGE_INTEGER qpc_freq;
 static unsigned sample_interval_us = 1000;
 static unsigned wall_interval_us = 10000;
+static unsigned leak_interval_s;
 static bool cpu_sampling = true, wall_sampling = true, signposts_on = true;
 static double cycles_per_interval;
 static sampled_thread threads[MAX_THREADS];
@@ -574,6 +575,9 @@ finish(void)
 {
   if (meta_thread)
     WaitForSingleObject(meta_thread, 10000);
+  /* stopped by the recorder while the program runs: a last leak check */
+  if (!finished && gspw_leaks_enabled() && !gspw_exit_snapshot_taken())
+    gspw_leaks_snapshot(NULL);
   if (InterlockedExchange(&finished, 1))
     return;
   InterlockedExchange(&recording, 0);
@@ -597,13 +601,15 @@ finish(void)
 static DWORD WINAPI
 sampler_main(LPVOID arg)
 {
-  uint64_t next_wall = 0, next_scan = 0, next_flush = 0;
+  uint64_t next_wall = 0, next_scan = 0, next_flush = 0, next_leak = UINT64_MAX;
 
   (void)arg;
   gspw_heap_exclude_thread();
   timeBeginPeriod(1);
   calibrate();
   refresh_threads();
+  if (leak_interval_s && gspw_leaks_enabled())
+    next_leak = now_ns() + (uint64_t)leak_interval_s * 1000000000ull;
   /* The recorder resumes the target when this is set.  */
   WCHAR rname[64];
   swprintf(rname, 64, L"Local\\gsperf-ready-%lu", (unsigned long)self_pid);
@@ -642,6 +648,11 @@ sampler_main(LPVOID arg)
             }
           if (wall && t->tid == main_tid)
             sample_thread(t, GSP_SAMPLE_WALL, 1);
+        }
+      if (now >= next_leak)
+        {
+          gspw_leaks_snapshot(NULL);
+          next_leak = now_ns() + (uint64_t)leak_interval_s * 1000000000ull;
         }
       if (now >= next_flush)
         {
@@ -682,6 +693,12 @@ bool
 gspw_recording(void)
 {
   return recording && !finished;
+}
+
+bool
+gspw_is_agent_thread(unsigned long tid)
+{
+  return tid == sampler_tid || tid == meta_thread_id;
 }
 
 /* ------------------------------------------------------------------ */
@@ -838,6 +855,8 @@ start(void)
   InterlockedExchange(&recording, 1);
   emit(GSP_REC_MARK, GSP_MARK_START, 0, hdr.start_ns, self_pid, NULL, 0, NULL, 0);
   emit_new_modules();
+  gspw_leaks_start(env_flag("GSP_LEAKS", false));
+  leak_interval_s = env_uint("GSP_LEAK_INTERVAL", 0);
   gspw_heap_start(env_flag("GSP_ALLOCATIONS", false) || env_flag("GSP_LEAKS", false),
                   env_uint("GSP_ALLOC_FRAMES", 48));
   sampler_thread = CreateThread(NULL, 0, sampler_main, NULL, 0, &sampler_tid);
