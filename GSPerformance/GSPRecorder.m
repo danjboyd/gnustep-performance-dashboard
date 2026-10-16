@@ -98,15 +98,15 @@ make_error(NSInteger code, NSString *message)
   NSFileManager *fm = [NSFileManager defaultManager];
   NSMutableArray *candidates = [NSMutableArray array];
   const char *env = getenv("GSP_AGENT_PATH");
-  HMODULE self = NULL;
+  HMODULE module = NULL;
   WCHAR wpath[MAX_PATH];
 
   if (env && *env)
     [candidates addObject: [NSString stringWithUTF8String: env]];
   if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS
                          | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                         (LPCWSTR)(void *)GSPAgentEnvironmentForInstruments, &self)
-      && GetModuleFileNameW(self, wpath, MAX_PATH))
+                         (LPCWSTR)(void *)GSPAgentEnvironmentForInstruments, &module)
+      && GetModuleFileNameW(module, wpath, MAX_PATH))
     {
       NSString *dir = [[NSString stringWithCharacters: (const unichar *)wpath
                                                length: wcslen(wpath)]
