@@ -41,7 +41,7 @@ WIN_AGENT_SRCS = win/gsp_agent_win.c win/gsp_heap_win.c
 $(OBJDIR)/gsperf-agent.dll: $(WIN_AGENT_SRCS) win/gsp_agent_win.h \
                             include/GSPerformance/gsp_format.h | $(OBJDIR)
 	$(CC) $(CFLAGS) -std=gnu11 -Wall -Wno-unused-parameter -Iinclude -shared \
-	  -o $@ $(WIN_AGENT_SRCS) -lwinmm
+	  -o $@ $(WIN_AGENT_SRCS) -lwinmm -ladvapi32
 
 $(OBJDIR)/gsperf.dll: gsp_signpost_api.c include/GSPerformance/gsp_signpost.h | $(OBJDIR)
 	$(CC) $(CFLAGS) -std=gnu11 -Wall -Iinclude -DGSP_BUILDING_API -shared \

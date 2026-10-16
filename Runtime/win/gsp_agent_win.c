@@ -12,6 +12,8 @@
      state, for the Hangs analysis;
    - records loaded modules and, when the Objective-C class list grows,
      the method table (GNUstep's DLLs carry no symbols for methods);
+   - signals Local\gsperf-ready-<pid> once it runs (the recorder keeps
+     the target suspended until then);
    - stops when the recorder signals the named event
      Local\gsperf-stop-<pid>, then writes END and events-<pid>.done.
 
@@ -516,18 +518,35 @@ sample_thread(sampled_thread *t, uint32_t kind, uint16_t weight)
        buf, sizeof(*fp) + n * 8, NULL, 0);
 }
 
+/* Cycles per sampling interval.  QueryThreadCycleTime counts at the
+   processor's nominal rate, which the registry records; measuring it
+   instead would delay the first sample.  */
 static void
 calibrate(void)
 {
-  /* cycles per sampling interval, measured on this thread */
-  ULONG64 c0 = 0, c1 = 0;
-  uint64_t t0 = now_ns();
-  QueryThreadCycleTime(GetCurrentThread(), &c0);
-  while (now_ns() - t0 < 20000000)
-    ;
-  QueryThreadCycleTime(GetCurrentThread(), &c1);
-  double per_ns = (double)(c1 - c0) / (double)(now_ns() - t0);
-  cycles_per_interval = per_ns * sample_interval_us * 1000.0;
+  HKEY key;
+  DWORD mhz = 0, size = sizeof(mhz);
+
+  if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, "HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0",
+                    0, KEY_READ, &key) == ERROR_SUCCESS)
+    {
+      if (RegQueryValueExA(key, "~MHz", NULL, NULL, (LPBYTE)&mhz, &size) != ERROR_SUCCESS)
+        mhz = 0;
+      RegCloseKey(key);
+    }
+  if (mhz != 0)
+    cycles_per_interval = (double)mhz * sample_interval_us;
+  else
+    {
+      ULONG64 c0 = 0, c1 = 0;
+      uint64_t t0 = now_ns();
+      QueryThreadCycleTime(GetCurrentThread(), &c0);
+      while (now_ns() - t0 < 5000000)
+        ;
+      QueryThreadCycleTime(GetCurrentThread(), &c1);
+      cycles_per_interval = (double)(c1 - c0) / (double)(now_ns() - t0)
+        * sample_interval_us * 1000.0;
+    }
   if (cycles_per_interval < 1)
     cycles_per_interval = 1;
 }
@@ -585,6 +604,15 @@ sampler_main(LPVOID arg)
   timeBeginPeriod(1);
   calibrate();
   refresh_threads();
+  /* The recorder resumes the target when this is set.  */
+  WCHAR rname[64];
+  swprintf(rname, 64, L"Local\\gsperf-ready-%lu", (unsigned long)self_pid);
+  HANDLE ready = OpenEventW(EVENT_MODIFY_STATE, FALSE, rname);
+  if (ready)
+    {
+      SetEvent(ready);
+      CloseHandle(ready);
+    }
   for (;;)
     {
       DWORD w = WaitForSingleObject(stop_event, sample_interval_us >= 2000

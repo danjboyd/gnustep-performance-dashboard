@@ -163,23 +163,28 @@ gspw_intern_stack(const uint64_t *frames, unsigned n)
   return id;
 }
 
-/* The caller's caller's stack: skips this function and the hook.  */
-static __attribute__((noinline)) uint32_t
+static uintptr_t self_start, self_end;
+
+/* The stack of the code that called a hook, without the agent's frames.  */
+static uint32_t
 hook_caller_stack(void)
 {
   void *pcs[MAX_ALLOC_FRAMES];
   uint64_t frames[MAX_ALLOC_FRAMES];
-  USHORT n = RtlCaptureStackBackTrace(2, alloc_frames, pcs, NULL);
+  USHORT n = RtlCaptureStackBackTrace(0, alloc_frames, pcs, NULL);
+  USHORT skip = 0, k = 0;
 
-  for (USHORT i = 0; i < n; i++)
-    frames[i] = (uint64_t)(uintptr_t)pcs[i];
-  return n ? gspw_intern_stack(frames, n) : 0;
+  while (skip < n && (uintptr_t)pcs[skip] >= self_start && (uintptr_t)pcs[skip] < self_end)
+    skip++;
+  for (USHORT i = skip; i < n; i++)
+    frames[k++] = (uint64_t)(uintptr_t)pcs[i];
+  return k ? gspw_intern_stack(frames, k) : 0;
 }
 
 /* ------------------------------------------------------------------ */
 /* recording                                                           */
 
-static __attribute__((noinline)) void
+static void
 record_alloc(void *p, size_t size, void *old)
 {
   gsp_alloc_payload a;
@@ -632,6 +637,12 @@ gspw_heap_start(bool allocations, unsigned frames)
   GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS
                      | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                      (LPCSTR)(void *)gspw_heap_start, &self_module);
+  MODULEINFO mi;
+  if (self_module && K32GetModuleInformation(GetCurrentProcess(), self_module, &mi, sizeof(mi)))
+    {
+      self_start = (uintptr_t)mi.lpBaseOfDll;
+      self_end = self_start + mi.SizeOfImage;
+    }
   alloc_frames = frames == 0 ? 1 : (frames > MAX_ALLOC_FRAMES ? MAX_ALLOC_FRAMES : frames);
   if (!allocations || guard_tls == TLS_OUT_OF_INDEXES)
     return;

@@ -869,7 +869,10 @@ wide(NSString *s)
       return NO;
     }
 
-  /* inject the agent */
+  /* inject the agent; it signals this event once its sampler runs */
+  WCHAR readyName[64];
+  swprintf(readyName, 64, L"Local\\gsperf-ready-%lu", (unsigned long)pi.dwProcessId);
+  HANDLE ready = CreateEventW(NULL, TRUE, FALSE, readyName);
   WCHAR *agentw = wide([agent stringByReplacingOccurrencesOfString: @"/" withString: @"\\"]);
   SIZE_T bytes = (wcslen(agentw) + 1) * sizeof(WCHAR);
   LPVOID remote = VirtualAllocEx(pi.hProcess, NULL, bytes, MEM_COMMIT | MEM_RESERVE,
@@ -894,12 +897,21 @@ wide(NSString *s)
     VirtualFreeEx(pi.hProcess, remote, 0, MEM_RELEASE);
   if (!injected)
     {
+      if (ready)
+        CloseHandle(ready);
       TerminateProcess(pi.hProcess, 1);
       CloseHandle(pi.hThread);
       CloseHandle(pi.hProcess);
       if (error)
         *error = make_error(13, @"Cannot load the recording agent into the target.");
       return NO;
+    }
+  /* Let the target run only when sampling has started, or a short program
+     would be over before its first sample.  */
+  if (ready)
+    {
+      WaitForSingleObject(ready, 5000);
+      CloseHandle(ready);
     }
   ResumeThread(pi.hThread);
   CloseHandle(pi.hThread);

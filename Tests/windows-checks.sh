@@ -59,7 +59,11 @@ if command -v gnustep-config >/dev/null 2>&1; then
     -o "$OUT/objalloc.csv" >/dev/null 2>&1
   cut -d, -f5 "$OUT/objalloc.csv" | sort | uniq -c | sort -rn | head -8
   check "Allocations: 10000 GSCInlineString allocations classified" "[ \$(grep -c ',GSCInlineString,' '$OUT/objalloc.csv') -ge 10000 ]"
-  check "Allocations: 5 Leaky objects allocated in make_leaks" "[ \$(grep ',Leaky,' '$OUT/objalloc.csv' | grep -c make_leaks) -ge 5 ]"
+  check "Allocations: 5 Leaky objects" "[ \$(grep -c ',Leaky,' '$OUT/objalloc.csv') -eq 5 ]"
+  "$GSTRACE" report "$OUT/objalloc.gstrace" allocations --by-stack --min-percent 0 \
+    >"$OUT/objalloc-stacks.txt" 2>&1
+  check "Allocations: stacks reach make_leaks, without agent frames" \
+    "grep -q make_leaks '$OUT/objalloc-stacks.txt' && ! grep -q hook_ '$OUT/objalloc-stacks.txt'"
 fi
 
 echo
