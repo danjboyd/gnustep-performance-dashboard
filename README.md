@@ -33,10 +33,12 @@ Status: Linux (x86_64). Windows is planned (see
 | Allocations | Every `malloc`/`calloc`/`realloc`/`free` with its call stack; Objective-C instances are labelled with their class. Statistics (persistent / transient), allocation list, call trees, live-heap graph. |
 | Leaks | Periodic conservative heap scans (stop-the-world) reporting unreachable blocks, including retain cycles, with their allocation stacks. |
 | Zombies | `NSZombieEnabled` plus retain/release history: which deallocated object received which message, and its malloc/retain/release history. |
+| File Activity | Every open, read, write, sync and close on files (POSIX calls, their `_FORTIFY_SOURCE` variants and stdio), with duration, bytes, errors and call stack; per-file summaries and a duration-weighted call tree. |
+| Network | Connections (with peer addresses) and bytes sent and received per peer, with call stacks. |
 | System Time Profiler | Attach to a running process and sample it with `perf_event`, including kernel stacks (needs the profiling helper, see below). |
 
 Templates combine them: Time Profiler, Allocations, Leaks, Zombies, Hangs,
-Logging, System Time Profiler and Blank (`gstrace list templates`).
+File Activity, Network, Logging, System Time Profiler and Blank (`gstrace list templates`).
 
 ## Building
 
@@ -86,6 +88,8 @@ gstrace report trace.gstrace allocations [--by-stack --persistent]
 gstrace report trace.gstrace leaks [--by-stack]
 gstrace report trace.gstrace signposts --limit 20
 gstrace report trace.gstrace zombies
+gstrace report trace.gstrace files [--events | --by-stack]
+gstrace report trace.gstrace network [--events]
 
 gstrace export trace.gstrace --format chrome -o trace.json    # Perfetto UI
 gstrace export trace.gstrace --format speedscope -o p.speedscope.json

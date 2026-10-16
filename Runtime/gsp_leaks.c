@@ -184,7 +184,7 @@ typedef struct regions
 static bool
 read_maps(regions *rs)
 {
-  int fd = open("/proc/self/maps", O_RDONLY | O_CLOEXEC);
+  int fd = gsp_sys_open("/proc/self/maps", O_RDONLY | O_CLOEXEC, 0);
   size_t cap = 16u << 20, used = 0;
   char *text;
 
@@ -193,19 +193,19 @@ read_maps(regions *rs)
   text = gsp_map_raw(cap);
   if (text == NULL)
     {
-      close(fd);
+      gsp_sys_close(fd);
       return false;
     }
   for (;;)
     {
       if (used + 4096 > cap)
         break;
-      ssize_t n = read(fd, text + used, cap - used - 1);
+      ssize_t n = gsp_sys_read(fd, text + used, cap - used - 1);
       if (n <= 0)
         break;
       used += (size_t)n;
     }
-  close(fd);
+  gsp_sys_close(fd);
   text[used] = 0;
 
   rs->cap = 1;
@@ -433,7 +433,7 @@ explain(uintptr_t at, uint64_t v, mblock *m)
                    (unsigned long)at, (unsigned long)v, explain_root);
   if (n > 0)
     {
-      ssize_t ignored = write(2, buf, (size_t)n);
+      ssize_t ignored = gsp_sys_write(2, buf, (size_t)n);
       (void)ignored;
     }
 }
@@ -694,16 +694,16 @@ gsp_leaks_snapshot(void)
 
   if (explain_size)
     {
-      int mfd = open("/proc/self/maps", O_RDONLY | O_CLOEXEC);
+      int mfd = gsp_sys_open("/proc/self/maps", O_RDONLY | O_CLOEXEC, 0);
       char mb[4096];
       ssize_t mn;
-      while (mfd >= 0 && (mn = read(mfd, mb, sizeof(mb))) > 0)
+      while (mfd >= 0 && (mn = gsp_sys_read(mfd, mb, sizeof(mb))) > 0)
         {
-          ssize_t ignored = write(2, mb, (size_t)mn);
+          ssize_t ignored = gsp_sys_write(2, mb, (size_t)mn);
           (void)ignored;
         }
       if (mfd >= 0)
-        close(mfd);
+        gsp_sys_close(mfd);
     }
   if (s.blocks == NULL || !read_maps(&s.maps))
     goto done;
@@ -805,7 +805,7 @@ gsp_leaks_snapshot(void)
               "gsperf region %#lx-%#lx r%d w%d special%d heap%d arena%d stack%d blocks%d -> %s\n",
               (unsigned long)r->lo, (unsigned long)r->hi, r->readable, r->writable,
               r->special, r->heap, arena, r->stack, r->has_block, skip ? "skip" : "scan");
-            ssize_t ig = write(2, line, (size_t)ln);
+            ssize_t ig = gsp_sys_write(2, line, (size_t)ln);
             (void)ig;
             static char rd[96];
             snprintf(rd, sizeof(rd), "mapping %#lx-%#lx", (unsigned long)r->lo,

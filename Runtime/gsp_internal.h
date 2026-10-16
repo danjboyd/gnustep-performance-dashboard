@@ -52,6 +52,8 @@ typedef struct gsp_config
   bool leaks;
   bool signposts;
   bool zombies;
+  bool file_io;               /* File Activity */
+  bool network;               /* Network */
   bool unwind_fp;             /* force frame-pointer unwinding */
   unsigned sample_interval_us;
   unsigned wall_interval_us;
@@ -142,6 +144,23 @@ gsp_now(void)
 
 GSP_HIDDEN pid_t gsp_gettid(void);
 
+/* The agent's own file I/O goes straight to the kernel: open/read/write/
+   close are interposed by the File Activity hooks, and the agent must
+   never re-enter itself (or call dlsym) from the writer or a handler.  */
+#include <fcntl.h>
+#include <sys/syscall.h>
+#include <unistd.h>
+static inline int gsp_sys_open(const char *path, int flags, int mode)
+{ return (int)syscall(SYS_openat, AT_FDCWD, path, flags, mode); }
+static inline ssize_t gsp_sys_read(int fd, void *buf, size_t n)
+{ return (ssize_t)syscall(SYS_read, fd, buf, n); }
+static inline ssize_t gsp_sys_write(int fd, const void *buf, size_t n)
+{ return (ssize_t)syscall(SYS_write, fd, buf, n); }
+static inline int gsp_sys_close(int fd)
+{ return (int)syscall(SYS_close, fd); }
+static inline int gsp_sys_fsync(int fd)
+{ return (int)syscall(SYS_fsync, fd); }
+
 /* ---- emitting records ----
    gsp_emit_normal may block briefly when the ring is full; gsp_emit_signal
    drops and counts instead.  Both take up to two payload pieces.  */
@@ -204,6 +223,9 @@ GSP_HIDDEN void gsp_objc_dump_methods(void); /* writer: method table */
 GSP_HIDDEN void gsp_leaks_init(void);
 GSP_HIDDEN void gsp_leaks_snapshot(void);    /* writer thread */
 GSP_HIDDEN void gsp_signpost_init(void);
+GSP_HIDDEN void gsp_io_resolve(void);
+GSP_HIDDEN void gsp_io_init(void);
+GSP_HIDDEN void gsp_io_stop(void);
 
 /* live block table, used by allocations and leaks */
 typedef struct gsp_block

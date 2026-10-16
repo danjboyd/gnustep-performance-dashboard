@@ -82,6 +82,7 @@ enum gsp_record_type
   GSP_REC_END = 18,         /* stream finished cleanly */
   GSP_REC_LOG = 19,         /* aux = level; gsp_signpost_payload (name unused) */
   GSP_REC_MARK = 20,        /* aux = GSP_MARK_*; payload = optional text */
+  GSP_REC_IO = 21,          /* aux = GSP_IO_*; gsp_io_payload (time = start) */
   GSP_REC_TYPE_COUNT
 };
 
@@ -106,6 +107,32 @@ enum
 };
 
 enum { GSP_MARK_START = 1, GSP_MARK_STOP_REQUESTED = 2, GSP_MARK_USER = 3 };
+
+/* File and network operations (File Activity and Network instruments). */
+enum
+{
+  GSP_IO_OPEN = 1,      /* fd = result; name = path */
+  GSP_IO_CLOSE = 2,
+  GSP_IO_READ = 3,      /* read, pread, readv, fread */
+  GSP_IO_WRITE = 4,     /* write, pwrite, writev, fwrite */
+  GSP_IO_SYNC = 5,      /* fsync, fdatasync */
+  GSP_IO_CONNECT = 6,   /* name = peer address */
+  GSP_IO_ACCEPT = 7,    /* fd = new socket; name = peer address */
+  GSP_IO_SEND = 8,      /* send, sendto, sendmsg */
+  GSP_IO_RECV = 9       /* recv, recvfrom, recvmsg */
+};
+
+typedef struct gsp_io_payload
+{
+  int64_t result;      /* bytes, new fd, 0, or -errno */
+  uint64_t duration;   /* ns */
+  int32_t fd;
+  uint32_t name;       /* string id: path or peer, 0 if none */
+  uint32_t stack;
+  uint32_t flags;      /* open flags; GSP_IO_SOCKET on socket closes */
+} gsp_io_payload;
+
+#define GSP_IO_SOCKET 0x80000000u
 
 typedef struct gsp_image_payload
 {

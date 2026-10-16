@@ -17,6 +17,7 @@
 @property (nonatomic, readonly) GSPHangAnalysis *hangAnalysis;
 @property (nonatomic, readonly) GSPAllocationAnalysis *allocationAnalysis;
 @property (nonatomic, readonly) GSPLeakAnalysis *leakAnalysis;
+@property (nonatomic, readonly) GSPIOAnalysis *ioAnalysis;
 
 - (void) invalidate;
 - (NSString *) instrumentForTrack: (NSUInteger)track;

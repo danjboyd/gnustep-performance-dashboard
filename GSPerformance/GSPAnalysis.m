@@ -755,3 +755,230 @@ GSPZombieHistory(GSPProcess *p, GSPZombieEvent *z)
   }];
   return events;
 }
+
+/* ------------------------------------------------------------------ */
+/* File Activity and Network                                           */
+
+@implementation GSPIOSummary
+@end
+
+static BOOL
+io_is_network(uint16_t op)
+{
+  return op == GSP_IO_CONNECT || op == GSP_IO_ACCEPT || op == GSP_IO_SEND
+    || op == GSP_IO_RECV;
+}
+
+@implementation GSPIOAnalysis
+{
+  GSPProcess *_process;
+  NSMutableArray *_names;        /* per event */
+  uint8_t *_network;             /* per event */
+  BOOL _hasFiles, _hasNet;
+}
+
++ (NSString *) operationName: (uint16_t)op
+{
+  switch (op)
+    {
+    case GSP_IO_OPEN: return @"open";
+    case GSP_IO_CLOSE: return @"close";
+    case GSP_IO_READ: return @"read";
+    case GSP_IO_WRITE: return @"write";
+    case GSP_IO_SYNC: return @"fsync";
+    case GSP_IO_CONNECT: return @"connect";
+    case GSP_IO_ACCEPT: return @"accept";
+    case GSP_IO_SEND: return @"send";
+    case GSP_IO_RECV: return @"recv";
+    default: return @"?";
+    }
+}
+
+static NSString *
+fd_name(int32_t fd)
+{
+  switch (fd)
+    {
+    case 0: return @"stdin";
+    case 1: return @"stdout";
+    case 2: return @"stderr";
+    default: return [NSString stringWithFormat: @"fd %d", fd];
+    }
+}
+
+- (instancetype) initWithProcess: (GSPProcess *)process
+{
+  if ((self = [super init]) == nil)
+    return nil;
+  _process = process;
+  NSUInteger n = process.ioEventCount;
+  const GSPIOEvent *ev = process.ioEvents;
+  NSMutableDictionary *open = [NSMutableDictionary dictionary];   /* fd -> name */
+  NSMutableSet *sockets = [NSMutableSet set];
+
+  _names = [NSMutableArray arrayWithCapacity: n];
+  _network = calloc(n + 1, 1);
+  for (NSUInteger i = 0; i < n; i++)
+    {
+      const GSPIOEvent *e = &ev[i];
+      NSNumber *fd = [NSNumber numberWithInt: e->fd];
+      NSString *name = e->name ? [process stringForID: e->name] : nil;
+      BOOL net = io_is_network(e->op);
+
+      if (e->op == GSP_IO_OPEN || e->op == GSP_IO_CONNECT || e->op == GSP_IO_ACCEPT)
+        {
+          int32_t newfd = e->op == GSP_IO_ACCEPT ? (int32_t)e->result : e->fd;
+          if (newfd >= 0 && e->result >= 0 && name)
+            [open setObject: name forKey: [NSNumber numberWithInt: newfd]];
+          if (net && newfd >= 0)
+            [sockets addObject: [NSNumber numberWithInt: newfd]];
+        }
+      if (name == nil)
+        name = [open objectForKey: fd];
+      if (e->op == GSP_IO_CLOSE)
+        {
+          net = (e->flags & GSP_IO_SOCKET) != 0 || [sockets containsObject: fd];
+          [open removeObjectForKey: fd];
+          [sockets removeObject: fd];
+        }
+      if (name == nil)
+        name = fd_name(e->fd);
+      [_names addObject: name];
+      _network[i] = net;
+      if (net)
+        _hasNet = YES;
+      else
+        _hasFiles = YES;
+    }
+  return self;
+}
+
+- (void) dealloc
+{
+  free(_network);
+}
+
+- (BOOL) hasFileEvents { return _hasFiles; }
+- (BOOL) hasNetworkEvents { return _hasNet; }
+
+- (NSString *) nameOfEvent: (NSUInteger)index
+{
+  return index < [_names count] ? [_names objectAtIndex: index] : nil;
+}
+
+- (BOOL) isNetworkEvent: (NSUInteger)index
+{
+  return index < [_names count] && _network[index];
+}
+
+- (NSIndexSet *) eventsForNetwork: (BOOL)network from: (GSPTime)start to: (GSPTime)end
+{
+  NSMutableIndexSet *set = [NSMutableIndexSet indexSet];
+  const GSPIOEvent *ev = _process.ioEvents;
+  for (NSUInteger i = 0; i < [_names count]; i++)
+    {
+      if ((BOOL)_network[i] != network)
+        continue;
+      if (end && (ev[i].time < start || ev[i].time > end))
+        continue;
+      [set addIndex: i];
+    }
+  return set;
+}
+
+- (NSArray *) summariesForNetwork: (BOOL)network from: (GSPTime)start to: (GSPTime)end
+{
+  NSMutableDictionary *by = [NSMutableDictionary dictionary];
+  const GSPIOEvent *ev = _process.ioEvents;
+  NSIndexSet *set = [self eventsForNetwork: network from: start to: end];
+
+  [set enumerateIndexesUsingBlock: ^(NSUInteger i, BOOL *stop) {
+    const GSPIOEvent *e = &ev[i];
+    NSString *name = [_names objectAtIndex: i];
+    GSPIOSummary *sum = [by objectForKey: name];
+    if (sum == nil)
+      {
+        sum = [GSPIOSummary new];
+        sum.name = name;
+        sum.isNetwork = network;
+        [by setObject: sum forKey: name];
+      }
+    sum.totalDuration += e->duration;
+    if (e->result < 0)
+      sum.errors++;
+    switch (e->op)
+      {
+      case GSP_IO_OPEN: case GSP_IO_CONNECT: case GSP_IO_ACCEPT:
+        sum.opens++;
+        break;
+      case GSP_IO_READ: case GSP_IO_RECV:
+        sum.reads++;
+        if (e->result > 0)
+          sum.bytesRead += (uint64_t)e->result;
+        break;
+      case GSP_IO_WRITE: case GSP_IO_SEND:
+        sum.writes++;
+        if (e->result > 0)
+          sum.bytesWritten += (uint64_t)e->result;
+        break;
+      case GSP_IO_SYNC:
+        sum.syncs++;
+        break;
+      default:
+        break;
+      }
+  }];
+  return [[by allValues] sortedArrayUsingComparator:
+    ^NSComparisonResult(GSPIOSummary *a, GSPIOSummary *b) {
+      if (a.totalDuration != b.totalDuration)
+        return a.totalDuration > b.totalDuration ? NSOrderedAscending : NSOrderedDescending;
+      return [a.name compare: b.name];
+    }];
+}
+
+- (void) bytesForNetwork: (BOOL)network read: (double *)rd written: (double *)wr
+                 buckets: (NSUInteger)nb start: (GSPTime)start end: (GSPTime)end
+{
+  const GSPIOEvent *ev = _process.ioEvents;
+  memset(rd, 0, nb * sizeof(double));
+  memset(wr, 0, nb * sizeof(double));
+  if (end <= start || nb == 0)
+    return;
+  for (NSUInteger i = 0; i < [_names count]; i++)
+    {
+      const GSPIOEvent *e = &ev[i];
+      if ((BOOL)_network[i] != network || e->result <= 0
+          || e->time < start || e->time >= end)
+        continue;
+      NSUInteger b = (NSUInteger)((double)(e->time - start) / (double)(end - start) * nb);
+      if (b >= nb)
+        b = nb - 1;
+      if (e->op == GSP_IO_READ || e->op == GSP_IO_RECV)
+        rd[b] += (double)e->result;
+      else if (e->op == GSP_IO_WRITE || e->op == GSP_IO_SEND)
+        wr[b] += (double)e->result;
+    }
+}
+
+- (GSPCallTree *) callTreeForNetwork: (BOOL)network from: (GSPTime)start
+                                  to: (GSPTime)end options: (NSUInteger)options
+{
+  const GSPIOEvent *ev = _process.ioEvents;
+  NSIndexSet *set = [self eventsForNetwork: network from: start to: end];
+  GSPWeightedStack *in = malloc(([set count] + 1) * sizeof(GSPWeightedStack));
+  __block NSUInteger used = 0;
+  [set enumerateIndexesUsingBlock: ^(NSUInteger i, BOOL *stop) {
+    in[used].stack = ev[i].stack;
+    in[used].tid = ev[i].tid;
+    in[used].weight = ev[i].duration ? ev[i].duration : 1;
+    used++;
+  }];
+  GSPCallTree *tree = [[GSPCallTree alloc] initWithProcess: _process];
+  tree.options = options;
+  tree.weightUnit = @"ns";
+  [tree buildFromStacks: in count: used];
+  free(in);
+  return tree;
+}
+
+@end

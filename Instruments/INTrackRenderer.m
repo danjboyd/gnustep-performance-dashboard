@@ -13,6 +13,7 @@
   GSPHangAnalysis *_hangs;
   GSPAllocationAnalysis *_allocs;
   GSPLeakAnalysis *_leaks;
+  GSPIOAnalysis *_io;
   NSMutableDictionary *_signpostLanes;   /* name -> color index */
   double _peakCPU;
 }
@@ -34,7 +35,7 @@
   NSArray *order = [NSArray arrayWithObjects: GSPInstrumentTimeProfiler,
     GSPInstrumentSystemProfiler, GSPInstrumentHangs, GSPInstrumentPointsOfInterest,
     GSPInstrumentLogging, GSPInstrumentAllocations, GSPInstrumentLeaks,
-    GSPInstrumentZombies, nil];
+    GSPInstrumentZombies, GSPInstrumentFileActivity, GSPInstrumentNetwork, nil];
   NSArray *have = _trace.instrumentIdentifiers;
   NSMutableArray *tracks = [NSMutableArray array];
 
@@ -121,6 +122,7 @@
   _hangs = nil;
   _allocs = nil;
   _leaks = nil;
+  _io = nil;
   _peakCPU = 0;
   [self rebuildTracks];
 }
@@ -144,6 +146,13 @@
   if (_leaks == nil)
     _leaks = [[GSPLeakAnalysis alloc] initWithProcess: _process];
   return _leaks;
+}
+
+- (GSPIOAnalysis *) ioAnalysis
+{
+  if (_io == nil)
+    _io = [[GSPIOAnalysis alloc] initWithProcess: _process];
+  return _io;
 }
 
 - (NSString *) instrumentForTrack: (NSUInteger)track
@@ -219,6 +228,18 @@
     }
   if ([ident isEqual: GSPInstrumentZombies])
     return [NSString stringWithFormat: @"%lu zombie messages", (unsigned long)[_process.zombies count]];
+  if ([ident isEqual: GSPInstrumentFileActivity] || [ident isEqual: GSPInstrumentNetwork])
+    {
+      BOOL net = [ident isEqual: GSPInstrumentNetwork];
+      uint64_t rd = 0, wr = 0;
+      for (GSPIOSummary *sum in [[self ioAnalysis] summariesForNetwork: net from: 0 to: 0])
+        {
+          rd += sum.bytesRead;
+          wr += sum.bytesWritten;
+        }
+      return [NSString stringWithFormat: net ? @"%@ in, %@ out" : @"%@ read, %@ written",
+              [GSPAllocationAnalysis formatBytes: rd], [GSPAllocationAnalysis formatBytes: wr]];
+    }
   return nil;
 }
 
@@ -529,6 +550,35 @@ draw_label(NSString *s, NSPoint p, NSColor *color)
     }
 }
 
+/* Reads (or bytes received) above the middle line, writes (sent) below. */
+- (void) drawIO: (NSRect)r from: (double)start to: (double)end network: (BOOL)net
+{
+  NSUInteger n = MAX(1, (NSUInteger)(r.size.width / 3));
+  double *rd = calloc(n, sizeof(double)), *wr = calloc(n, sizeof(double));
+  [[self ioAnalysis] bytesForNetwork: net read: rd written: wr buckets: n
+                               start: [self abs: start] end: [self abs: end]];
+  double peak = 1;
+  for (NSUInteger i = 0; i < n; i++)
+    peak = MAX(peak, MAX(rd[i], wr[i]));
+  CGFloat half = r.size.height / 2;
+  NSRect top = NSMakeRect(r.origin.x, r.origin.y, r.size.width, half);
+  draw_area(rd, n, peak, top, [INTheme cpuColor]);
+  CGFloat step = r.size.width / n;
+  [[INTheme color: [INTheme hangColor: 1] alpha: 0.75] set];
+  for (NSUInteger i = 0; i < n; i++)
+    if (wr[i] > 0)
+      NSRectFill(NSMakeRect(r.origin.x + i * step, r.origin.y + half,
+                            MAX(1, step), half * MIN(1.0, wr[i] / peak)));
+  [[INTheme gridColor] set];
+  NSRectFill(NSMakeRect(r.origin.x, r.origin.y + half, r.size.width, 1));
+  draw_label(net ? @"in" : @"read", NSMakePoint(r.origin.x + 4, r.origin.y),
+             [INTheme secondaryTextColor]);
+  draw_label(net ? @"out" : @"written", NSMakePoint(r.origin.x + 4, r.origin.y + half + 2),
+             [INTheme secondaryTextColor]);
+  free(rd);
+  free(wr);
+}
+
 - (void) timeline: (INTimelineView *)view drawTrack: (NSUInteger)track
            inRect: (NSRect)rect from: (double)start to: (double)end
 {
@@ -551,6 +601,10 @@ draw_label(NSString *s, NSPoint p, NSColor *color)
     [self drawLeaks: rect from: start to: end];
   else if ([ident isEqual: GSPInstrumentZombies])
     [self drawZombies: rect from: start to: end];
+  else if ([ident isEqual: GSPInstrumentFileActivity])
+    [self drawIO: rect from: start to: end network: NO];
+  else if ([ident isEqual: GSPInstrumentNetwork])
+    [self drawIO: rect from: start to: end network: YES];
 }
 
 - (NSString *) timeline: (INTimelineView *)view describeTrack: (NSUInteger)track

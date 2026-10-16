@@ -201,6 +201,8 @@ read_config(void)
   gsp_cfg.refcounts = env_flag("GSP_REFCOUNTS", false);
   gsp_cfg.signposts = env_flag("GSP_SIGNPOSTS", true);
   gsp_cfg.zombies = env_flag("GSP_ZOMBIES", false);
+  gsp_cfg.file_io = env_flag("GSP_FILE_IO", false);
+  gsp_cfg.network = env_flag("GSP_NETWORK", false);
   gsp_cfg.unwind_fp = getenv("GSP_UNWIND") != NULL
     && strcmp(getenv("GSP_UNWIND"), "fp") == 0;
   gsp_cfg.sample_interval_us = env_uint("GSP_SAMPLE_INTERVAL_US", 1000);
@@ -402,7 +404,7 @@ write_all(const void *p, size_t len)
   const uint8_t *c = p;
   while (len > 0 && out_fd >= 0)
     {
-      ssize_t n = write(out_fd, c, len);
+      ssize_t n = gsp_sys_write(out_fd, c, len);
       if (n < 0)
         {
           if (errno == EINTR)
@@ -459,7 +461,7 @@ gsp_writer_wake(void)
   if (wake_pipe[1] >= 0)
     {
       char c = 1;
-      ssize_t ignored = write(wake_pipe[1], &c, 1);
+      ssize_t ignored = gsp_sys_write(wake_pipe[1], &c, 1);
       (void)ignored;
     }
 }
@@ -777,6 +779,7 @@ finish_recording(void)
 {
   bool from_signal = atomic_load(&stop_from_signal);
   gsp_sampler_stop();
+  gsp_io_stop();
   drain_all();
   if (!from_signal)
     {
@@ -810,16 +813,16 @@ finish_recording(void)
                   NULL, 0, NULL, 0);
   wbuf_flush();
   atomic_store(&gsp_recording, 0);
-  fsync(out_fd);
-  close(out_fd);
+  gsp_sys_fsync(out_fd);
+  gsp_sys_close(out_fd);
   out_fd = -1;
 
   char done[1200];
   snprintf(done, sizeof(done), "%s/events-%d.done", gsp_cfg.output,
            (int)traced_pid);
-  int fd = open(done, O_CREAT | O_WRONLY | O_TRUNC | O_CLOEXEC, 0644);
+  int fd = gsp_sys_open(done, O_CREAT | O_WRONLY | O_TRUNC | O_CLOEXEC, 0644);
   if (fd >= 0)
-    close(fd);
+    gsp_sys_close(fd);
 }
 
 static void *
@@ -867,7 +870,7 @@ writer_main(void *arg)
       uint64_t now;
 
       poll(&pfd, 1, 20);
-      while (read(wake_pipe[0], junk, sizeof(junk)) > 0)
+      while (gsp_sys_read(wake_pipe[0], junk, sizeof(junk)) > 0)
         ;
       drain_all();
       gsp_objc_poll();
@@ -1016,7 +1019,7 @@ fork_child(void)
   atomic_store(&finished, 1);
   gsp_self_thread = NULL;
   if (out_fd >= 0)
-    close(out_fd);
+    gsp_sys_close(out_fd);
   out_fd = -1;
 }
 
@@ -1098,6 +1101,7 @@ gsp_init(void)
   char exe[256] = "";
 
   gsp_in_agent++;
+  gsp_io_resolve();
   read_config();
   gsp_signpost_init();
   if (gsp_cfg.output[0] == '\0')
@@ -1128,13 +1132,13 @@ gsp_init(void)
   mkdir(gsp_cfg.output, 0755);
   snprintf(events_path, sizeof(events_path), "%s/events-%d.bin",
            gsp_cfg.output, (int)traced_pid);
-  out_fd = open(events_path, O_CREAT | O_WRONLY | O_TRUNC | O_CLOEXEC, 0644);
+  out_fd = gsp_sys_open(events_path, O_CREAT | O_WRONLY | O_TRUNC | O_CLOEXEC, 0644);
   if (out_fd < 0 || pipe2(wake_pipe, O_CLOEXEC | O_NONBLOCK) != 0)
     {
       fprintf(stderr, "gsperf: cannot write %s: %s\n", events_path,
               strerror(errno));
       if (out_fd >= 0)
-        close(out_fd);
+        gsp_sys_close(out_fd);
       out_fd = -1;
       gsp_alloc_stop_live();
       gsp_in_agent--;
@@ -1193,6 +1197,7 @@ gsp_init(void)
   atexit(at_exit_handler);
   install_fatal_handlers();
   atomic_store(&gsp_alloc_on, gsp_cfg.allocations ? 1 : 0);
+  gsp_io_init();
   gsp_in_agent--;
 }
 

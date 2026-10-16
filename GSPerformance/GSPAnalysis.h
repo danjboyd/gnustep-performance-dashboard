@@ -134,6 +134,40 @@ typedef struct GSPAllocationRecord
 @end
 
 /* ------------------------------------------------------------------ */
+/* File Activity and Network                                           */
+
+@interface GSPIOSummary : NSObject
+@property (nonatomic, copy) NSString *name;        /* path, peer, or "fd N" */
+@property (nonatomic) BOOL isNetwork;
+@property (nonatomic) uint64_t opens;              /* open/connect/accept */
+@property (nonatomic) uint64_t reads, bytesRead;   /* read or recv */
+@property (nonatomic) uint64_t writes, bytesWritten; /* write or send */
+@property (nonatomic) uint64_t syncs;
+@property (nonatomic) uint64_t errors;
+@property (nonatomic) uint64_t totalDuration;      /* ns */
+@end
+
+@interface GSPIOAnalysis : NSObject
+- (instancetype) initWithProcess: (GSPProcess *)process;
+/* For each event (same order as process.ioEvents): the resolved name. */
+- (NSString *) nameOfEvent: (NSUInteger)index;
+- (BOOL) isNetworkEvent: (NSUInteger)index;
+/* Summaries per file (network NO) or per peer (YES), sorted by total
+   duration, for events starting in [start, end] (0, 0 = all). */
+- (NSArray *) summariesForNetwork: (BOOL)network from: (GSPTime)start to: (GSPTime)end;
+- (NSIndexSet *) eventsForNetwork: (BOOL)network from: (GSPTime)start to: (GSPTime)end;
+/* Bytes read/received and written/sent per bucket. */
+- (void) bytesForNetwork: (BOOL)network read: (double *)rd written: (double *)wr
+                 buckets: (NSUInteger)n start: (GSPTime)start end: (GSPTime)end;
+/* Call tree weighted by time spent in the calls (ns). */
+- (GSPCallTree *) callTreeForNetwork: (BOOL)network from: (GSPTime)start
+                                  to: (GSPTime)end options: (NSUInteger)options;
+@property (nonatomic, readonly) BOOL hasFileEvents;
+@property (nonatomic, readonly) BOOL hasNetworkEvents;
++ (NSString *) operationName: (uint16_t)op;
+@end
+
+/* ------------------------------------------------------------------ */
 /* Zombies                                                             */
 
 @interface GSPHistoryEvent : NSObject

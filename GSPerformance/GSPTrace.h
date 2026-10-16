@@ -49,6 +49,20 @@ typedef struct GSPRefCountEvent
   int32_t refcount;
 } GSPRefCountEvent;
 
+typedef struct GSPIOEvent
+{
+  GSPTime time;          /* start */
+  uint64_t duration;     /* ns */
+  int64_t result;        /* bytes, new fd, 0, or -errno */
+  int32_t fd;
+  uint32_t name;         /* process string id (path or peer), 0 if none */
+  uint32_t stack;
+  uint32_t tid;
+  uint16_t op;           /* GSP_IO_* */
+  uint16_t reserved;
+  uint32_t flags;
+} GSPIOEvent;
+
 @interface GSPThreadInfo : NSObject
 @property (nonatomic) uint32_t tid;
 @property (nonatomic, copy) NSString *name;
@@ -148,6 +162,8 @@ typedef struct GSPRefCountEvent
 @property (nonatomic, readonly) NSUInteger tagEventCount;
 @property (nonatomic, readonly) const GSPRefCountEvent *refCountEvents;
 @property (nonatomic, readonly) NSUInteger refCountEventCount;
+@property (nonatomic, readonly) const GSPIOEvent *ioEvents;
+@property (nonatomic, readonly) NSUInteger ioEventCount;
 
 @property (nonatomic, readonly) GSPSymbolicator *symbolicator;
 

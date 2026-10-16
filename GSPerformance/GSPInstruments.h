@@ -11,6 +11,8 @@ extern NSString * const GSPInstrumentAllocations;        /* "allocations" */
 extern NSString * const GSPInstrumentLeaks;              /* "leaks" */
 extern NSString * const GSPInstrumentZombies;            /* "zombies" */
 extern NSString * const GSPInstrumentSystemProfiler;     /* "system-time-profiler" */
+extern NSString * const GSPInstrumentFileActivity;       /* "file-activity" */
+extern NSString * const GSPInstrumentNetwork;            /* "network" */
 
 @interface GSPInstrument : NSObject
 @property (nonatomic, copy) NSString *identifier;

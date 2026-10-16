@@ -8,6 +8,8 @@ NSString * const GSPInstrumentAllocations = @"allocations";
 NSString * const GSPInstrumentLeaks = @"leaks";
 NSString * const GSPInstrumentZombies = @"zombies";
 NSString * const GSPInstrumentSystemProfiler = @"system-time-profiler";
+NSString * const GSPInstrumentFileActivity = @"file-activity";
+NSString * const GSPInstrumentNetwork = @"network";
 
 static GSPInstrument *
 make_instrument(NSString *ident, NSString *name, NSString *summary,
@@ -50,6 +52,12 @@ make_instrument(NSString *ident, NSString *name, NSString *summary,
         NO, YES, NO),
       make_instrument(GSPInstrumentZombies, @"Zombies",
         @"Keeps deallocated objects as zombies and records messages sent to them.",
+        NO, YES, NO),
+      make_instrument(GSPInstrumentFileActivity, @"File Activity",
+        @"Records file opens, reads, writes and syncs with their durations and call stacks.",
+        NO, YES, NO),
+      make_instrument(GSPInstrumentNetwork, @"Network",
+        @"Records connections and bytes sent and received per peer, with call stacks.",
         NO, YES, NO),
       make_instrument(GSPInstrumentSystemProfiler, @"System Time Profiler",
         @"Samples a running process with perf_event, including kernel stacks. Needs the profiling helper.",
@@ -103,6 +111,13 @@ make_template(NSString *name, NSString *summary, NSArray *ids)
       make_template(@"Hangs",
         @"Main-thread responsiveness with the stacks behind each hang.",
         [NSArray arrayWithObjects: GSPInstrumentHangs, GSPInstrumentTimeProfiler, nil]),
+      make_template(@"File Activity",
+        @"File system calls with their durations and the code that made them.",
+        [NSArray arrayWithObjects: GSPInstrumentFileActivity, GSPInstrumentTimeProfiler,
+          GSPInstrumentPointsOfInterest, nil]),
+      make_template(@"Network",
+        @"Connections and traffic per peer, with the code that sent and received it.",
+        [NSArray arrayWithObjects: GSPInstrumentNetwork, GSPInstrumentPointsOfInterest, nil]),
       make_template(@"Logging",
         @"Signposts and os_log messages.",
         [NSArray arrayWithObjects: GSPInstrumentPointsOfInterest, GSPInstrumentLogging, nil]),
@@ -140,6 +155,8 @@ GSPAgentEnvironmentForInstruments(NSArray *ids, unsigned sampleIntervalUs,
   BOOL allocs = [ids containsObject: GSPInstrumentAllocations];
   BOOL leaks = [ids containsObject: GSPInstrumentLeaks];
   BOOL zombies = [ids containsObject: GSPInstrumentZombies];
+  BOOL files = [ids containsObject: GSPInstrumentFileActivity];
+  BOOL network = [ids containsObject: GSPInstrumentNetwork];
 
   [env setObject: cpu ? @"1" : @"0" forKey: @"GSP_CPU_SAMPLING"];
   [env setObject: hangs ? @"1" : @"0" forKey: @"GSP_WALL_SAMPLING"];
@@ -148,6 +165,8 @@ GSPAgentEnvironmentForInstruments(NSArray *ids, unsigned sampleIntervalUs,
   [env setObject: leaks ? @"1" : @"0" forKey: @"GSP_LEAKS"];
   [env setObject: zombies ? @"1" : @"0" forKey: @"GSP_ZOMBIES"];
   [env setObject: zombies ? @"1" : @"0" forKey: @"GSP_REFCOUNTS"];
+  [env setObject: files ? @"1" : @"0" forKey: @"GSP_FILE_IO"];
+  [env setObject: network ? @"1" : @"0" forKey: @"GSP_NETWORK"];
   if (zombies)
     [env setObject: @"YES" forKey: @"NSZombieEnabled"];
   if (sampleIntervalUs)

@@ -117,6 +117,8 @@ typedef struct pending_ref
   NSUInteger _tagCount, _tagCap;
   GSPRefCountEvent *_refs;
   NSUInteger _refCount, _refCap;
+  GSPIOEvent *_io;
+  NSUInteger _ioCount, _ioCap;
   raw_signpost *_rawSignposts;
   NSUInteger _rawCount, _rawCap;
   pending_ref *_pending;
@@ -163,6 +165,7 @@ typedef struct pending_ref
   free(_allocs);
   free(_tags);
   free(_refs);
+  free(_io);
   free(_rawSignposts);
   free(_pending);
 }
@@ -194,6 +197,8 @@ typedef struct pending_ref
 - (NSUInteger) tagEventCount { return _tagCount; }
 - (const GSPRefCountEvent *) refCountEvents { return _refs; }
 - (NSUInteger) refCountEventCount { return _refCount; }
+- (const GSPIOEvent *) ioEvents { return _io; }
+- (NSUInteger) ioEventCount { return _ioCount; }
 
 - (GSPSymbolicator *) symbolicator
 {
@@ -417,6 +422,29 @@ payload_string(const uint8_t *p, size_t max)
         }
       break;
 
+    case GSP_REC_IO:
+      if (plen >= sizeof(gsp_io_payload))
+        {
+          const gsp_io_payload *ip = (const gsp_io_payload *)p;
+          GROW(_io, _ioCount, _ioCap, GSPIOEvent);
+          GSPIOEvent *e = &_io[_ioCount];
+          memset(e, 0, sizeof(*e));
+          e->time = r->time;
+          e->duration = ip->duration;
+          e->result = ip->result;
+          e->fd = ip->fd;
+          e->name = ip->name;
+          e->tid = r->tid;
+          e->op = (uint16_t)r->aux;
+          e->flags = ip->flags;
+          if (ip->stack)
+            [self addPending: _ioCount stack: ip->stack table: 2];
+          _ioCount++;
+          if (r->time + ip->duration > _end)
+            _end = r->time + ip->duration;
+        }
+      break;
+
     case GSP_REC_SIGNPOST:
     case GSP_REC_LOG:
       if (plen >= sizeof(gsp_signpost_payload))
@@ -568,6 +596,13 @@ compare_tags(const void *a, const void *b)
 }
 
 static int
+compare_io(const void *a, const void *b)
+{
+  const GSPIOEvent *x = a, *y = b;
+  return (x->time > y->time) - (x->time < y->time);
+}
+
+static int
 compare_refs(const void *a, const void *b)
 {
   const GSPRefCountEvent *x = a, *y = b;
@@ -601,6 +636,8 @@ compare_refs(const void *a, const void *b)
         _allocs[pr->index].stack = local;
       else if (pr->table == 1 && pr->index < _refCount)
         _refs[pr->index].stack = local;
+      else if (pr->table == 2 && pr->index < _ioCount)
+        _io[pr->index].stack = local;
     }
   _pendingCount = keep;
 
@@ -641,6 +678,8 @@ compare_refs(const void *a, const void *b)
     qsort(_tags, _tagCount, sizeof(GSPTagEvent), compare_tags);
   if (_refCount > 1)
     qsort(_refs, _refCount, sizeof(GSPRefCountEvent), compare_refs);
+  if (_ioCount > 1)
+    qsort(_io, _ioCount, sizeof(GSPIOEvent), compare_io);
 
   if (!_samplesSorted && _sampleCount > 1)
     qsort(_samples, _sampleCount, sizeof(GSPSample), compare_samples);

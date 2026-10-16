@@ -5,6 +5,7 @@
 
 #include <GSPerformance/gsp_format.h>
 #include <GSPerformance/gsp_signpost.h>
+#include <string.h>
 
 /* Right-clicking selects the row under the pointer, so the context menu
    acts on it (GNUstep does not set the clicked row for menu events).  */
@@ -296,6 +297,10 @@ check_box(NSString *title, NSRect frame, id target, SEL action)
     return [NSArray arrayWithObjects: @"Leaks", @"Call Tree", @"Leak Checks", nil];
   if ([ident isEqual: GSPInstrumentZombies])
     return [NSArray arrayWithObjects: @"Zombies", nil];
+  if ([ident isEqual: GSPInstrumentFileActivity])
+    return [NSArray arrayWithObjects: @"Files", @"Events", @"Call Tree", nil];
+  if ([ident isEqual: GSPInstrumentNetwork])
+    return [NSArray arrayWithObjects: @"Connections", @"Events", @"Call Tree", nil];
   return [NSArray arrayWithObject: @"Details"];
 }
 
@@ -456,7 +461,17 @@ col(NSString *ident, NSString *title, CGFloat width)
     col(@"self", _weightIsBytes ? @"Self Bytes" : @"Self Weight", 150),
     col(@"library", @"Library", 170), nil] outline: @"symbol"];
 
-  if ([_instrument isEqual: GSPInstrumentAllocations])
+  BOOL ioTree = [_instrument isEqual: GSPInstrumentFileActivity]
+    || [_instrument isEqual: GSPInstrumentNetwork];
+  if (ioTree)
+    {
+      _weightIsBytes = NO;
+      _tree = [_renderer.ioAnalysis callTreeForNetwork:
+                 [_instrument isEqual: GSPInstrumentNetwork]
+                                                  from: _start to: _end
+                                               options: [self treeOptions]];
+    }
+  else if ([_instrument isEqual: GSPInstrumentAllocations])
     {
       _weightIsBytes = YES;
       _tree = [_renderer.allocationAnalysis callTreeFrom: _start to: _end
@@ -478,7 +493,8 @@ col(NSString *ident, NSString *title, CGFloat width)
     setStringValue: _weightIsBytes ? @"Bytes" : @"Weight"];
   [[[_outline tableColumnWithIdentifier: @"self"] headerCell]
     setStringValue: _weightIsBytes ? @"Self Bytes" : @"Self Weight"];
-  _weightScale = _weightIsBytes ? 1 : (p.sampleIntervalMicroseconds ?: 1000) / 1e6;
+  _weightScale = _weightIsBytes ? 1
+    : (ioTree ? 1e-9 : (p.sampleIntervalMicroseconds ?: 1000) / 1e6);
   if ([_charged count] || [_pruned count] || _focus)
     {
       _tree.chargedToCaller = _charged;
@@ -491,7 +507,7 @@ col(NSString *ident, NSString *title, CGFloat width)
     ? [NSString stringWithFormat: @"%@ in %llu allocations",
        [GSPAllocationAnalysis formatBytes: _tree.totalWeight],
        (unsigned long long)_tree.root.sampleCount]
-    : [NSString stringWithFormat: @"%@ of CPU time in %llu samples",
+    : [NSString stringWithFormat: ioTree ? @"%@ spent in %llu calls" : @"%@ of CPU time in %llu samples",
        GSPFormatDuration(_tree.totalWeight * _weightScale),
        (unsigned long long)_tree.root.sampleCount]];
 }
@@ -855,6 +871,87 @@ col(NSString *ident, NSString *title, CGFloat width)
     (unsigned long)[_renderer.process.leakSnapshots count]]];
 }
 
+- (void) buildIOSummaries: (BOOL)net
+{
+  GSPIOAnalysis *io = _renderer.ioAnalysis;
+  [self setColumns: [NSArray arrayWithObjects:
+    col(@"name", net ? @"Peer" : @"File", 320),
+    col(@"opens", net ? @"Connections" : @"Opens", 90),
+    col(@"reads", net ? @"Receives" : @"Reads", 80),
+    col(@"rbytes", net ? @"Received" : @"Bytes Read", 100),
+    col(@"writes", net ? @"Sends" : @"Writes", 70),
+    col(@"wbytes", net ? @"Sent" : @"Written", 100),
+    col(@"errors", @"Errors", 60), col(@"time", @"Time", 100), nil] outline: nil];
+  for (GSPIOSummary *sum in [io summariesForNetwork: net from: _start to: _end])
+    {
+      INRow *r = [INRow new];
+      [r set: @"name" text: sum.name sort: nil];
+      [r set: @"opens" text: [NSString stringWithFormat: @"%llu", (unsigned long long)sum.opens]
+        sort: [NSNumber numberWithUnsignedLongLong: sum.opens]];
+      [r set: @"reads" text: [NSString stringWithFormat: @"%llu", (unsigned long long)sum.reads]
+        sort: [NSNumber numberWithUnsignedLongLong: sum.reads]];
+      [r set: @"rbytes" text: [GSPAllocationAnalysis formatBytes: sum.bytesRead]
+        sort: [NSNumber numberWithUnsignedLongLong: sum.bytesRead]];
+      [r set: @"writes" text: [NSString stringWithFormat: @"%llu", (unsigned long long)sum.writes]
+        sort: [NSNumber numberWithUnsignedLongLong: sum.writes]];
+      [r set: @"wbytes" text: [GSPAllocationAnalysis formatBytes: sum.bytesWritten]
+        sort: [NSNumber numberWithUnsignedLongLong: sum.bytesWritten]];
+      [r set: @"errors" text: [NSString stringWithFormat: @"%llu", (unsigned long long)sum.errors]
+        sort: [NSNumber numberWithUnsignedLongLong: sum.errors]];
+      [r set: @"time" text: GSPFormatDuration(sum.totalDuration / 1e9)
+        sort: [NSNumber numberWithUnsignedLongLong: sum.totalDuration]];
+      r.detail = [NSString stringWithFormat: @"%@\n%llu syncs", sum.name,
+                  (unsigned long long)sum.syncs];
+      [_rows addObject: r];
+    }
+  [_status setStringValue: [NSString stringWithFormat: net ? @"%lu peers" : @"%lu files",
+                            (unsigned long)[_rows count]]];
+}
+
+- (void) buildIOEvents: (BOOL)net
+{
+  GSPIOAnalysis *io = _renderer.ioAnalysis;
+  const GSPIOEvent *ev = _renderer.process.ioEvents;
+  [self setColumns: [NSArray arrayWithObjects: col(@"time", @"Time", 110),
+    col(@"op", @"Operation", 90), col(@"duration", @"Duration", 100),
+    col(@"result", @"Result", 90), col(@"name", net ? @"Peer" : @"File", 320),
+    col(@"thread", @"Thread", 80), nil] outline: nil];
+  NSIndexSet *set = [io eventsForNetwork: net from: _start to: _end];
+  __block NSUInteger shown = 0;
+  [set enumerateIndexesUsingBlock: ^(NSUInteger i, BOOL *stop) {
+    if (shown++ >= 50000)
+      {
+        *stop = YES;
+        return;
+      }
+    const GSPIOEvent *e = &ev[i];
+    INRow *r = [INRow new];
+    NSString *res = e->result < 0
+      ? [NSString stringWithFormat: @"%s", strerror((int)-e->result)]
+      : ((e->op == GSP_IO_READ || e->op == GSP_IO_WRITE || e->op == GSP_IO_SEND || e->op == GSP_IO_RECV)
+         ? [GSPAllocationAnalysis formatBytes: (uint64_t)e->result]
+         : [NSString stringWithFormat: @"%lld", (long long)e->result]);
+    [r set: @"time" text: [INTimelineView formatTime: [_renderer.trace relativeTime: e->time]]
+      sort: [NSNumber numberWithUnsignedLongLong: e->time]];
+    [r set: @"op" text: [GSPIOAnalysis operationName: e->op] sort: nil];
+    [r set: @"duration" text: GSPFormatDuration(e->duration / 1e9)
+      sort: [NSNumber numberWithUnsignedLongLong: e->duration]];
+    [r set: @"result" text: res sort: [NSNumber numberWithLongLong: e->result]];
+    [r set: @"name" text: [io nameOfEvent: i] sort: nil];
+    [r set: @"thread" text: [NSString stringWithFormat: @"%u", e->tid]
+      sort: [NSNumber numberWithUnsignedInt: e->tid]];
+    r.stack = e->stack;
+    r.start = e->time;
+    r.end = e->time + e->duration;
+    r.detail = [NSString stringWithFormat: @"%@ %@\n%@, result %@",
+                [GSPIOAnalysis operationName: e->op], [io nameOfEvent: i],
+                GSPFormatDuration(e->duration / 1e9), res];
+    [_rows addObject: r];
+  }];
+  [_status setStringValue: [NSString stringWithFormat: @"%lu operations%@",
+    (unsigned long)[set count], [set count] > 50000 ? @", first 50000 shown" : @""]];
+}
+
 - (void) buildZombies
 {
   GSPProcess *p = _renderer.process;
@@ -918,6 +1015,12 @@ col(NSString *ident, NSString *title, CGFloat width)
     [self buildLeakChecks];
   else if ([mode isEqual: @"Zombies"])
     [self buildZombies];
+  else if ([mode isEqual: @"Files"])
+    [self buildIOSummaries: NO];
+  else if ([mode isEqual: @"Connections"])
+    [self buildIOSummaries: YES];
+  else if ([mode isEqual: @"Events"])
+    [self buildIOEvents: [_instrument isEqual: GSPInstrumentNetwork]];
   [self sortRows];
   [_outline reloadData];
   [self expandHeaviest];

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+Since the first implementation:
+
+- File Activity and Network instruments (agent hooks, analysis, CLI
+  reports, timeline tracks and detail views, CSV/JSON export).
+- Leak scanner: heap blocks scanned at a 4-byte stride (GSInlineArray
+  stores objects 4-byte aligned; GUI apps reported ~1,900 false leaks);
+  robustness fixes from a code review; per-thread CPU tracks; call tree
+  data mining in the app; GitHub Actions CI.
+
 First implementation (phases 0–3):
 
 - Recording agent: CPU and main-thread wall-clock sampling, allocations with

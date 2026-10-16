@@ -18,7 +18,7 @@ ALL_CFLAGS = $(CFLAGS) -std=gnu11 -fPIC -fvisibility=hidden \
   -D_GNU_SOURCE -Iinclude
 
 AGENT_SRCS = gsp_runtime.c gsp_unwind.c gsp_sampler.c gsp_alloc.c \
-  gsp_objc.c gsp_leaks.c gsp_signpost_agent.c
+  gsp_objc.c gsp_leaks.c gsp_signpost_agent.c gsp_io.c
 AGENT_OBJS = $(AGENT_SRCS:%.c=$(OBJDIR)/%.o)
 API_OBJS = $(OBJDIR)/gsp_signpost_api.o
 

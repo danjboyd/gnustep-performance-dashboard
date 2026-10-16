@@ -464,7 +464,7 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
     @"JSON summary (.json)", @"Chrome / Perfetto trace (.json)",
     @"speedscope profile (.speedscope.json)", @"Folded stacks for flame graphs (.folded)",
     @"CSV: samples", @"CSV: allocations", @"CSV: signposts", @"CSV: hangs",
-    @"CSV: leaks", @"CSV: os_log", nil]];
+    @"CSV: leaks", @"CSV: os_log", @"CSV: file and network operations", nil]];
   NSSavePanel *panel = [NSSavePanel savePanel];
   [panel setTitle: @"Export Trace"];
   [panel setAccessoryView: popup];

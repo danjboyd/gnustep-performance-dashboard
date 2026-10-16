@@ -51,7 +51,7 @@ csv_escape(NSString *s)
 + (NSArray *) csvTables
 {
   return [NSArray arrayWithObjects: @"samples", @"allocations", @"signposts",
-          @"hangs", @"leaks", @"logs", nil];
+          @"hangs", @"leaks", @"logs", @"io", nil];
 }
 
 + (NSDictionary *) summaryOfTrace: (GSPTrace *)trace process: (GSPProcess *)p
@@ -175,6 +175,27 @@ csv_escape(NSString *s)
       [NSNumber numberWithDouble: [trace relativeTime: ze.time]], @"time", nil]];
   [d setObject: z forKey: @"zombies"];
   [d setObject: [NSNumber numberWithUnsignedInteger: [p.logMessages count]] forKey: @"logMessages"];
+  if (p.ioEventCount)
+    {
+      GSPIOAnalysis *io = [[GSPIOAnalysis alloc] initWithProcess: p];
+      for (int net = 0; net < 2; net++)
+        {
+          NSMutableArray *list = [NSMutableArray array];
+          for (GSPIOSummary *sum in [io summariesForNetwork: net from: 0 to: 0])
+            {
+              if ([list count] >= 50)
+                break;
+              [list addObject: [NSDictionary dictionaryWithObjectsAndKeys:
+                sum.name, @"name",
+                [NSNumber numberWithUnsignedLongLong: sum.opens], @"opens",
+                [NSNumber numberWithUnsignedLongLong: sum.bytesRead], @"bytesRead",
+                [NSNumber numberWithUnsignedLongLong: sum.bytesWritten], @"bytesWritten",
+                [NSNumber numberWithUnsignedLongLong: sum.errors], @"errors",
+                [NSNumber numberWithDouble: sum.totalDuration / 1e9], @"seconds", nil]];
+            }
+          [d setObject: list forKey: net ? @"network" : @"files"];
+        }
+    }
   (void)s;
   return d;
 }
@@ -441,6 +462,20 @@ json_data(id obj, NSError **error)
               csv_escape(l.className ?: [GSPAllocationAnalysis mallocCategoryNameForSize: l.size]),
               csv_escape([names count] ? [names objectAtIndex: 0] : @"")];
           }
+    }
+  else if ([table isEqual: @"io"])
+    {
+      GSPIOAnalysis *io = [[GSPIOAnalysis alloc] initWithProcess: p];
+      [out appendString: @"time,duration,operation,result,name,network,tid,responsible\n"];
+      for (NSUInteger i = 0; i < p.ioEventCount; i++)
+        {
+          const GSPIOEvent *e = &p.ioEvents[i];
+          NSArray *names = symbol_names(p, e->stack, NO);
+          [out appendFormat: @"%.6f,%.9f,%@,%lld,%@,%d,%u,%@\n", [trace relativeTime: e->time],
+            e->duration / 1e9, [GSPIOAnalysis operationName: e->op], (long long)e->result,
+            csv_escape([io nameOfEvent: i]), [io isNetworkEvent: i], e->tid,
+            csv_escape([names count] ? [names objectAtIndex: 0] : @"")];
+        }
     }
   else if ([table isEqual: @"logs"])
     {

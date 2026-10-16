@@ -52,11 +52,11 @@ usage(void)
       @"\n"
       @"Analysis\n"
       @"  info <trace>\n"
-      @"  report <trace> <calltree|top|hangs|allocations|leaks|signposts|logs|zombies|threads>\n"
+      @"  report <trace> <calltree|top|hangs|allocations|leaks|signposts|logs|zombies|threads|files|network>\n"
       @"    --pid <pid>  --thread <tid>  --range <start-end seconds>\n"
       @"    --invert  --separate-threads  --hide-system  --flatten-recursion\n"
       @"    --charge-to-caller <symbol>  --prune <symbol>  --focus <symbol>\n"
-      @"    --depth <n>  --min-percent <p>  --limit <n>  --by-stack  --persistent  --lines\n"
+      @"    --depth <n>  --min-percent <p>  --limit <n>  --by-stack  --persistent  --lines  --events\n"
       @"  export <trace> --format <json|chrome|speedscope|collapsed|csv> [--table <name>]\n"
       @"         [--output <file>] [--pid <pid>]\n"
       @"  symbolicate <trace> [--embed] [address...]\n"
@@ -287,7 +287,7 @@ typedef struct report_opts
   NSUInteger depth;
   double minPercent;
   NSUInteger limit;
-  BOOL byStack, persistent, lines;
+  BOOL byStack, persistent, lines, events;
 } report_opts;
 
 static GSPTrace *
@@ -665,6 +665,70 @@ report_zombies(GSPTrace *t, GSPProcess *p, report_opts *o)
 }
 
 static int
+report_io(GSPTrace *t, GSPProcess *p, report_opts *o, BOOL network, BOOL events)
+{
+  GSPTime s, e;
+  range_for(t, o, &s, &e);
+  GSPIOAnalysis *io = [[GSPIOAnalysis alloc] initWithProcess: p];
+  if (!(network ? io.hasNetworkEvents : io.hasFileEvents))
+    {
+      out(network ? @"No network activity recorded (use the Network template).\n"
+                  : @"No file activity recorded (use the File Activity template).\n");
+      return 0;
+    }
+  if (o->byStack)
+    {
+      GSPCallTree *tree = configured([io callTreeForNetwork: network from: s to: e
+                                                    options: o->treeOptions], o);
+      [tree rebuild];
+      out([tree textWithMaxDepth: o->depth minPercent: o->minPercent
+                 weightFormatter: ^NSString *(uint64_t w) { return GSPFormatDuration(w / 1e9); }]);
+      return 0;
+    }
+  if (events)
+    {
+      NSUInteger limit = o->limit ? o->limit : 50;
+      const GSPIOEvent *ev = p.ioEvents;
+      out([NSString stringWithFormat: @"%10@ %-8@ %10@ %12@  %@\n", @"Time", @"Op",
+           @"Duration", @"Result", network ? @"Peer" : @"File"]);
+      [[io eventsForNetwork: network from: s to: e] enumerateIndexesUsingBlock:
+        ^(NSUInteger i, BOOL *stop) {
+          static NSUInteger shown;
+          if (shown++ >= limit)
+            {
+              *stop = YES;
+              return;
+            }
+          out([NSString stringWithFormat: @"%9.4fs %-8@ %10@ %12lld  %@\n",
+               [t relativeTime: ev[i].time], [GSPIOAnalysis operationName: ev[i].op],
+               GSPFormatDuration(ev[i].duration / 1e9), (long long)ev[i].result,
+               [io nameOfEvent: i]]);
+        }];
+      return 0;
+    }
+  NSUInteger limit = o->limit ? o->limit : 30;
+  out([NSString stringWithFormat: @"%-44@ %6@ %8@ %12@ %8@ %12@ %6@ %10@\n",
+       network ? @"Peer" : @"File", network ? @"Conn" : @"Opens",
+       network ? @"Recvs" : @"Reads", network ? @"Received" : @"Bytes Read",
+       network ? @"Sends" : @"Writes", network ? @"Sent" : @"Written",
+       @"Errors", @"Time"]);
+  for (GSPIOSummary *sum in [io summariesForNetwork: network from: s to: e])
+    {
+      if (limit-- == 0)
+        break;
+      NSString *name = [sum.name length] > 44
+        ? [@"…" stringByAppendingString: [sum.name substringFromIndex: [sum.name length] - 43]]
+        : sum.name;
+      out([NSString stringWithFormat: @"%-44@ %6llu %8llu %12@ %8llu %12@ %6llu %10@\n", name,
+           (unsigned long long)sum.opens, (unsigned long long)sum.reads,
+           [GSPAllocationAnalysis formatBytes: sum.bytesRead],
+           (unsigned long long)sum.writes, [GSPAllocationAnalysis formatBytes: sum.bytesWritten],
+           (unsigned long long)sum.errors, GSPFormatDuration(sum.totalDuration / 1e9)]);
+    }
+  return 0;
+}
+
+static int
 report_threads(GSPTrace *t, GSPProcess *p)
 {
   NSMutableDictionary *cpu = [NSMutableDictionary dictionary];
@@ -710,6 +774,7 @@ cmd_report(NSArray *args)
       else if ([a isEqual: @"--by-stack"]) { o.byStack = YES; takes = NO; }
       else if ([a isEqual: @"--persistent"]) { o.persistent = YES; takes = NO; }
       else if ([a isEqual: @"--lines"]) { o.lines = YES; takes = NO; }
+      else if ([a isEqual: @"--events"]) { o.events = YES; takes = NO; }
       else if (v == nil)
         {
           err([NSString stringWithFormat: @"%@ needs a value (or is unknown)", a]);
@@ -769,6 +834,10 @@ cmd_report(NSArray *args)
     return report_zombies(t, p, &o);
   if ([kind isEqual: @"threads"])
     return report_threads(t, p);
+  if ([kind isEqual: @"files"])
+    return report_io(t, p, &o, NO, o.events);
+  if ([kind isEqual: @"network"])
+    return report_io(t, p, &o, YES, o.events);
   err([NSString stringWithFormat: @"unknown report \"%@\"", kind]);
   return 2;
 }
