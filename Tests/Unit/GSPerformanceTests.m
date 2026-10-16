@@ -293,6 +293,51 @@ child(GSPCallTreeNode *n, NSString *name)
   XCTAssertEqualObjects([[syms objectAtIndex: 0] name], @"helper");
 }
 
+/* Two 72-byte malloc leaks, one allocated under libs-gui's JPEG check
+   (libs-gui#1010) and one by the program: they are grouped apart, only
+   the first is labelled, and hiding known leaks leaves the second.  */
+- (void) testKnownGNUstepLeaksAreLabelledAndCanBeHidden
+{
+  TraceBuilder *b = named_builder();
+  uint64_t jpeg = 0x8000;   /* after A_RECURSE */
+  uint64_t known[] = { jpeg + 0x10, A_HELPER + 0x10, A_MAIN + 0x10 };
+  uint64_t own[] = { A_HELPER + 0x20, A_MAIN + 0x10 };
+  [b name: jpeg as: @"+[NSBitmapImageRep _bitmapIsJPEG:]"];
+  [b stack: 3 frames: known count: 3];
+  [b stack: 4 frames: own count: 2];
+  [b leakSnapshot: 1 at: b.start + MS leaks: [NSArray arrayWithObjects:
+    [NSArray arrayWithObjects: @0x40000, @72, @3, @0, nil],
+    [NSArray arrayWithObjects: @0x50000, @72, @4, @0, nil], nil]];
+  [b end: b.start + 2 * MS];
+  GSPTrace *t = [self traceFrom: b name: @"knownleaks" instruments: nil];
+  GSPLeakAnalysis *la = [[GSPLeakAnalysis alloc] initWithProcess: t.targetProcess];
+
+  NSArray *groups = [la groupsForSnapshot: nil];
+  XCTAssertEqual([groups count], (NSUInteger)2);
+  NSUInteger labelled = 0;
+  for (GSPLeakGroup *g in groups)
+    {
+      XCTAssertEqualObjects(g.name, @"Malloc 72 Bytes");
+      XCTAssertEqual(g.count, (uint64_t)1);
+      if (g.knownLeak != nil)
+        {
+          labelled++;
+          XCTAssertEqualObjects(g.knownLeak.identifier, @"libs-gui#1010");
+          XCTAssertEqual(((GSPLeak *)[g.leaks objectAtIndex: 0]).address, (uint64_t)0x40000);
+        }
+    }
+  XCTAssertEqual(labelled, (NSUInteger)1);
+  XCTAssertEqual([la knownLeakCountInSnapshot: nil], (NSUInteger)1);
+
+  la.hidesKnownLeaks = YES;
+  groups = [la groupsForSnapshot: nil];
+  XCTAssertEqual([groups count], (NSUInteger)1);
+  XCTAssertNil([[groups objectAtIndex: 0] knownLeak]);
+  XCTAssertEqual(((GSPLeak *)[[[groups objectAtIndex: 0] leaks] objectAtIndex: 0]).address, (uint64_t)0x50000);
+  GSPCallTree *tree = [la callTreeForSnapshot: nil options: 0];
+  XCTAssertEqual(tree.root.totalWeight, (uint64_t)72);
+}
+
 - (void) testHangDetection
 {
   TraceBuilder *b = named_builder();

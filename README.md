@@ -34,7 +34,7 @@ launched by the recorder or attached to (see
 | Points of Interest | `os_signpost` intervals and events. |
 | os_log | `os_log` messages. |
 | Allocations | Every `malloc`/`calloc`/`realloc`/`free` with its call stack; Objective-C instances are labelled with their class. Statistics (persistent / transient), allocation list, call trees, live-heap graph. |
-| Leaks | Periodic conservative heap scans (stop-the-world) reporting unreachable blocks, including retain cycles, with their allocation stacks. |
+| Leaks | Periodic conservative heap scans (stop-the-world) reporting unreachable blocks, including retain cycles, with their allocation stacks. Leaks GNUstep itself is known to have (reported upstream) are labelled and can be hidden. |
 | Zombies | `NSZombieEnabled` plus retain/release history: which deallocated object received which message, and its malloc/retain/release history. |
 | File Activity | Every open, read, write, sync and close on files (POSIX calls, their `_FORTIFY_SOURCE` variants and stdio), with duration, bytes, errors and call stack; per-file summaries and a duration-weighted call tree. |
 | Network | Connections (with peer addresses) and bytes sent and received per peer, with call stacks. |
@@ -88,7 +88,7 @@ gstrace report trace.gstrace top                       # Top Functions
 gstrace report trace.gstrace calltree --invert --hide-system --min-percent 1
 gstrace report trace.gstrace hangs --lines             # with source lines
 gstrace report trace.gstrace allocations [--by-stack --persistent]
-gstrace report trace.gstrace leaks [--by-stack]
+gstrace report trace.gstrace leaks [--by-stack] [--hide-known]
 gstrace report trace.gstrace signposts --limit 20
 gstrace report trace.gstrace zombies
 gstrace report trace.gstrace files [--events | --by-stack]

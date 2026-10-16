@@ -97,21 +97,40 @@ typedef struct GSPAllocationRecord
 /* ------------------------------------------------------------------ */
 /* Leaks                                                               */
 
+/* A leak in a GNUstep library that has been reported upstream: not the
+   recorded program's fault.  Recognised by a function in the leak's
+   allocation stack.  */
+@interface GSPKnownLeak : NSObject
+@property (nonatomic, readonly, copy) NSString *identifier;  /* "libs-gui#1010" */
+@property (nonatomic, readonly, copy) NSString *summary;
+@property (nonatomic, readonly, copy) NSString *URL;
+@property (nonatomic, readonly, copy) NSArray *functions;    /* any one of them */
++ (NSArray *) allKnownLeaks;
+@end
+
 @interface GSPLeakGroup : NSObject
 @property (nonatomic, copy) NSString *name;   /* class or "Malloc N Bytes" */
 @property (nonatomic) uint64_t count;
 @property (nonatomic) uint64_t bytes;
 @property (nonatomic, strong) NSMutableArray *leaks;
+@property (nonatomic, strong) GSPKnownLeak *knownLeak;  /* nil unless all are known */
 @end
 
 @interface GSPLeakAnalysis : NSObject
 - (instancetype) initWithProcess: (GSPProcess *)process;
 @property (nonatomic, readonly) GSPLeakSnapshot *latestSnapshot;
-/* Groups for a snapshot (nil = latest), sorted by bytes. */
+/* Leave known GNUstep leaks out of the groups and the call tree.  */
+@property (nonatomic) BOOL hidesKnownLeaks;
+/* Groups for a snapshot (nil = latest), sorted by bytes.  Known leaks are
+   grouped apart from the program's own leaks of the same class.  */
 - (NSArray *) groupsForSnapshot: (GSPLeakSnapshot *)snapshot;
 /* Leaks in `snapshot` that were not leaked in the previous snapshot. */
 - (NSArray *) newLeaksInSnapshot: (GSPLeakSnapshot *)snapshot;
 - (GSPCallTree *) callTreeForSnapshot: (GSPLeakSnapshot *)snapshot options: (NSUInteger)options;
+/* The known GNUstep leak `leak` is, or nil.  */
+- (GSPKnownLeak *) knownLeakForLeak: (GSPLeak *)leak;
+/* How many leaks in `snapshot` (nil = latest) are known GNUstep leaks.  */
+- (NSUInteger) knownLeakCountInSnapshot: (GSPLeakSnapshot *)snapshot;
 @end
 
 /* ------------------------------------------------------------------ */

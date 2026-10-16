@@ -4,6 +4,14 @@
 
 Since the first implementation:
 
+- Leaks: leaks GNUstep itself is known to have, recognised by their
+  allocation stack, are labelled with the upstream issue (for now
+  libs-gui#1010, TIFF images and the JPEG check) and can be hidden: a
+  Known Issue column and a Hide Known GNUstep Leaks check box in the app,
+  `--hide-known` in `gstrace report leaks`, `knownIssue` in JSON exports.
+- Quitting under the Sombre theme no longer crashes; quitting stops
+  running recordings so their traces are complete; SIGTERM quits the
+  app safely.
 - Renamed from "GNUstep Instruments" to Performance Dashboard: the app
   is `PerformanceDashboard.app`, the bundle id
   `org.gnustep.PerformanceDashboard`, the polkit policy

@@ -541,12 +541,46 @@ alive_at(const GSPAllocationRecord *r, GSPTime t)
 /* ------------------------------------------------------------------ */
 /* Leaks                                                               */
 
+@implementation GSPKnownLeak
+
+- (instancetype) initWithIdentifier: (NSString *)identifier summary: (NSString *)summary
+                                URL: (NSString *)url functions: (NSArray *)functions
+{
+  if ((self = [super init]) != nil)
+    {
+      _identifier = [identifier copy];
+      _summary = [summary copy];
+      _URL = [url copy];
+      _functions = [functions copy];
+    }
+  return self;
+}
+
+/* Reported upstream; remove an entry once the fix is in the GNUstep
+   releases people run.  */
++ (NSArray *) allKnownLeaks
+{
+  static NSArray *all;
+  if (all == nil)
+    all = [NSArray arrayWithObjects:
+      [[GSPKnownLeak alloc]
+        initWithIdentifier: @"libs-gui#1010"
+                   summary: @"libs-gui: 72 bytes per TIFF image in the JPEG check"
+                       URL: @"https://github.com/gnustep/libs-gui/issues/1010"
+                 functions: [NSArray arrayWithObject: @"+[NSBitmapImageRep _bitmapIsJPEG:]"]],
+      nil];
+  return all;
+}
+
+@end
+
 @implementation GSPLeakGroup
 @end
 
 @implementation GSPLeakAnalysis
 {
   GSPProcess *_process;
+  NSMutableDictionary *_knownByStack;   /* stack -> GSPKnownLeak or NSNull */
 }
 
 - (instancetype) initWithProcess: (GSPProcess *)process
@@ -568,6 +602,41 @@ leak_name(GSPLeak *leak)
     : [GSPAllocationAnalysis mallocCategoryNameForSize: leak.size];
 }
 
+- (GSPKnownLeak *) knownLeakForLeak: (GSPLeak *)leak
+{
+  NSNumber *key = [NSNumber numberWithUnsignedInt: leak.stack];
+  id known;
+
+  if (_knownByStack == nil)
+    _knownByStack = [NSMutableDictionary dictionary];
+  known = [_knownByStack objectForKey: key];
+  if (known == nil)
+    {
+      NSMutableSet *names = [NSMutableSet set];
+      known = [NSNull null];
+      for (GSPSymbol *sym in [_process.symbolicator symbolsForStack: leak.stack])
+        if (sym.name != nil)
+          [names addObject: sym.name];
+      for (GSPKnownLeak *k in [GSPKnownLeak allKnownLeaks])
+        for (NSString *f in k.functions)
+          if ([names containsObject: f])
+            known = k;
+      [_knownByStack setObject: known forKey: key];
+    }
+  return known == [NSNull null] ? nil : known;
+}
+
+- (NSUInteger) knownLeakCountInSnapshot: (GSPLeakSnapshot *)snapshot
+{
+  NSUInteger n = 0;
+  if (snapshot == nil)
+    snapshot = [self latestSnapshot];
+  for (GSPLeak *leak in snapshot.leaks)
+    if ([self knownLeakForLeak: leak] != nil)
+      n++;
+  return n;
+}
+
 - (NSArray *) groupsForSnapshot: (GSPLeakSnapshot *)snapshot
 {
   NSMutableDictionary *groups = [NSMutableDictionary dictionary];
@@ -576,13 +645,20 @@ leak_name(GSPLeak *leak)
   for (GSPLeak *leak in snapshot.leaks)
     {
       NSString *name = leak_name(leak);
-      GSPLeakGroup *g = [groups objectForKey: name];
+      GSPKnownLeak *known = [self knownLeakForLeak: leak];
+      NSString *key = known ? [NSString stringWithFormat: @"%@\n%@", name, known.identifier] : name;
+      GSPLeakGroup *g;
+
+      if (known != nil && _hidesKnownLeaks)
+        continue;
+      g = [groups objectForKey: key];
       if (g == nil)
         {
           g = [GSPLeakGroup new];
           g.name = name;
+          g.knownLeak = known;
           g.leaks = [NSMutableArray array];
-          [groups setObject: g forKey: name];
+          [groups setObject: g forKey: key];
         }
       g.count++;
       g.bytes += leak.size;
@@ -621,6 +697,8 @@ leak_name(GSPLeak *leak)
   NSUInteger i = 0;
   for (GSPLeak *l in snapshot.leaks)
     {
+      if (_hidesKnownLeaks && [self knownLeakForLeak: l] != nil)
+        continue;
       in[i].stack = l.stack;
       in[i].tid = 0;
       in[i].weight = l.size;
@@ -629,7 +707,7 @@ leak_name(GSPLeak *leak)
   GSPCallTree *tree = [[GSPCallTree alloc] initWithProcess: _process];
   tree.options = options;
   tree.weightUnit = @"bytes";
-  [tree buildFromStacks: in count: n];
+  [tree buildFromStacks: in count: i];
   free(in);
   return tree;
 }

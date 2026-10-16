@@ -33,6 +33,8 @@ cc -O0 -g -Wno-unused-result "$ROOT/Tests/fixtures/iofix.c" -o "$OUT/iofix" || e
 clang $OBJCFLAGS -O0 -Wno-unused-but-set-variable -I"$ROOT/Runtime/include" \
   "$ROOT/Tests/fixtures/objcwork.m" -o "$OUT/objcwork" $(gnustep-config --base-libs) \
   -L"$ROOT/Runtime/obj" -lgsperf -Wl,-rpath,"$ROOT/Runtime/obj" || exit 1
+clang $OBJCFLAGS -O0 "$ROOT/docs/upstream-issues/jpeg_probe_leak.m" \
+  -o "$OUT/jpeg_probe_leak" $(gnustep-config --gui-libs) || exit 1
 clang $OBJCFLAGS -O0 -I"$ROOT/Runtime/include" "$ROOT/Tests/fixtures/hangapp.m" \
   -o "$OUT/hangapp" $(gnustep-config --gui-libs) \
   -L"$ROOT/Runtime/obj" -lgsperf -Wl,-rpath,"$ROOT/Runtime/obj" || exit 1
@@ -110,6 +112,17 @@ echo "== Relative target path with another working directory"
 record relpath --template "Time Profiler" --cwd / --launch Tests/out/cburn
 check "relative target: launched and recorded" "'$GSTRACE' info '$OUT/relpath.gstrace' 2>/dev/null | grep -q 'finished cleanly: yes'"
 check "relative target: Info.plist stores the absolute path" "grep -q 'TargetPath = \"$OUT/cburn\"' '$OUT/relpath.gstrace/Info.plist'"
+
+echo "== Known GNUstep leaks (libs-gui#1010: TIFF images and the JPEG check)"
+record jpegleak --template Leaks --launch "$OUT/jpeg_probe_leak"
+"$GSTRACE" report "$OUT/jpegleak.gstrace" leaks >"$OUT/jpegleak.txt" 2>/dev/null
+"$GSTRACE" report "$OUT/jpegleak.gstrace" leaks --hide-known >"$OUT/jpegleak-hidden.txt" 2>/dev/null
+if grep -q '_bitmapIsJPEG' "$OUT/jpegleak.txt"; then
+  check "known leaks: the JPEG check's leaks are labelled libs-gui#1010" "grep -q 'known: libs-gui#1010' '$OUT/jpegleak.txt' && grep -q 'of them are known GNUstep leaks' '$OUT/jpegleak.txt'"
+  check "known leaks: --hide-known leaves them out" "! grep -q '_bitmapIsJPEG' '$OUT/jpegleak-hidden.txt'"
+else
+  echo "     (this libs-gui does not leak in the JPEG check; nothing to label)"
+fi
 
 echo "== Zombies"
 record zombie --template Zombies --launch "$OUT/objcwork" zombie

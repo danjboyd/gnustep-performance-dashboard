@@ -148,10 +148,15 @@ csv_escape(NSString *s)
       GSPLeakAnalysis *la = [[GSPLeakAnalysis alloc] initWithProcess: p];
       NSMutableArray *l = [NSMutableArray array];
       for (GSPLeakGroup *g in [la groupsForSnapshot: nil])
-        [l addObject: [NSDictionary dictionaryWithObjectsAndKeys:
-          g.name, @"category",
-          [NSNumber numberWithUnsignedLongLong: g.count], @"count",
-          [NSNumber numberWithUnsignedLongLong: g.bytes], @"bytes", nil]];
+        {
+          NSMutableDictionary *e = [NSMutableDictionary dictionaryWithObjectsAndKeys:
+            g.name, @"category",
+            [NSNumber numberWithUnsignedLongLong: g.count], @"count",
+            [NSNumber numberWithUnsignedLongLong: g.bytes], @"bytes", nil];
+          if (g.knownLeak != nil)
+            [e setObject: g.knownLeak.identifier forKey: @"knownIssue"];
+          [l addObject: e];
+        }
       [d setObject: l forKey: @"leaks"];
       [d setObject: [NSNumber numberWithUnsignedInteger: [p.leakSnapshots count]]
             forKey: @"leakSnapshots"];

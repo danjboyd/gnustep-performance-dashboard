@@ -58,6 +58,7 @@ usage(void)
       @"    --invert  --separate-threads  --hide-system  --flatten-recursion\n"
       @"    --charge-to-caller <symbol>  --prune <symbol>  --focus <symbol>\n"
       @"    --depth <n>  --min-percent <p>  --limit <n>  --by-stack  --persistent  --lines  --events\n"
+      @"    --hide-known   leave out leaks GNUstep is known to have (leaks report)\n"
       @"  export <trace> --format <json|chrome|speedscope|collapsed|csv> [--table <name>]\n"
       @"         [--output <file>] [--pid <pid>]\n"
       @"  symbolicate <trace> [--embed] [address...]\n"
@@ -295,7 +296,7 @@ typedef struct report_opts
   NSUInteger depth;
   double minPercent;
   NSUInteger limit;
-  BOOL byStack, persistent, lines, events;
+  BOOL byStack, persistent, lines, events, hideKnown;
 } report_opts;
 
 static GSPTrace *
@@ -566,8 +567,14 @@ report_leaks(GSPTrace *t, GSPProcess *p, report_opts *o)
        (unsigned long)[p.leakSnapshots count], [t relativeTime: snap.time],
        (unsigned long long)snap.liveCount, [GSPAllocationAnalysis formatBytes: snap.liveBytes],
        GSPFormatDuration(snap.scanMicroseconds / 1e6)]);
-  out([NSString stringWithFormat: @"%lu leaked block(s), %@\n\n",
+  out([NSString stringWithFormat: @"%lu leaked block(s), %@\n",
        (unsigned long)[snap.leaks count], [GSPAllocationAnalysis formatBytes: snap.leakedBytes]]);
+  NSUInteger known = [la knownLeakCountInSnapshot: snap];
+  if (known > 0)
+    out([NSString stringWithFormat: @"%lu of them are known GNUstep leaks%@\n",
+         (unsigned long)known, o->hideKnown ? @", left out" : @" (--hide-known leaves them out)"]);
+  out(@"\n");
+  la.hidesKnownLeaks = o->hideKnown;
   if (o->byStack)
     {
       GSPCallTree *tree = [la callTreeForSnapshot: snap options: o->treeOptions];
@@ -580,8 +587,12 @@ report_leaks(GSPTrace *t, GSPProcess *p, report_opts *o)
     {
       if (limit-- == 0)
         break;
-      out([NSString stringWithFormat: @"%-40@ %6llu  %@\n", g.name,
-           (unsigned long long)g.count, [GSPAllocationAnalysis formatBytes: g.bytes]]);
+      out([NSString stringWithFormat: @"%-40@ %6llu  %@%@\n", g.name,
+           (unsigned long long)g.count, [GSPAllocationAnalysis formatBytes: g.bytes],
+           g.knownLeak ? [NSString stringWithFormat: @"  [known: %@]", g.knownLeak.identifier] : @""]);
+      if (g.knownLeak != nil)
+        out([NSString stringWithFormat: @"      Known GNUstep leak: %@ (%@)\n",
+             g.knownLeak.summary, g.knownLeak.URL]);
       GSPLeak *first = [g.leaks objectAtIndex: 0];
       out(stack_text(p, first.stack, @"      ", o->lines));
     }
@@ -781,6 +792,7 @@ cmd_report(NSArray *args)
       else if ([a isEqual: @"--flatten-recursion"]) { o.treeOptions |= GSPCallTreeFlattenRecursion; takes = NO; }
       else if ([a isEqual: @"--by-stack"]) { o.byStack = YES; takes = NO; }
       else if ([a isEqual: @"--persistent"]) { o.persistent = YES; takes = NO; }
+      else if ([a isEqual: @"--hide-known"]) { o.hideKnown = YES; takes = NO; }
       else if ([a isEqual: @"--lines"]) { o.lines = YES; takes = NO; }
       else if ([a isEqual: @"--events"]) { o.events = YES; takes = NO; }
       else if (v == nil)

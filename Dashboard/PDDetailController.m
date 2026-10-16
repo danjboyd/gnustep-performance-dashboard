@@ -72,7 +72,7 @@ responsible_frame(GSPProcess *p, uint32_t stack)
   PDInspectorView *_inspector;
   NSPopUpButton *_mode;
   NSPopUpButton *_threads;
-  NSButton *_separate, *_invert, *_hideSystem, *_flatten, *_top;
+  NSButton *_separate, *_invert, *_hideSystem, *_flatten, *_top, *_hideKnown;
   NSSearchField *_search;
   NSTextField *_status;
   NSOutlineView *_outline;
@@ -154,6 +154,11 @@ check_box(NSString *title, NSRect frame, id target, SEL action)
       [_view addSubview: b];
       x += f.size.width + 14;
     }
+  /* Leaks only; placed by -layoutBar.  */
+  _hideKnown = check_box(@"Hide Known GNUstep Leaks", NSMakeRect(8, optY, 10, 20), self,
+                         @selector(optionsChanged:));
+  [_hideKnown setAutoresizingMask: NSViewMinYMargin];
+  [_view addSubview: _hideKnown];
 
   _search = [[NSSearchField alloc] initWithFrame: NSMakeRect(w - 226, barY + 3, 220, 22)];
   [_search setTarget: self];
@@ -366,8 +371,15 @@ check_box(NSString *title, NSRect frame, id target, SEL action)
     [b setHidden: !tree];
   [_separate setHidden: !(tree && cpu)];
   [_search setHidden: !tree];
+  /* after the call tree options, or alone in the Leaks list */
+  BOOL leaks = [_instrument isEqual: GSPInstrumentLeaks]
+    && (tree || [_currentMode isEqual: @"Leaks"]);
+  NSRect hf = [_hideKnown frame];
+  hf.origin.x = tree ? NSMaxX([_top frame]) + 14 : 8;
+  [_hideKnown setFrame: hf];
+  [_hideKnown setHidden: !leaks];
   NSRect vb = [_view bounds];
-  CGFloat reserved = tree ? 58 : 34;   /* bar rows above the table */
+  CGFloat reserved = (tree || leaks) ? 58 : 34;   /* bar rows above the table */
   [_scroll setFrame: NSMakeRect(0, 22, vb.size.width, vb.size.height - 22 - reserved)];
 }
 
@@ -480,6 +492,7 @@ col(NSString *ident, NSString *title, CGFloat width)
   else if ([_instrument isEqual: GSPInstrumentLeaks])
     {
       _weightIsBytes = YES;
+      _renderer.leakAnalysis.hidesKnownLeaks = PDIsOn(_hideKnown);
       _tree = [_renderer.leakAnalysis callTreeForSnapshot: nil options: [self treeOptions]];
     }
   else
@@ -806,9 +819,12 @@ col(NSString *ident, NSString *title, CGFloat width)
   GSPLeakAnalysis *la = _renderer.leakAnalysis;
   GSPProcess *p = _renderer.process;
   GSPLeakSnapshot *snap = la.latestSnapshot;
+  NSUInteger known = [la knownLeakCountInSnapshot: snap];
+  la.hidesKnownLeaks = PDIsOn(_hideKnown);
   [self setColumns: [NSArray arrayWithObjects: col(@"object", @"Leaked Object", 240),
     col(@"count", @"#", 60), col(@"address", @"Address", 130), col(@"size", @"Size", 100),
-    col(@"caller", @"Responsible Frame", 300), nil] outline: nil];
+    col(@"caller", @"Responsible Frame", 240), col(@"known", @"Known Issue", 120), nil]
+           outline: nil];
   for (GSPLeakGroup *g in [la groupsForSnapshot: snap])
     {
       GSPLeak *first = [g.leaks objectAtIndex: 0];
@@ -823,9 +839,13 @@ col(NSString *ident, NSString *title, CGFloat width)
       [r set: @"size" text: [GSPAllocationAnalysis formatBytes: g.bytes]
         sort: [NSNumber numberWithUnsignedLongLong: g.bytes]];
       [r set: @"caller" text: caller sort: nil];
+      [r set: @"known" text: g.knownLeak.identifier ?: @"" sort: nil];
       r.stack = first.stack;
       NSMutableString *d = [NSMutableString stringWithFormat: @"%llu leaked %@ (%@)\n",
         (unsigned long long)g.count, g.name, [GSPAllocationAnalysis formatBytes: g.bytes]];
+      if (g.knownLeak != nil)
+        [d appendFormat: @"Known GNUstep leak, not the program's: %@\n%@\n",
+         g.knownLeak.summary, g.knownLeak.URL];
       NSUInteger shown = 0;
       for (GSPLeak *l in g.leaks)
         if (shown++ < 20)
@@ -835,10 +855,12 @@ col(NSString *ident, NSString *title, CGFloat width)
       [_rows addObject: r];
     }
   [_status setStringValue: snap == nil ? @"No leak checks yet."
-    : [NSString stringWithFormat: @"%lu leaked blocks (%@) at the check at %.3f s; %llu live blocks scanned in %@",
+    : [NSString stringWithFormat: @"%lu leaked blocks (%@) at the check at %.3f s; %llu live blocks scanned in %@%@",
        (unsigned long)[snap.leaks count], [GSPAllocationAnalysis formatBytes: snap.leakedBytes],
        [_renderer.trace relativeTime: snap.time], (unsigned long long)snap.liveCount,
-       GSPFormatDuration(snap.scanMicroseconds / 1e6)]];
+       GSPFormatDuration(snap.scanMicroseconds / 1e6),
+       known == 0 ? @"" : [NSString stringWithFormat: @"; %lu known GNUstep leaks%@",
+                           (unsigned long)known, PDIsOn(_hideKnown) ? @" hidden" : @""]]];
 }
 
 - (void) buildLeakChecks
