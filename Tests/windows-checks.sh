@@ -34,7 +34,7 @@ check "4 Round signposts" "grep -E -q '^Round +PointsOfInterest +4 ' '$OUT/spin-
 # Objective-C: method names come from the runtime's method table
 if command -v gnustep-config >/dev/null 2>&1; then
   OBJCFLAGS=$(gnustep-config --objc-flags | sed 's/-MMD//; s/-MP//')
-  clang $OBJCFLAGS -O0 -Wno-unused-but-set-variable -I"$ROOT/Runtime/include" \
+  clang $OBJCFLAGS -DHAVE_MODE_T -O0 -Wno-unused-but-set-variable -I"$ROOT/Runtime/include" \
     "$ROOT/Tests/fixtures/objcwork.m" -o "$OUT/objcwork.exe" $(gnustep-config --base-libs) \
     -L"$ROOT/Runtime/obj" -lgsperf >"$OUT/objcwork-build.log" 2>&1 || cat "$OUT/objcwork-build.log"
   rm -rf "$OUT/objc.gstrace"
