@@ -200,7 +200,10 @@ if [ "${SKIP_GUI:-0}" != 1 ] && command -v Xvfb >/dev/null 2>&1; then
       if kill -0 "$1" 2>/dev/null; then kill -9 "$1"; wait "$1" 2>/dev/null; STATUS=running
       else wait "$1"; STATUS=$?; fi
     }
-    key() { DISPLAY=$DISP xdotool key --window "$1" "$2"; }
+    # key <window> <keys>: focus the window and type through XTEST. Keys
+    # sent to a window with XSendEvent (key --window) reach the app here
+    # but not on GitHub's runner.
+    key() { DISPLAY=$DISP xdotool windowfocus --sync "$1" key "$2"; }
     # diagnose <name>: the screen, the windows and the app's log, kept in
     # Tests/out (CI uploads them when the suite fails).
     diagnose() {
