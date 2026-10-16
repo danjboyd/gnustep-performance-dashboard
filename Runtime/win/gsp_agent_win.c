@@ -19,6 +19,9 @@
    that thread could hold (heap, loader): the walk uses only stack memory
    and RtlLookupFunctionEntry, and records are written after resuming.
 
+   Allocations (heap and Objective-C allocation hooks) are in
+   gsp_heap_win.c.
+
    Signposts and os_log go through the same entry points as on Linux
    (gsp_agent_signpost, called by gsperf.dll); there are no signal
    handlers here, so a critical section protects the output.  */
@@ -35,6 +38,7 @@
 #include <string.h>
 
 #include "GSPerformance/gsp_format.h"
+#include "gsp_agent_win.h"
 
 #define GSP_EXPORT __declspec(dllexport)
 #define MAX_FRAMES 128
@@ -534,9 +538,11 @@ static DWORD WINAPI
 meta_main(LPVOID arg)
 {
   (void)arg;
+  gspw_heap_exclude_thread();
   SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
   do
     {
+      gspw_heap_patch_modules();
       emit_new_modules();
       dump_methods(false);
     }
@@ -575,6 +581,7 @@ sampler_main(LPVOID arg)
   uint64_t next_wall = 0, next_scan = 0, next_flush = 0;
 
   (void)arg;
+  gspw_heap_exclude_thread();
   timeBeginPeriod(1);
   calibrate();
   refresh_threads();
@@ -619,6 +626,34 @@ sampler_main(LPVOID arg)
   timeEndPeriod(1);
   finish();
   return 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* for the other parts of the agent                                    */
+
+void
+gspw_emit(uint16_t type, uint32_t aux, uint16_t flags, uint64_t time, uint32_t tid,
+          const void *a, size_t alen, const void *b, size_t blen)
+{
+  emit(type, aux, flags, time, tid, a, alen, b, blen);
+}
+
+uint32_t
+gspw_intern(const char *s)
+{
+  return intern(s);
+}
+
+uint64_t
+gspw_now(void)
+{
+  return now_ns();
+}
+
+bool
+gspw_recording(void)
+{
+  return recording && !finished;
 }
 
 /* ------------------------------------------------------------------ */
@@ -775,6 +810,8 @@ start(void)
   InterlockedExchange(&recording, 1);
   emit(GSP_REC_MARK, GSP_MARK_START, 0, hdr.start_ns, self_pid, NULL, 0, NULL, 0);
   emit_new_modules();
+  gspw_heap_start(env_flag("GSP_ALLOCATIONS", false) || env_flag("GSP_LEAKS", false),
+                  env_uint("GSP_ALLOC_FRAMES", 48));
   sampler_thread = CreateThread(NULL, 0, sampler_main, NULL, 0, &sampler_tid);
   DWORD meta_tid = 0;
   meta_thread = CreateThread(NULL, 0, meta_main, NULL, 0, &meta_tid);

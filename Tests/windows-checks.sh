@@ -46,6 +46,20 @@ if command -v gnustep-config >/dev/null 2>&1; then
   check "Objective-C: -[Worker crunch:] is the top function" "sed -n 4p '$OUT/objc-top.txt' | grep -q 'Worker crunch:'"
   "$GSTRACE" report "$OUT/objc.gstrace" signposts >"$OUT/objc-sp.txt" 2>&1
   check "Objective-C: 5 Round signposts" "grep -E -q '^Round +PointsOfInterest +5 ' '$OUT/objc-sp.txt'"
+
+  # Allocations: CRT heap and Objective-C allocation hooks
+  rm -rf "$OUT/objalloc.gstrace"
+  "$GSTRACE" record --template Allocations -o "$OUT/objalloc.gstrace" --launch "$OUT/objcwork.exe" \
+    >"$OUT/objalloc-record.log" 2>&1
+  cat "$OUT/objalloc-record.log"
+  "$GSTRACE" info "$OUT/objalloc.gstrace" 2>&1 | tail -6
+  "$GSTRACE" report "$OUT/objalloc.gstrace" allocations --limit 12 >"$OUT/objalloc.txt" 2>&1
+  cat "$OUT/objalloc.txt"
+  "$GSTRACE" export "$OUT/objalloc.gstrace" --format csv --table allocations \
+    -o "$OUT/objalloc.csv" >/dev/null 2>&1
+  cut -d, -f5 "$OUT/objalloc.csv" | sort | uniq -c | sort -rn | head -8
+  check "Allocations: 10000 GSCInlineString allocations classified" "[ \$(grep -c ',GSCInlineString,' '$OUT/objalloc.csv') -ge 10000 ]"
+  check "Allocations: 5 Leaky objects allocated in make_leaks" "[ \$(grep ',Leaky,' '$OUT/objalloc.csv' | grep -c make_leaks) -ge 5 ]"
 fi
 
 echo
