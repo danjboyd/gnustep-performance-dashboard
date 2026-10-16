@@ -4,6 +4,7 @@
 #import <GSPerformance/GSPerformance.h>
 
 #include <GSPerformance/gsp_format.h>
+#include <math.h>
 #include <signal.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -60,6 +61,8 @@ usage(void)
       @"  export <trace> --format <json|chrome|speedscope|collapsed|csv> [--table <name>]\n"
       @"         [--output <file>] [--pid <pid>]\n"
       @"  symbolicate <trace> [--embed] [address...]\n"
+      @"  diff <before> <after> [--kind cpu|allocations|leaks|signposts|files|network]\n"
+      @"       [--limit n] [--fail-above percent]   compare two traces (exit 1 above the limit)\n"
       @"\n"
       @"Other\n"
       @"  list <templates|instruments>\n"
@@ -946,6 +949,68 @@ cmd_symbolicate(NSArray *args)
 }
 
 static int
+cmd_diff(NSArray *args)
+{
+  NSString *kindName = @"cpu";
+  NSUInteger limit = 25;
+  double threshold = NAN;
+  NSMutableArray *paths = [NSMutableArray array];
+
+  for (NSUInteger i = 0; i < [args count]; i++)
+    {
+      NSString *a = [args objectAtIndex: i];
+      NSString *v = i + 1 < [args count] ? [args objectAtIndex: i + 1] : nil;
+      if ([a isEqual: @"--kind"] && v) { kindName = v; i++; }
+      else if ([a isEqual: @"--limit"] && v) { limit = (NSUInteger)[v intValue]; i++; }
+      else if ([a isEqual: @"--fail-above"] && v) { threshold = [v doubleValue]; i++; }
+      else if ([a hasPrefix: @"--"])
+        {
+          err([NSString stringWithFormat: @"unknown option %@", a]);
+          return 2;
+        }
+      else
+        [paths addObject: a];
+    }
+  GSPComparisonKind kind;
+  if ([paths count] != 2 || ![GSPComparison kindFromString: kindName kind: &kind])
+    {
+      err(@"diff <before.gstrace> <after.gstrace> [--kind cpu|allocations|leaks|signposts|files|network] [--limit n] [--fail-above percent]");
+      return 2;
+    }
+  GSPTrace *before = open_trace([paths objectAtIndex: 0]);
+  GSPTrace *after = open_trace([paths objectAtIndex: 1]);
+  if (before == nil || after == nil)
+    return 1;
+  BOOL time = [GSPComparison kindIsTime: kind];
+  NSString *(^fmt)(double) = ^NSString *(double v) {
+    if (time)
+      return GSPFormatDuration(fabs(v));
+    return [GSPAllocationAnalysis formatBytes: (uint64_t)fabs(v)];
+  };
+  GSPComparisonRow *total = [GSPComparison totalFor: before with: after kind: kind];
+  out([NSString stringWithFormat: @"%12@ %12@ %13@ %8@  %@\n", @"Before", @"After", @"Change", @"%", @"Name"]);
+  out([NSString stringWithFormat: @"%12@ %12@ %@%12@ %7.1f%%  %@\n", fmt(total.before), fmt(total.after),
+       total.delta < 0 ? @"-" : @"+", fmt(total.delta),
+       isnan(total.percentChange) ? 0.0 : total.percentChange, @"(total)"]);
+  for (GSPComparisonRow *r in [GSPComparison compare: before with: after kind: kind])
+    {
+      if (limit-- == 0)
+        break;
+      NSString *pct = isnan(r.percentChange) ? @"    new"
+        : [NSString stringWithFormat: @"%7.1f%%", r.percentChange];
+      out([NSString stringWithFormat: @"%12@ %12@ %@%12@ %@  %@\n", fmt(r.before), fmt(r.after),
+           r.delta < 0 ? @"-" : @"+", fmt(r.delta), pct, r.name]);
+    }
+  if (!isnan(threshold) && !isnan(total.percentChange) && total.percentChange > threshold)
+    {
+      err([NSString stringWithFormat: @"total grew by %.1f%%, more than %.1f%%",
+           total.percentChange, threshold]);
+      return 1;
+    }
+  return 0;
+}
+
+static int
 cmd_list(NSArray *args)
 {
   NSString *what = [args count] ? [args objectAtIndex: 0] : @"templates";
@@ -1047,6 +1112,8 @@ main(int argc, const char **argv)
         return cmd_symbolicate(args);
       if ([cmd isEqual: @"list"])
         return cmd_list(args);
+      if ([cmd isEqual: @"diff"])
+        return cmd_diff(args);
       if ([cmd isEqual: @"install-helper"])
         return cmd_install_helper(args);
       if ([cmd isEqual: @"uninstall-helper"])

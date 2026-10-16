@@ -97,6 +97,10 @@ gstrace export trace.gstrace --format collapsed | flamegraph.pl > fg.svg
 gstrace export trace.gstrace --format csv --table allocations
 
 gstrace symbolicate trace.gstrace --embed   # store symbol names in the bundle
+
+gstrace diff before.gstrace after.gstrace                  # CPU per function
+gstrace diff before.gstrace after.gstrace --kind allocations --fail-above 10
+                         # kinds: cpu, allocations, leaks, signposts, files, network
 ```
 
 `--range 1.5-3.0` (seconds) and `--thread <tid>` restrict reports.

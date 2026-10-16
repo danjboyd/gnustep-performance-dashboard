@@ -9,3 +9,4 @@
 #import <GSPerformance/GSPInstruments.h>
 #import <GSPerformance/GSPRecorder.h>
 #import <GSPerformance/GSPExporter.h>
+#import <GSPerformance/GSPComparison.h>

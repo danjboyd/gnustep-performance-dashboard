@@ -11,7 +11,8 @@ libGSPerformance_OBJC_FILES = \
   GSPAnalysis.m \
   GSPInstruments.m \
   GSPRecorder.m \
-  GSPExporter.m
+  GSPExporter.m \
+  GSPComparison.m
 
 libGSPerformance_HEADER_FILES = \
   GSPerformance.h \
@@ -22,7 +23,8 @@ libGSPerformance_HEADER_FILES = \
   GSPAnalysis.h \
   GSPInstruments.h \
   GSPRecorder.h \
-  GSPExporter.h
+  GSPExporter.h \
+  GSPComparison.h
 
 libGSPerformance_HEADER_FILES_INSTALL_DIR = GSPerformance
 

@@ -120,6 +120,11 @@ check "export collapsed has hot_inner stacks" "grep -q 'hot_outer;hot_inner ' '$
 check "symbolicate --embed writes symbols plist" "ls '$OUT/cburn.gstrace'/symbols-*.plist >/dev/null 2>&1"
 check "embedded symbols still resolve" "'$GSTRACE' report '$OUT/cburn.gstrace' top --limit 1 2>/dev/null | grep -q hot_inner"
 
+echo "== Trace comparison"
+check "diff of a trace with itself shows no change" "'$GSTRACE' diff '$OUT/objcwork.gstrace' '$OUT/objcwork.gstrace' 2>/dev/null | grep -E -q '^ .* \+ +0.00 µs +0.0%  \(total\)'"
+check "diff --fail-above fails when CPU time grows" "! '$GSTRACE' diff '$OUT/objcwork.gstrace' '$OUT/cburn.gstrace' --fail-above 50 >/dev/null 2>&1"
+check "diff --fail-above passes when it shrinks" "'$GSTRACE' diff '$OUT/cburn.gstrace' '$OUT/objcwork.gstrace' --fail-above 50 >/dev/null 2>&1"
+
 echo "== CLI behaviour"
 check "unknown template is rejected" "! '$GSTRACE' record --template Nope --launch /bin/true >/dev/null 2>&1"
 check "list templates" "'$GSTRACE' list templates 2>/dev/null | grep -q '^Time Profiler'"
