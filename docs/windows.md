@@ -7,7 +7,15 @@
   traces recorded on Linux. CI builds them on `windows-latest`, runs the
   unit tests with tools-xctest and runs `Tests/viewer-checks.sh` against a
   Linux-recorded sample trace.
-- **Next — recording.** The agent, the launcher and the helper below.
+- **Done — Time Profiler, Hangs (main-thread wall samples), Points of
+  Interest and os_log.** `gsperf-agent.dll` is injected at launch; a sampler
+  thread suspends threads whose cycle count moved and unwinds them with
+  `RtlVirtualUnwind`; PE images are symbolicated from COFF symbols,
+  exports and `.pdata`, Objective-C methods from the runtime. CI records a
+  C fixture and an Objective-C fixture on `windows-latest`.
+- **Next:** Allocations/Leaks/Zombies (CRT heap hooks via import-table
+  patching), File Activity/Network, attaching (ETW, UAC helper), DWARF/PDB
+  source lines.
 
 ## Plan for recording
 

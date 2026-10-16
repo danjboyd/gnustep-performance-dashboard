@@ -31,6 +31,23 @@ check "two threads with CPU" "[ \$(grep -c 'CPU' '$OUT/spin-threads.txt') -ge 2 
 cat "$OUT/spin-sp.txt"
 check "4 Round signposts" "grep -E -q '^Round +PointsOfInterest +4 ' '$OUT/spin-sp.txt'"
 
+# Objective-C: method names come from the runtime's method table
+if command -v gnustep-config >/dev/null 2>&1; then
+  OBJCFLAGS=$(gnustep-config --objc-flags | sed 's/-MMD//; s/-MP//')
+  clang $OBJCFLAGS -O0 -Wno-unused-but-set-variable -I"$ROOT/Runtime/include" \
+    "$ROOT/Tests/fixtures/objcwork.m" -o "$OUT/objcwork.exe" $(gnustep-config --base-libs) \
+    -L"$ROOT/Runtime/obj" -lgsperf >"$OUT/objcwork-build.log" 2>&1 || cat "$OUT/objcwork-build.log"
+  rm -rf "$OUT/objc.gstrace"
+  "$GSTRACE" record --template "Time Profiler" -o "$OUT/objc.gstrace" --launch "$OUT/objcwork.exe" \
+    >"$OUT/objc-record.log" 2>&1
+  "$GSTRACE" info "$OUT/objc.gstrace" 2>&1 | tail -4
+  "$GSTRACE" report "$OUT/objc.gstrace" top --limit 5 >"$OUT/objc-top.txt" 2>&1
+  cat "$OUT/objc-top.txt"
+  check "Objective-C: -[Worker crunch:] is the top function" "sed -n 4p '$OUT/objc-top.txt' | grep -q 'Worker crunch:'"
+  "$GSTRACE" report "$OUT/objc.gstrace" signposts >"$OUT/objc-sp.txt" 2>&1
+  check "Objective-C: 5 Round signposts" "grep -E -q '^Round +PointsOfInterest +5 ' '$OUT/objc-sp.txt'"
+fi
+
 echo
 if [ $FAILED -eq 0 ]; then
   echo "All $PASSED Windows recording checks passed."
