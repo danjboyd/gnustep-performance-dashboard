@@ -20,8 +20,8 @@
      Local\gsperf-stop-<pid>, then writes END and events-<pid>.done.
 
    While another thread is suspended the sampler must not take any lock
-   that thread could hold (heap, loader): the walk uses only stack memory
-   and RtlLookupFunctionEntry, and records are written after resuming.
+   that thread could hold (heap, loader): the walk reads only the stack and
+   the modules' own unwind tables, and records are written after resuming.
 
    Allocations (heap and Objective-C allocation hooks) are in
    gsp_heap_win.c, the Leaks scan in gsp_leaks_win.c.
@@ -459,6 +459,110 @@ refresh_threads(void)
     }
 }
 
+/* Unwind data of the loaded modules, for lookups while a thread is
+   suspended.  RtlLookupFunctionEntry cannot be used then: it takes the
+   loader's function table lock, which the suspended thread may hold (while
+   loading a DLL), and the sampler would wait for it forever.  Only the
+   sampler thread reads and rebuilds this table.  */
+typedef struct code_module
+{
+  uintptr_t base, end;
+  const RUNTIME_FUNCTION *funcs;
+  DWORD count;
+} code_module;
+
+#define MAX_CODE_MODULES 1024
+static code_module code_modules[MAX_CODE_MODULES];
+static int code_module_count;
+
+static int
+compare_code_modules(const void *a, const void *b)
+{
+  const code_module *x = a, *y = b;
+  return x->base < y->base ? -1 : x->base > y->base;
+}
+
+static void
+refresh_code_modules(void)
+{
+  static HMODULE mods[MAX_CODE_MODULES];
+  DWORD needed = 0;
+  int n = 0;
+
+  if (!K32EnumProcessModules(GetCurrentProcess(), mods, sizeof(mods), &needed))
+    return;
+  int count = (int)(needed / sizeof(HMODULE));
+  if (count > MAX_CODE_MODULES)
+    count = MAX_CODE_MODULES;
+  for (int i = 0; i < count; i++)
+    {
+      uint8_t *base = (uint8_t *)mods[i];
+      IMAGE_DOS_HEADER *dos = (IMAGE_DOS_HEADER *)base;
+      if (dos->e_magic != IMAGE_DOS_SIGNATURE)
+        continue;
+      IMAGE_NT_HEADERS64 *nt = (IMAGE_NT_HEADERS64 *)(base + dos->e_lfanew);
+      if (nt->Signature != IMAGE_NT_SIGNATURE
+          || nt->OptionalHeader.Magic != IMAGE_NT_OPTIONAL_HDR64_MAGIC)
+        continue;
+      code_module *m = &code_modules[n++];
+      m->base = (uintptr_t)base;
+      m->end = m->base + nt->OptionalHeader.SizeOfImage;
+      m->funcs = NULL;
+      m->count = 0;
+      if (nt->OptionalHeader.NumberOfRvaAndSizes > IMAGE_DIRECTORY_ENTRY_EXCEPTION)
+        {
+          IMAGE_DATA_DIRECTORY d = nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXCEPTION];
+          if (d.VirtualAddress && d.Size >= sizeof(RUNTIME_FUNCTION))
+            {
+              m->funcs = (const RUNTIME_FUNCTION *)(base + d.VirtualAddress);
+              m->count = d.Size / sizeof(RUNTIME_FUNCTION);
+            }
+        }
+    }
+  qsort(code_modules, (size_t)n, sizeof(code_module), compare_code_modules);
+  code_module_count = n;
+}
+
+/* RtlLookupFunctionEntry without locks: modules' .pdata only (code
+   generated at run time is unwound as a leaf).  */
+static PRUNTIME_FUNCTION
+lookup_function(uintptr_t pc, uintptr_t *image)
+{
+  int lo = 0, hi = code_module_count - 1;
+  const code_module *m = NULL;
+  while (lo <= hi)
+    {
+      int mid = (lo + hi) / 2;
+      if (pc < code_modules[mid].base)
+        hi = mid - 1;
+      else if (pc >= code_modules[mid].end)
+        lo = mid + 1;
+      else
+        {
+          m = &code_modules[mid];
+          break;
+        }
+    }
+  if (m == NULL || m->funcs == NULL)
+    return NULL;
+  DWORD rva = (DWORD)(pc - m->base);
+  size_t a = 0, b = m->count;
+  while (a < b)
+    {
+      size_t mid = (a + b) / 2;
+      if (rva < m->funcs[mid].BeginAddress)
+        b = mid;
+      else if (rva >= m->funcs[mid].EndAddress)
+        a = mid + 1;
+      else
+        {
+          *image = m->base;
+          return (PRUNTIME_FUNCTION)&m->funcs[mid];
+        }
+    }
+  return NULL;
+}
+
 /* Walks a suspended thread's stack.  No locks, no allocation.  */
 static unsigned
 walk(HANDLE h, uint64_t *frames, unsigned max)
@@ -473,8 +577,8 @@ walk(HANDLE h, uint64_t *frames, unsigned max)
   while (n < max && ctx.Rip != 0)
     {
       frames[n++] = ctx.Rip;
-      DWORD64 image = 0;
-      PRUNTIME_FUNCTION fe = RtlLookupFunctionEntry(ctx.Rip, &image, NULL);
+      uintptr_t image = 0;
+      PRUNTIME_FUNCTION fe = lookup_function(ctx.Rip, &image);
       if (fe != NULL)
         {
           PVOID handler_data = NULL;
@@ -609,6 +713,7 @@ sampler_main(LPVOID arg)
   timeBeginPeriod(1);
   calibrate();
   refresh_threads();
+  refresh_code_modules();
   if (leak_interval_s && gspw_leaks_enabled())
     next_leak = now_ns() + (uint64_t)leak_interval_s * 1000000000ull;
   /* The recorder resumes the target when this is set.  */
@@ -630,6 +735,7 @@ sampler_main(LPVOID arg)
       if (now >= next_scan)
         {
           refresh_threads();
+          refresh_code_modules();
           next_scan = now + 100000000ull;
         }
       bool wall = wall_sampling && now >= next_wall;

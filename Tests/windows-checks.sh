@@ -15,7 +15,7 @@ clang -O0 -g -I"$ROOT/Runtime/include" "$ROOT/Tests/fixtures/spin.c" -o "$OUT/sp
 cp "$ROOT/Runtime/obj/gsperf.dll" "$OUT/"
 
 rm -rf "$OUT/spin.gstrace"
-"$GSTRACE" record --template "Time Profiler" -o "$OUT/spin.gstrace" --launch "$OUT/spin.exe" \
+timeout 180 "$GSTRACE" record --template "Time Profiler" -o "$OUT/spin.gstrace" --launch "$OUT/spin.exe" \
   >"$OUT/spin-record.log" 2>&1
 cat "$OUT/spin-record.log"
 "$GSTRACE" info "$OUT/spin.gstrace" >"$OUT/spin-info.txt" 2>&1
@@ -37,7 +37,7 @@ SPIN=$!
 WINPID=$(cat /proc/$SPIN/winpid 2>/dev/null || echo $SPIN)
 timeout 2 tail -f /dev/null 2>/dev/null
 rm -rf "$OUT/attach.gstrace"
-"$GSTRACE" record --template "Time Profiler" --attach "$WINPID" --time-limit 2s \
+timeout 180 "$GSTRACE" record --template "Time Profiler" --attach "$WINPID" --time-limit 2s \
   -o "$OUT/attach.gstrace" >"$OUT/attach-record.log" 2>&1
 cat "$OUT/attach-record.log"
 "$GSTRACE" info "$OUT/attach.gstrace" >"$OUT/attach-info.txt" 2>&1
@@ -53,7 +53,7 @@ check "attach: the program keeps running and finishes" "kill -0 $SPIN 2>/dev/nul
 # File Activity and Network
 clang -O0 -g "$ROOT/Tests/fixtures/iofix_win.c" -o "$OUT/iofix.exe" -lws2_32 || exit 1
 rm -rf "$OUT/io.gstrace"
-"$GSTRACE" record --template "File Activity" --instrument file-activity --instrument network \
+timeout 180 "$GSTRACE" record --template "File Activity" --instrument file-activity --instrument network \
   -o "$OUT/io.gstrace" --launch "$OUT/iofix.exe" "$OUT/iofix.dat" >"$OUT/io-record.log" 2>&1
 cat "$OUT/io-record.log"
 "$GSTRACE" report "$OUT/io.gstrace" files >"$OUT/io-files.txt" 2>&1
@@ -72,7 +72,7 @@ if command -v gnustep-config >/dev/null 2>&1; then
     "$ROOT/Tests/fixtures/objcwork.m" -o "$OUT/objcwork.exe" $(gnustep-config --base-libs) \
     -L"$ROOT/Runtime/obj" -lgsperf >"$OUT/objcwork-build.log" 2>&1 || cat "$OUT/objcwork-build.log"
   rm -rf "$OUT/objc.gstrace"
-  "$GSTRACE" record --template "Time Profiler" -o "$OUT/objc.gstrace" --launch "$OUT/objcwork.exe" \
+  timeout 180 "$GSTRACE" record --template "Time Profiler" -o "$OUT/objc.gstrace" --launch "$OUT/objcwork.exe" \
     >"$OUT/objc-record.log" 2>&1
   "$GSTRACE" info "$OUT/objc.gstrace" 2>&1 | tail -4
   "$GSTRACE" report "$OUT/objc.gstrace" top --limit 5 >"$OUT/objc-top.txt" 2>&1
@@ -83,7 +83,7 @@ if command -v gnustep-config >/dev/null 2>&1; then
 
   # Allocations: CRT heap and Objective-C allocation hooks
   rm -rf "$OUT/objalloc.gstrace"
-  "$GSTRACE" record --template Allocations -o "$OUT/objalloc.gstrace" --launch "$OUT/objcwork.exe" \
+  timeout 180 "$GSTRACE" record --template Allocations -o "$OUT/objalloc.gstrace" --launch "$OUT/objcwork.exe" \
     >"$OUT/objalloc-record.log" 2>&1
   cat "$OUT/objalloc-record.log"
   "$GSTRACE" info "$OUT/objalloc.gstrace" 2>&1 | tail -6
@@ -101,7 +101,7 @@ if command -v gnustep-config >/dev/null 2>&1; then
 
   # Leaks: the conservative scan at exit()
   rm -rf "$OUT/objleaks.gstrace"
-  "$GSTRACE" record --template Leaks -o "$OUT/objleaks.gstrace" --launch "$OUT/objcwork.exe" \
+  timeout 180 "$GSTRACE" record --template Leaks -o "$OUT/objleaks.gstrace" --launch "$OUT/objcwork.exe" \
     >"$OUT/objleaks-record.log" 2>&1
   cat "$OUT/objleaks-record.log"
   "$GSTRACE" info "$OUT/objleaks.gstrace" 2>&1 | tail -6
@@ -113,7 +113,7 @@ if command -v gnustep-config >/dev/null 2>&1; then
 
   # Zombies: a message to a deallocated object
   rm -rf "$OUT/zombie.gstrace"
-  "$GSTRACE" record --template Zombies -o "$OUT/zombie.gstrace" --launch "$OUT/objcwork.exe" zombie \
+  timeout 180 "$GSTRACE" record --template Zombies -o "$OUT/zombie.gstrace" --launch "$OUT/objcwork.exe" zombie \
     >"$OUT/zombie-record.log" 2>&1
   cat "$OUT/zombie-record.log"
   "$GSTRACE" info "$OUT/zombie.gstrace" 2>&1 | tail -4
