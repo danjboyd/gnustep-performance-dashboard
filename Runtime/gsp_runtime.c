@@ -61,7 +61,7 @@ gsp_gettid(void)
 /* ------------------------------------------------------------------ */
 /* raw memory                                                          */
 
-#define GSP_MAX_MAPPINGS 16384
+#define GSP_MAX_MAPPINGS 65536
 static struct { uintptr_t lo, hi; } mappings[GSP_MAX_MAPPINGS];
 static atomic_int mapping_count;
 static atomic_flag mapping_lock = ATOMIC_FLAG_INIT;

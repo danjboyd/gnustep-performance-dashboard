@@ -133,7 +133,12 @@ stop_world(void)
     {
       struct timespec deadline;
       clock_gettime(CLOCK_REALTIME, &deadline);
-      deadline.tv_sec += 1;
+      deadline.tv_nsec += 250000000;   /* a thread may block the signal */
+      if (deadline.tv_nsec >= 1000000000)
+        {
+          deadline.tv_sec++;
+          deadline.tv_nsec -= 1000000000;
+        }
       if (sem_timedwait(&suspend_ack, &deadline) != 0)
         {
           if (errno == EINTR)
@@ -297,6 +302,7 @@ typedef struct scan_state
   size_t bytes;
   uint32_t *work;      /* indices of marked, unscanned blocks */
   size_t work_count, work_cap, work_bytes;
+  bool incomplete;     /* out of memory: results would be wrong */
   regions maps;
 } scan_state;
 
@@ -397,7 +403,10 @@ push_work(scan_state *s, uint32_t index)
       size_t nbytes = ncap * sizeof(uint32_t);
       uint32_t *nw = gsp_map_raw(nbytes);
       if (nw == NULL)
-        return;
+        {
+          s->incomplete = true;
+          return;
+        }
       if (s->work)
         {
           memcpy(nw, s->work, s->work_count * sizeof(uint32_t));
@@ -720,8 +729,8 @@ gsp_leaks_snapshot(void)
      buffers, thread stacks or large mmap'd blocks: those ranges are cut
      out and the rest is scanned.  Blocks are scanned only when reached.  */
   {
-    static uintptr_t cuts[GSP_MAX_THREADS + 16400 + 8][2];
-    int ncuts = gsp_agent_mappings(cuts, 16384);
+    static uintptr_t cuts[GSP_MAX_THREADS + 65536 + 16][2];
+    int ncuts = gsp_agent_mappings(cuts, 65536);
     int nthreads = atomic_load(&gsp_thread_count);
     /* Exited threads too: glibc keeps their stacks mapped for reuse, and
        the stale frames would hide leaks.  Their thread control block and
@@ -882,7 +891,7 @@ gsp_leaks_snapshot(void)
     gsp_writer_emit(GSP_REC_LEAK_BEGIN, ordinal, t0, 0, &sum, sizeof(sum),
                     NULL, 0);
   }
-  for (size_t i = 0; i < s.count; i++)
+  for (size_t i = 0; i < s.count && !s.incomplete; i++)
     if (!s.blocks[i].marked)
       {
         gsp_leak_payload lp;

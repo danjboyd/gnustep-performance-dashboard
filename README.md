@@ -140,6 +140,14 @@ contains kernel addresses), and never records for more than an hour. The
 installed copy cannot reinstall or remove itself; `gstrace uninstall-helper`
 removes it (again through an administrator password).
 
+## Overhead
+
+Measured on a small Objective-C program (82 ms unrecorded; figures include
+about 50 ms of `gstrace` start-up): Time Profiler 141 ms, Zombies 132 ms,
+Allocations 164 ms, Leaks 199 ms. Allocation recording costs about 165 ns
+per allocation (mostly stack unwinding); a leak check of a GNUstep GUI app
+(145,000 live blocks) pauses it for about 0.4–1.4 s.
+
 ## How it works
 
 See [docs/architecture.md](docs/architecture.md) for the design and
