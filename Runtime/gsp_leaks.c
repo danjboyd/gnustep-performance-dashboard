@@ -461,11 +461,13 @@ looks_like_chunk_header(const mblock *m, uint64_t v)
 }
 
 static inline void
-scan_buffer(scan_state *s, const uint64_t *words, size_t n, uintptr_t base)
+scan_buffer(scan_state *s, const uint8_t *bytes, size_t len, uintptr_t base,
+            unsigned stride)
 {
-  for (size_t i = 0; i < n; i++)
+  for (size_t off = 0; off + 8 <= len; off += stride)
     {
-      uint64_t v = words[i];
+      uint64_t v;
+      memcpy(&v, bytes + off, 8);
       if (v < 4096)
         continue;
       mblock *m = block_for(s, v);
@@ -481,7 +483,7 @@ scan_buffer(scan_state *s, const uint64_t *words, size_t n, uintptr_t base)
         {
           m->marked = 1;
           if (explain_size && m->size == explain_size)
-            explain(base + i * 8, v, m);
+            explain(base + off, v, m);
           push_work(s, (uint32_t)(m - s->blocks));
         }
     }
@@ -489,35 +491,52 @@ scan_buffer(scan_state *s, const uint64_t *words, size_t n, uintptr_t base)
 
 /* Memory is copied with process_vm_readv, which fails cleanly on pages
    that are unmapped or protected: other (unregistered) threads keep
-   running during the scan and may unmap memory under us.  */
+   running during the scan and may unmap memory under us.
+
+   Heap blocks are scanned at a 4-byte stride: GNUstep's GSInlineArray
+   (what +arrayWithObjects: returns) stores its objects right after a
+   20-byte instance, so with libobjc2's 8-byte prefix they sit at 4 mod 8
+   within the block.  Roots are scanned at 8.  */
 static void
-scan_words(scan_state *s, uintptr_t lo, uintptr_t hi)
+scan_range(scan_state *s, uintptr_t lo, uintptr_t hi, unsigned stride)
 {
-  static uint64_t buf[8192];
+  static uint8_t buf[65536];
   pid_t self = getpid();
 
-  lo = (lo + 7) & ~(uintptr_t)7;
+  lo = (lo + stride - 1) & ~(uintptr_t)(stride - 1);
   while (lo + 8 <= hi)
     {
       size_t len = hi - lo;
       if (len > sizeof(buf))
         len = sizeof(buf);
-      len &= ~(size_t)7;
+      len &= ~(size_t)(stride - 1);
       struct iovec local = { buf, len };
       struct iovec remote = { (void *)lo, len };
       ssize_t got = process_vm_readv(self, &local, 1, &remote, 1, 0);
-      if (got <= 0)
+      if (got < 8)
         {
           /* skip to the next page */
           uintptr_t next = (lo + 4096) & ~(uintptr_t)4095;
           lo = next > lo ? next : lo + 4096;
           continue;
         }
-      scan_buffer(s, buf, (size_t)got / 8, lo);
-      lo += (uintptr_t)got & ~(uintptr_t)7;
+      scan_buffer(s, buf, (size_t)got, lo, stride);
       if ((size_t)got < len)
-        lo = (lo + 4096) & ~(uintptr_t)4095;
+        {
+          lo = (lo + (uintptr_t)got + 4095) & ~(uintptr_t)4095;
+          continue;
+        }
+      /* overlap so a word that straddles the chunk boundary is seen */
+      lo += (uintptr_t)got - (lo + (uintptr_t)got < hi ? 8 - stride : 0);
+      if (stride == 8)
+        lo = (lo + 7) & ~(uintptr_t)7;
     }
+}
+
+static void
+scan_words(scan_state *s, uintptr_t lo, uintptr_t hi)
+{
+  scan_range(s, lo, hi, 8);
 }
 
 /* Scan [lo, hi) except the live blocks inside it.  */
@@ -627,7 +646,7 @@ drain_work(scan_state *s)
       if (r == NULL || !r->readable || r->special
           || (uintptr_t)(m->address + m->size) > r->hi)
         continue;
-      scan_words(s, (uintptr_t)m->address, (uintptr_t)(m->address + m->size));
+      scan_range(s, (uintptr_t)m->address, (uintptr_t)(m->address + m->size), 4);
       scan_relative_header(s, m);
     }
 }

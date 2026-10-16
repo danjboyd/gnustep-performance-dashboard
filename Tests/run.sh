@@ -129,7 +129,7 @@ if [ "${SKIP_GUI:-0}" != 1 ] && command -v Xvfb >/dev/null 2>&1; then
   check "hangapp: hang stack shows the busy loop" "grep -q 'HangController tick:' '$OUT/hang.txt'"
   DISPLAY=$DISP XAUTHORITY= record hangleaks --template Leaks --launch "$OUT/hangapp"
   "$GSTRACE" report "$OUT/hangleaks.gstrace" leaks >"$OUT/hangleaks.txt" 2>/dev/null
-  check "GUI app leak check stays small (< 4000 blocks)" "[ \$(sed -n 2p '$OUT/hangleaks.txt' | cut -d' ' -f1) -lt 4000 ]"
+  check "GUI app leak check stays small (< 100 blocks, no GSCInlineString)" "[ \$(sed -n 2p '$OUT/hangleaks.txt' | cut -d' ' -f1) -lt 100 ] && ! grep -q '^GSCInlineString' '$OUT/hangleaks.txt'"
   kill $XPID 2>/dev/null
 else
   echo "== AppKit fixture skipped"

@@ -23,11 +23,9 @@ clicks are detected — in the wrong column.
 
 Workaround: the call tree puts Symbol Name first.
 
-## libs-back (to verify): strings from `FCFontEnumerator` reported as leaked
+## (Retracted) libs-back font strings
 
-Recording any GNUstep GUI app with the Leaks template reports about 1,900
-`GSCInlineString` objects (≈ 93 KiB) created by
-`-[FCFontEnumerator enumerateFontsAndFamilies]` via
-`+[NSString stringWithUTF8String:]`. They may be a real leak in the font
-enumeration, or referenced through a structure the conservative scanner
-cannot follow; this needs a closer look before reporting.
+About 1,900 `GSCInlineString`s from `FCFontEnumerator` were reported as
+leaked in every GUI app. They were reachable: `GSInlineArray` stores its
+objects at a 4-byte-aligned offset, which the scanner skipped. Fixed in the
+scanner (heap blocks are scanned at a 4-byte stride); nothing to report.
