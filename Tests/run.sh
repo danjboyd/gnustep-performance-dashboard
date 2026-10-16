@@ -215,12 +215,17 @@ if [ "${SKIP_GUI:-0}" != 1 ] && command -v Xvfb >/dev/null 2>&1; then
     # GNUstep takes the first click on it to activate it: click an empty
     # spot, then Record (its centre is 29 points above the content's
     # bottom edge, 656 from the left).
-    if [ -n "$P" ]; then
+    # The activating click is not always taken: try again while the
+    # chooser is still up.
+    n=0
+    while [ -n "$P" ] && [ $n -lt 3 ] && window_id "Choose a Profiling Template" 1 >/dev/null; do
       eval $(DISPLAY=$DISP xdotool getwindowgeometry --shell "$P")
       DISPLAY=$DISP xdotool mousemove --window "$P" 360 $((HEIGHT - 60)) click 1
       sleep 1
       DISPLAY=$DISP xdotool mousemove --window "$P" 656 $((HEIGHT - 29)) click 1
-    fi
+      sleep 3
+      n=$((n + 1))
+    done
     check "app: the chooser records into a new window" "window_id 'objcwork — Time Profiler' 10 >/dev/null"
     sleep 3
     NEW=$(find "$TRACES" -maxdepth 1 -name 'objcwork*.gstrace' -newer "$OUT/gui.mark" | head -1)
