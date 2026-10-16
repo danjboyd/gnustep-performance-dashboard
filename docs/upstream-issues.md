@@ -61,6 +61,33 @@ declare `cinfo` (and `jerrMgr`) `volatile`, or keep the source manager
 pointer in a volatile local and free that. Same pattern in
 `-_initBitmapFromJPEG:errorMessage:`.
 
+## libs-gui: `-state` declared both `NSInteger` and `NSControlStateValue` (`NSUInteger`)
+
+**Status:** drafted, not reviewed:
+`upstream-issues/4-libs-gui-state-signature-mismatch.md`. Reproduced on
+0.32.0 and master. Workaround: `PDIsOn` asks the cell through an `NSCell *`.
+
+## Lead: quitting under the Sombre theme recurses until the stack overflows
+
+**Status:** lead, not reproduced outside Performance Dashboard. With libs-gui
+0.32.0 and Sombre, `-[NSApplication replyToApplicationShouldTerminate:]`
+closes every window (`makeObjectsPerformSelector: @selector(close)`), and
+`-[NSWindow close]` ↔ `-[NSAutoreleasePool emptyPool]` recursed through 19
+`GSCacheW` image-cache windows until the stack overflowed (seen in gdb on
+2026-10-16). A small program with a table, scroll bars and a pop-up button
+under Sombre (9 windows, cache windows included) quits cleanly, so the
+trigger may be in how this app's windows and controllers are torn down.
+Workaround: the app exits from `-applicationWillTerminate:`.
+
+## Lead: libs-back's SIGTERM handler calls `-[NSApp terminate:]`
+
+**Status:** lead, no harm observed of its own. `Source/x11/XGServer.m`
+installs `signal(SIGTERM, terminate)`, and `terminate()` sends
+`-terminate:` from the signal handler, which is not async-signal-safe. The
+crashes seen on SIGTERM were the Sombre teardown above, which happens on a
+menu Quit too. Workaround: the app installs a handler that only writes to a
+pipe.
+
 ## (Retracted) libs-back font strings
 
 About 1,900 `GSCInlineString`s from `FCFontEnumerator` were reported as
