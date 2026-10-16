@@ -214,5 +214,178 @@
         "mode": "launch-only"
       }
     }
+  },
+  "platformOverrides": {
+    "windows": {
+      "pipeline": {
+        "workingDirectory": "..",
+        "shell": {
+          "kind": "pwsh",
+          "bootstrapCommands": [],
+          "environment": {}
+        },
+        "build": {
+          "command": "./scripts/package-build-windows.ps1"
+        },
+        "stage": {
+          "command": "./scripts/package-stage-windows.ps1 -StageRoot dist/stage",
+          "outputRoot": "../dist/stage"
+        }
+      },
+      "payload": {
+        "runtimeSeedPaths": [
+          "runtime/bin/defaults.exe"
+        ]
+      },
+      "launch": {
+        "entryRelativePath": "app/PerformanceDashboard.app/PerformanceDashboard.exe",
+        "workingDirectory": "app/PerformanceDashboard.app",
+        "arguments": [],
+        "pathPrepend": [
+          "runtime/bin"
+        ],
+        "env": null
+      },
+      "themeInputs": [
+        {
+          "name": "WinUITheme",
+          "repo": "https://github.com/danjboyd/plugins-themes-winuitheme.git",
+          "ref": "906e462ca6f3c42d4463cc2f22277888436cda21",
+          "platforms": [
+            "msi"
+          ],
+          "required": true,
+          "default": true
+        }
+      ],
+      "packagedDefaults": {
+        "defaultTheme": "WinUITheme"
+      },
+      "validation": {
+        "smoke": {
+          "requiredPaths": [
+            "app/PerformanceDashboard.app/PerformanceDashboard.exe",
+            "app/PerformanceDashboard.app/Resources/Info-gnustep.plist",
+            "app/PerformanceDashboard.app/Resources/gsperf-agent.dll",
+            "metadata/icons/PerformanceDashboard.ico",
+            "metadata/licenses/PerformanceDashboard.txt",
+            "runtime/bin/defaults.exe",
+            "runtime/bin/gstrace.exe",
+            "runtime/bin/GNUstep.conf",
+            "runtime/System/Tools/gdnc.exe"
+          ]
+        },
+        "packageContract": {
+          "requiredContent": [
+            {
+              "kind": "notice-report"
+            },
+            {
+              "kind": "bundled-theme",
+              "name": "WinUITheme"
+            }
+          ]
+        },
+        "installedResult": null
+      },
+      "compliance": {
+        "runtimeNotices": [
+          {
+            "name": "Performance Dashboard",
+            "version": "0.1.0",
+            "license": "LGPL-2.1-or-later",
+            "source": "Performance Dashboard application, framework, recording agent and gstrace",
+            "homepage": "https://github.com/danjboyd/gnustep-performance-dashboard",
+            "stageRelativePath": "metadata/licenses/PerformanceDashboard.txt"
+          },
+          {
+            "name": "GNUstep Base",
+            "license": "LGPL-2.1-or-later",
+            "source": "runtime/bin (MSYS2 CLANG64 gnustep-base)",
+            "homepage": "https://github.com/gnustep/libs-base",
+            "stageRelativePath": "metadata/licenses/GNUstep-base.txt"
+          },
+          {
+            "name": "GNUstep GUI",
+            "license": "LGPL-2.1-or-later",
+            "source": "runtime/bin (MSYS2 CLANG64 gnustep-gui)",
+            "homepage": "https://github.com/gnustep/libs-gui",
+            "stageRelativePath": "metadata/licenses/GNUstep-gui.txt"
+          },
+          {
+            "name": "GNUstep Back",
+            "license": "LGPL-2.1-or-later",
+            "source": "runtime/System/Library/Bundles (MSYS2 CLANG64 gnustep-back)",
+            "homepage": "https://github.com/gnustep/libs-back",
+            "stageRelativePath": "metadata/licenses/GNUstep-back.txt"
+          },
+          {
+            "name": "GNUstep tools",
+            "license": "GPL-3.0-or-later AND GPL-2.0-or-later",
+            "source": "defaults, make_services, gpbs (GPL-3.0-or-later), gdnc (GPL-2.0-or-later)",
+            "homepage": "https://github.com/gnustep",
+            "stageRelativePath": "metadata/licenses/GNUstep-tools.txt"
+          },
+          {
+            "name": "libobjc2",
+            "license": "MIT",
+            "source": "runtime/bin",
+            "homepage": "https://github.com/gnustep/libobjc2",
+            "stageRelativePath": "metadata/licenses/libobjc2.txt"
+          },
+          {
+            "name": "libdispatch",
+            "license": "Apache-2.0",
+            "source": "runtime/bin",
+            "homepage": "https://github.com/swiftlang/swift-corelibs-libdispatch",
+            "stageRelativePath": "metadata/licenses/libdispatch.txt"
+          },
+          {
+            "name": "WinUITheme",
+            "license": "LGPL-2.1-or-later",
+            "source": "Default Windows theme, from danjboyd/plugins-themes-winuitheme",
+            "homepage": "https://github.com/danjboyd/plugins-themes-winuitheme",
+            "stageRelativePath": "metadata/licenses/WinUITheme.txt"
+          },
+          {
+            "name": "MSYS2 CLANG64 libraries",
+            "license": "Various; see msys2-libraries.txt",
+            "source": "Libraries from MSYS2 CLANG64 packages in runtime/bin",
+            "stageRelativePath": "metadata/licenses/msys2-libraries.txt"
+          }
+        ]
+      },
+      "backends": {
+        "appimage": {
+          "enabled": false
+        },
+        "msi": {
+          "enabled": true,
+          "upgradeCode": "a1abfa04-702d-4dc6-bc8a-61644ffe3591",
+          "installScope": "perUser",
+          "productName": "Performance Dashboard",
+          "shortcutName": "Performance Dashboard",
+          "installDirectoryName": "Performance Dashboard",
+          "launcherFileName": "PerformanceDashboard.exe",
+          "iconRelativePath": "metadata/icons/PerformanceDashboard.ico",
+          "ignoredRuntimeDependencies": [
+            "dbghelp.dll",
+            "DNSAPI.dll",
+            "DWrite.dll",
+            "IPHLPAPI.DLL",
+            "MSIMG32.dll",
+            "OPENGL32.dll",
+            "PSAPI.DLL",
+            "USP10.dll",
+            "WINSPOOL.DRV"
+          ],
+          "signing": {
+            "enabled": false,
+            "timestampUrl": "http://timestamp.digicert.com",
+            "description": "Performance Dashboard installer"
+          }
+        }
+      }
+    }
   }
 }

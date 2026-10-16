@@ -1,0 +1,149 @@
+# Release builds on GitHub's runners (docs/release.md): the Linux AppImage on
+# Debian 13 (scripts/ci-release-linux.sh, with the release checks) and the
+# Windows MSI through gnustep-packager's reusable workflow (gnustep-cli-new
+# toolchain, WinUITheme), from the inputs pinned in
+# packaging/release-inputs.json. The result is a workflow artifact,
+# "release", with SHA256SUMS. Nothing is signed, tagged or published: every
+# tag and publish needs Dan's approval (docs/release.md).
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+    # Changes to how releases are built are tried on release/* branches
+    # before they reach main.
+    branches: ["release/**"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to package instead of package.version (a release candidate such as 0.1.0-rc1)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  version:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: version
+        name: Version
+        env:
+          REQUESTED: ${{ inputs.version }}
+        run: |
+          manifest="$(python3 -c 'import json; print(json.load(open("packaging/package.manifest.json"))["package"]["version"])')"
+          version="${REQUESTED:-$manifest}"
+          case "$GITHUB_REF" in
+            refs/tags/v*) version="${GITHUB_REF#refs/tags/v}" ;;
+          esac
+          case "$version" in
+            "$manifest"|"$manifest"-*) ;;
+            *) echo "::error::version $version does not match package.version $manifest"; exit 1 ;;
+          esac
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Performance Dashboard $version from ${GITHUB_SHA::7}" >> "$GITHUB_STEP_SUMMARY"
+
+  linux:
+    needs: version
+    runs-on: ubuntu-24.04
+    container: debian:trixie
+    timeout-minutes: 90
+    steps:
+      - name: Packages
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates curl git make gcc libc6-dev pkg-config python3 sudo file binutils \
+            libx11-dev libxext-dev libxft-dev libxrender-dev libfreetype-dev \
+            libfontconfig-dev libcairo2-dev libglib2.0-dev \
+            xvfb xauth x11-utils fonts-cantarell fonts-dejavu-core \
+            desktop-file-utils squashfs-tools
+
+      - uses: actions/checkout@v4
+
+      # The container runs as root on a workspace the runner's user owns; the
+      # scripts read the commit with git.
+      - name: Trust the workspace
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Package and check
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: scripts/ci-release-linux.sh "$VERSION"
+
+      - name: Check results
+        if: always()
+        run: |
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY" || true
+          import glob, json
+          for path in glob.glob("dist/ci/linux/*.provenance.json"):
+              p = json.load(open(path))
+              print("Linux checks: " + ", ".join("%s %s" % kv for kv in p["checks"].items()))
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: dist/ci/linux
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: linux-logs
+          path: dist/logs
+          if-no-files-found: warn
+
+  windows:
+    needs: version
+    # The same gnustep-packager commit as packaging/release-inputs.json.
+    uses: danjboyd/gnustep-packager/.github/workflows/package-gnustep-app.yml@362f270baf442c57f0736522530b82dd6a164e2e
+    with:
+      manifest-path: packaging/package.manifest.json
+      backend: msi
+      package-version: ${{ needs.version.outputs.version }}
+      packager-repository: danjboyd/gnustep-packager
+      packager-ref: 362f270baf442c57f0736522530b82dd6a164e2e
+      run-validation: true
+      run-smoke: true
+      artifact-name: windows
+
+  release:
+    needs: [version, linux, windows]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux
+          path: dist/ci/release
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-packages
+          path: dist/ci/windows
+
+      - name: Collect and SHA256SUMS
+        run: |
+          find dist/ci/windows -name '*.msi' -exec cp {} dist/ci/release/ \;
+          ls dist/ci/release/*.msi >/dev/null || { echo "::error::no MSI in the windows artifact"; exit 1; }
+          cd dist/ci/release
+          sha256sum -- *.AppImage *.msi > SHA256SUMS
+          {
+            echo '```'
+            cat SHA256SUMS
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release
+          path: dist/ci/release
+          if-no-files-found: error

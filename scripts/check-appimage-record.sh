@@ -37,6 +37,7 @@ mkdir -p "$work/home"
 touch "$work/start"
 env -i HOME="$work/home" PATH=/usr/bin:/bin DISPLAY=":$display_number" \
   DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent \
+  ${APPIMAGE_EXTRACT_AND_RUN:+APPIMAGE_EXTRACT_AND_RUN=$APPIMAGE_EXTRACT_AND_RUN} \
   "$appimage" -PDRecordTarget "$work/cburn" -PDRecordTemplate Leaks >"$work/app.log" 2>&1 &
 app_pid=$!
 
