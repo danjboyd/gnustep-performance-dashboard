@@ -21,5 +21,7 @@
 - (void) invalidate;
 - (NSString *) instrumentForTrack: (NSUInteger)track;
 - (NSUInteger) trackForInstrument: (NSString *)identifier;
+/* Per-thread CPU sub-tracks: the thread id, or 0 for instrument tracks. */
+- (uint32_t) threadForTrack: (NSUInteger)track;
 
 @end

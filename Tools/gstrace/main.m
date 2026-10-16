@@ -125,6 +125,7 @@ cmd_record(NSArray *args)
   NSMutableArray *instruments = [NSMutableArray array];
   NSMutableDictionary *env = [NSMutableDictionary dictionary];
   NSString *templateName = @"Time Profiler";
+  BOOL explicitTemplate = NO;
   NSUInteger i = 0, n = [args count];
 
   while (i < n)
@@ -132,7 +133,7 @@ cmd_record(NSArray *args)
       NSString *a = [args objectAtIndex: i++];
       NSString *v = i < n ? [args objectAtIndex: i] : nil;
 #define NEED_VALUE() if (v == nil) { err([NSString stringWithFormat: @"%@ needs a value", a]); return 2; } i++
-      if ([a isEqual: @"--template"]) { NEED_VALUE(); templateName = v; }
+      if ([a isEqual: @"--template"]) { NEED_VALUE(); templateName = v; explicitTemplate = YES; }
       else if ([a isEqual: @"--instrument"]) { NEED_VALUE(); [instruments addObject: v]; }
       else if ([a isEqual: @"--output"] || [a isEqual: @"-o"]) { NEED_VALUE(); opts.outputPath = v; }
       else if ([a isEqual: @"--time-limit"])
@@ -206,6 +207,8 @@ cmd_record(NSArray *args)
         }
     }
 
+  if ([instruments count] > 0 && !explicitTemplate && !opts.attachPID)
+    templateName = @"Custom";
   if ([instruments count] == 0)
     {
       GSPTemplate *t = [GSPTemplate templateNamed: templateName];

@@ -28,6 +28,8 @@
 /* Inspection range (0, 0 = everything) or thread changes, or new data. */
 - (void) setRangeStart: (GSPTime)start end: (GSPTime)end;
 - (void) reload;
+/* Restrict CPU call trees to one thread (0 = all threads). */
+- (void) showThread: (uint32_t)tid;
 @property (nonatomic, readonly) NSString *instrument;
 
 @end

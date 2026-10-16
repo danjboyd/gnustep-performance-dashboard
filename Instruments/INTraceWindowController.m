@@ -220,7 +220,9 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
   if (n == 0 || n == _sizedForTracks)
     return;
   _sizedForTracks = n;
-  CGFloat want = [INTimelineView rulerHeight] + 15 + n * 64 + 6;
+  CGFloat want = [INTimelineView rulerHeight] + 15 + 6;
+  for (NSUInteger i = 0; i < n; i++)
+    want += [_renderer timeline: _timeline heightOfTrack: i];
   CGFloat total = [_mainSplit bounds].size.height;
   want = MAX(150, MIN(want, total * 0.6));
   [_mainSplit setPosition: want ofDividerAtIndex: 0];
@@ -501,9 +503,21 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
 
 - (void) timeline: (INTimelineView *)view didSelectTrack: (NSUInteger)track
 {
+  uint32_t tid = [_renderer threadForTrack: track];
   NSString *ident = [_renderer instrumentForTrack: track];
+  if (tid)
+    {
+      NSString *tp = [_renderer.trackIdentifiers containsObject: GSPInstrumentTimeProfiler]
+        ? GSPInstrumentTimeProfiler : GSPInstrumentSystemProfiler;
+      if (![tp isEqual: _detail.instrument])
+        [_detail showInstrument: tp];
+      [_detail showThread: tid];
+      return;
+    }
   if (ident && ![ident isEqual: _detail.instrument])
     [_detail showInstrument: ident];
+  else if ([ident isEqual: GSPInstrumentTimeProfiler] || [ident isEqual: GSPInstrumentSystemProfiler])
+    [_detail showThread: 0];
 }
 
 - (void) detailController: (INDetailController *)dc

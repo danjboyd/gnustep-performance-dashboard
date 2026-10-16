@@ -54,6 +54,8 @@ the end-to-end suite runs the AppKit fixture under `Xvfb` when it is available
 
 ## Using the app
 
+![Template chooser](docs/screenshots/template-chooser.png)
+
 Launch `Instruments.app`, pick a template, choose the program to record
 (an `.app` bundle or any executable) and press **Record**. The timeline fills
 in live; **Stop** ends the target. Click a track to see its details below;

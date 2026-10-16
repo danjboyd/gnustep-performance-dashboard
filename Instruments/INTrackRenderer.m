@@ -66,7 +66,46 @@
     }
   if ([tracks count] == 0)
     [tracks addObject: GSPInstrumentTimeProfiler];
+
+  /* Threads that used at least 2% of the CPU get their own sub-track
+     under the Time Profiler, as in Instruments.  */
+  NSUInteger tp = [tracks indexOfObject: GSPInstrumentTimeProfiler];
+  if (tp == NSNotFound)
+    tp = [tracks indexOfObject: GSPInstrumentSystemProfiler];
+  if (tp != NSNotFound)
+    {
+      NSMutableDictionary *cpu = [NSMutableDictionary dictionary];
+      uint64_t total = 0;
+      for (NSUInteger i = 0; i < _process.sampleCount; i++)
+        {
+          const GSPSample *sm = &_process.samples[i];
+          if (sm->kind == GSP_SAMPLE_WALL)
+            continue;
+          NSNumber *k = [NSNumber numberWithUnsignedInt: sm->tid];
+          [cpu setObject: [NSNumber numberWithUnsignedLongLong:
+            [[cpu objectForKey: k] unsignedLongLongValue] + sm->weight] forKey: k];
+          total += sm->weight;
+        }
+      if ([cpu count] > 1)
+        {
+          NSUInteger at = tp + 1;
+          for (GSPThreadInfo *t in [_process sortedThreads])
+            {
+              uint64_t w = [[cpu objectForKey: [NSNumber numberWithUnsignedInt: t.tid]]
+                             unsignedLongLongValue];
+              if (total && w * 50 >= total)
+                [tracks insertObject: [NSString stringWithFormat: @"thread:%u", t.tid]
+                             atIndex: at++];
+            }
+        }
+    }
   _tracks = tracks;
+}
+
+- (uint32_t) threadForTrack: (NSUInteger)track
+{
+  NSString *ident = [self instrumentForTrack: track];
+  return [ident hasPrefix: @"thread:"] ? (uint32_t)[[ident substringFromIndex: 7] intValue] : 0;
 }
 
 - (NSArray *) trackIdentifiers { return _tracks; }
@@ -127,6 +166,13 @@
 
 - (NSString *) timeline: (INTimelineView *)view titleOfTrack: (NSUInteger)track
 {
+  uint32_t tid = [self threadForTrack: track];
+  if (tid)
+    {
+      GSPThreadInfo *t = [_process.threads objectForKey: [NSNumber numberWithUnsignedInt: tid]];
+      return [@"    " stringByAppendingString: t ? t.displayName
+              : [NSString stringWithFormat: @"Thread %u", tid]];
+    }
   return [[GSPInstrument instrumentWithIdentifier: [self instrumentForTrack: track]] name];
 }
 
@@ -142,6 +188,8 @@
 - (NSString *) timeline: (INTimelineView *)view subtitleOfTrack: (NSUInteger)track
 {
   NSString *ident = [self instrumentForTrack: track];
+  if ([self threadForTrack: track])
+    return nil;
   if ([ident isEqual: GSPInstrumentTimeProfiler] || [ident isEqual: GSPInstrumentSystemProfiler])
     return [NSString stringWithFormat: @"%@ CPU", GSPFormatDuration([self cpuSeconds])];
   if ([ident isEqual: GSPInstrumentHangs])
@@ -176,7 +224,7 @@
 
 - (CGFloat) timeline: (INTimelineView *)view heightOfTrack: (NSUInteger)track
 {
-  return TRACK_HEIGHT;
+  return [self threadForTrack: track] ? 36.0 : TRACK_HEIGHT;
 }
 
 static void
@@ -221,6 +269,11 @@ draw_label(NSString *s, NSPoint p, NSColor *color)
 
 - (void) drawCPU: (NSRect)r from: (double)start to: (double)end
 {
+  [self drawCPU: r from: start to: end thread: 0];
+}
+
+- (void) drawCPU: (NSRect)r from: (double)start to: (double)end thread: (uint32_t)onlyTid
+{
   NSUInteger n = MAX(1, (NSUInteger)(r.size.width / 2));
   double *v = calloc(n, sizeof(double));
   GSPTime s = [self abs: start], e = [self abs: end];
@@ -244,7 +297,7 @@ draw_label(NSString *s, NSPoint p, NSColor *color)
      over that span instead of piling it into one bucket.  */
   for (NSUInteger i = lo; i < count && samples[i].time <= e + (GSPTime)(interval * 1e9 * 64); i++)
     {
-      if (samples[i].kind == GSP_SAMPLE_WALL)
+      if (samples[i].kind == GSP_SAMPLE_WALL || (onlyTid && samples[i].tid != onlyTid))
         continue;
       double t1 = (double)((int64_t)(samples[i].time - s)) / 1e9;
       double t0 = t1 - samples[i].weight * interval;
@@ -482,7 +535,9 @@ draw_label(NSString *s, NSPoint p, NSColor *color)
   NSString *ident = [self instrumentForTrack: track];
   if (end <= start)
     return;
-  if ([ident isEqual: GSPInstrumentTimeProfiler] || [ident isEqual: GSPInstrumentSystemProfiler])
+  if ([self threadForTrack: track])
+    [self drawCPU: rect from: start to: end thread: [self threadForTrack: track]];
+  else if ([ident isEqual: GSPInstrumentTimeProfiler] || [ident isEqual: GSPInstrumentSystemProfiler])
     [self drawCPU: rect from: start to: end];
   else if ([ident isEqual: GSPInstrumentHangs])
     [self drawHangs: rect from: start to: end view: view];

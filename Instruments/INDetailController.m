@@ -327,6 +327,18 @@ check_box(NSString *title, NSRect frame, id target, SEL action)
   [_threads selectItemAtIndex: idx >= 0 ? idx : 0];
 }
 
+- (void) showThread: (uint32_t)tid
+{
+  NSInteger idx = [_threads indexOfItemWithTag: (NSInteger)tid];
+  [_threads selectItemAtIndex: idx >= 0 ? idx : 0];
+  if (![_currentMode isEqual: @"Call Tree"])
+    {
+      [_mode selectItemWithTitle: @"Call Tree"];
+      _currentMode = @"Call Tree";
+    }
+  [self reload];
+}
+
 - (void) setRangeStart: (GSPTime)start end: (GSPTime)end
 {
   _start = start;
