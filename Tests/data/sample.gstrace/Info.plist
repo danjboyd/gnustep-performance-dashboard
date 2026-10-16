@@ -1,0 +1,22 @@
+{
+    Arguments = (
+    );
+    Attached = <*BN>;
+    EndDate = <*D2026-10-16 01:00:49 +0000>;
+    ExitStatus = <*I0>;
+    FormatVersion = <*I1>;
+    Host = "iep-daniel-t14 Linux 6.12.111+deb13-amd64 x86_64";
+    Instruments = (
+	"time-profiler",
+	allocations,
+	leaks,
+	"points-of-interest",
+	"os-log"
+    );
+    RecorderVersion = "0.1.0";
+    SampleIntervalMicroseconds = <*I1000>;
+    StartDate = <*D2026-10-16 01:00:49 +0000>;
+    TargetPID = <*I1806974>;
+    TargetPath = "Tests/out/objcwork";
+    Template = Custom;
+}
