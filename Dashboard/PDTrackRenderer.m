@@ -111,6 +111,15 @@
 
 - (NSArray *) trackIdentifiers { return _tracks; }
 
+/* A new GSPTrace (the finished recording, read again) has its own process
+   objects: show the same process in it, or the analyses keep the old one.  */
+- (void) setTrace: (GSPTrace *)trace
+{
+  int pid = _process.pid;
+  _trace = trace;
+  _process = [trace processWithPID: pid] ?: trace.targetProcess;
+}
+
 - (void) setProcess: (GSPProcess *)process
 {
   _process = process;
