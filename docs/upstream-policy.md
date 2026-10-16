@@ -34,8 +34,15 @@ comments, design proposals, and merge request content". It says:
 
 What individual maintainers have added:
 
-- **libobjc2 (David Chisnall): no LLM-derived changes or reports at all.**
-  We send nothing to libobjc2.
+- **libobjc2 (David Chisnall): no AI-generated code at all.** Bug reports
+  are welcome, and he writes the fix himself. So for libobjc2 we send
+  issue reports only: no patches or pull requests, and no code of ours in
+  the report (no suggested fix, diff or rewritten function). The report
+  says in prose what goes wrong: the call and its arguments, what happens,
+  what was expected, and where in libobjc2's source it happens (quoting
+  libobjc2's own lines is fine). We still write and run a reproducer to
+  back every claim (rule 5), but keep it here; it goes with the report
+  only if Dan decides it should.
 - **libs-base (Richard Frith-Macdonald):** one patch per issue, each with
   the code change, its test in GNUstep's regression framework, and a
   ChangeLog entry. Others on the list asked for one pull request per
@@ -107,6 +114,9 @@ What individual maintainers have added:
       Performance Dashboard to show the bug, even when our tool found it.
 - [ ] Checked that it isn't already reported or fixed (open and closed
       issues, open pull requests, master's log).
+- [ ] For libobjc2: no code of ours in the report; the reproduction steps
+      in prose; the reproducer kept next to the draft, marked not to send
+      unless Dan decides otherwise.
 
 **A comment** on an upstream issue, pull request or list thread: drafted in
 the conversation or in a file, with the disclosure line, and every claim in
@@ -215,8 +225,9 @@ Tests/Scripts/gcc-syntax-check.sh --files docs/upstream-issues/outline_column.m
 Nothing from this project has been sent upstream. The findings are listed
 in `upstream-issues.md`:
 
-- **libobjc2 `objc_getClassList` double free:** not sending; libobjc2
-  accepts no LLM-derived reports. Our workaround stays.
+- **libobjc2 `objc_getClassList` double free:** to be filed as a bug
+  report with no code (see libobjc2 above); not drafted yet. Our
+  workaround stays until it is fixed upstream.
 - **libs-gui outline column** and **libs-gui JPEG probe leak:** leads
   only. Neither has a draft, a GCC-clean reproducer, a run on current
   master or a duplicate check yet (Stage 1).

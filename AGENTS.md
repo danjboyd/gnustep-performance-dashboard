@@ -52,6 +52,6 @@ other theme (Sombre). Use standard controls and theme colours (`PDTheme`).
   docs/release.md; every tag and publish needs Dan's approval in-session.
 - Anything sent to another project (issues, pull requests, patches,
   comments) follows docs/upstream-policy.md: nothing leaves without Dan's
-  sign-off on the exact hash, recorded in docs/upstream-signoff.md, and
-  nothing at all goes to libobjc2.
+  sign-off on the exact hash, recorded in docs/upstream-signoff.md.
+  libobjc2 gets bug reports only, never code of ours.
 - Never mention private package repositories or build hosts in this repo.

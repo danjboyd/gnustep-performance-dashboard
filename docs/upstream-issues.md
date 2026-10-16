@@ -9,8 +9,9 @@ verified to that standard. Each has a workaround here.
 
 ## libobjc2: `objc_getClassList` double-frees its enumerator
 
-**Status:** not sending. libobjc2 accepts no LLM-derived changes or
-reports (`upstream-policy.md`).
+**Status:** lead; to be filed as a bug report only. libobjc2 accepts no
+AI-generated code, so the report describes the bug in prose and the
+maintainer writes the fix (`upstream-policy.md`).
 
 `objc_getClassList(buffer, n)` with `n` larger than the number of registered
 classes walks off the end of the class table; `class_table_internal_next`
