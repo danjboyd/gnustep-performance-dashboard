@@ -53,7 +53,11 @@ for _ in $(seq 1 30); do
 done
 [ -n "$trace" ] || { tail -20 "$work/app.log" >&2; die "no trace was written"; }
 sleep 2
-kill -TERM "$app_pid"
+# Signal the app. In extract-and-run mode (no FUSE, as in CI containers)
+# the AppImage runtime runs it as a child and dies on SIGTERM itself,
+# leaving the app behind; with FUSE the AppImage's process is the app.
+target="$(pgrep -P "$app_pid" -f 'PerformanceDashboard\.app/PerformanceDashboard' | head -1 || true)"
+kill -TERM "${target:-$app_pid}"
 status=0
 for _ in $(seq 1 10); do kill -0 "$app_pid" 2>/dev/null || break; sleep 1; done
 if kill -0 "$app_pid" 2>/dev/null; then die "the app did not exit on SIGTERM"; fi
