@@ -2,7 +2,10 @@
 #import "INTheme.h"
 
 #include <sys/stat.h>
-#if !defined(_WIN32)
+#if defined(_WIN32)
+#  include <windows.h>
+#  include <tlhelp32.h>
+#else
 #  include <unistd.h>
 #endif
 
@@ -340,6 +343,7 @@ make_button(NSString *title, NSRect frame, id target, SEL action)
   NSTextField *_status;
   NSMutableArray *_procs;   /* NSDictionary pid, name, exe */
   NSTextField *_duration;
+  NSPopUpButton *_template;   /* Windows: the agent records any template */
   BOOL _ok;
 }
 
@@ -372,6 +376,42 @@ make_button(NSString *title, NSRect frame, id target, SEL action)
       [_procs addObject: [NSDictionary dictionaryWithObjectsAndKeys:
         [NSNumber numberWithInt: pid], @"pid", comm, @"name", exe ?: @"", @"exe", nil]];
     }
+#else
+  /* the user's own programs in this session that can be opened */
+  DWORD mySession = 0, me = GetCurrentProcessId();
+  ProcessIdToSessionId(me, &mySession);
+  BOOL (WINAPI *imageName)(HANDLE, DWORD, LPWSTR, PDWORD) = (void *)
+    GetProcAddress(GetModuleHandleA("kernel32.dll"), "QueryFullProcessImageNameW");
+  HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+  PROCESSENTRY32W pe;
+  pe.dwSize = sizeof(pe);
+  if (snap != INVALID_HANDLE_VALUE && Process32FirstW(snap, &pe))
+    do
+      {
+        DWORD session = 0;
+        if (pe.th32ProcessID == me || pe.th32ProcessID == 0
+            || !ProcessIdToSessionId(pe.th32ProcessID, &session) || session != mySession)
+          continue;
+        HANDLE h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_CREATE_THREAD
+                               | PROCESS_VM_OPERATION | PROCESS_VM_WRITE, FALSE, pe.th32ProcessID);
+        if (h == NULL)
+          continue;
+        WCHAR exe[MAX_PATH * 2];
+        DWORD n = MAX_PATH * 2;
+        NSString *path = @"";
+        if (imageName && imageName(h, 0, exe, &n))
+          path = [[NSString stringWithCharacters: (unichar *)exe length: n]
+                   stringByReplacingOccurrencesOfString: @"\\" withString: @"/"];
+        CloseHandle(h);
+        NSString *name = [NSString stringWithCharacters: (unichar *)pe.szExeFile
+                                                 length: wcslen(pe.szExeFile)];
+        [_procs addObject: [NSDictionary dictionaryWithObjectsAndKeys:
+          [NSNumber numberWithInt: (int)pe.th32ProcessID], @"pid", name, @"name",
+          path, @"exe", nil]];
+      }
+    while (Process32NextW(snap, &pe));
+  if (snap != INVALID_HANDLE_VALUE)
+    CloseHandle(snap);
 #endif
   [_procs sortUsingComparator: ^NSComparisonResult(NSDictionary *a, NSDictionary *b) {
     return [[a objectForKey: @"name"] caseInsensitiveCompare: [b objectForKey: @"name"]];
@@ -410,6 +450,18 @@ make_button(NSString *title, NSRect frame, id target, SEL action)
   [_status setAlignment: NSLeftTextAlignment];
   [[_status cell] setWraps: YES];
   [_status setFont: [INTheme smallFont]];
+#if defined(_WIN32)
+  [_status setFrame: NSMakeRect(124, 60, 500, 52)];
+  [_status setStringValue: @"The recording agent is loaded into the program, which keeps running when the recording stops. A program can be recorded this way once per run."];
+  [c addSubview: _status];
+  [c addSubview: make_label(@"Template:", NSMakeRect(196, 22, 64, 22))];
+  _template = [[NSPopUpButton alloc] initWithFrame: NSMakeRect(264, 20, 138, 26) pullsDown: NO];
+  for (GSPTemplate *t in [GSPTemplate allTemplates])
+    if (![t.instrumentIdentifiers containsObject: GSPInstrumentSystemProfiler])
+      [_template addItemWithTitle: t.name];
+  [_template selectItemWithTitle: @"Time Profiler"];
+  [c addSubview: _template];
+#else
   int paranoid = [GSPRecorder perfEventParanoid];
   NSString *helper = [GSPRecorder installedHelperPath];
   if ([GSPRecorder canAttachWithoutPrivileges])
@@ -423,13 +475,18 @@ make_button(NSString *title, NSRect frame, id target, SEL action)
       @"kernel.perf_event_paranoid is %d and the profiling helper is not installed. Use Install Profiling Helper… in the Instruments menu first.",
       paranoid]];
   [c addSubview: _status];
+#endif
 
   [c addSubview: make_label(@"Duration (s):", NSMakeRect(16, 22, 100, 22))];
   _duration = make_field(NSMakeRect(120, 22, 70, 24));
   [[_duration cell] setPlaceholderString: @"until stop"];
   [c addSubview: _duration];
 
+#if defined(_WIN32)
+  [c addSubview: make_button(@"Refresh", NSMakeRect(16, 72, 96, 30), self, @selector(refresh:))];
+#else
   [c addSubview: make_button(@"Refresh", NSMakeRect(300, 16, 96, 30), self, @selector(refresh:))];
+#endif
   NSButton *cancel = make_button(@"Cancel", NSMakeRect(410, 16, 96, 30), self, @selector(cancel:));
   [cancel setKeyEquivalent: @"\e"];
   [c addSubview: cancel];
@@ -448,8 +505,14 @@ make_button(NSString *title, NSRect frame, id target, SEL action)
   GSPRecordingOptions *o = [GSPRecordingOptions new];
   o.attachPID = [[p objectForKey: @"pid"] intValue];
   o.executablePath = [p objectForKey: @"exe"];
+#if defined(_WIN32)
+  GSPTemplate *t = [GSPTemplate templateNamed: [_template titleOfSelectedItem]];
+  o.templateName = t.name;
+  o.instrumentIdentifiers = t.instrumentIdentifiers;
+#else
   o.templateName = @"System Time Profiler";
   o.instrumentIdentifiers = [NSArray arrayWithObject: GSPInstrumentSystemProfiler];
+#endif
   o.timeLimit = [_duration doubleValue];
   return o;
 }

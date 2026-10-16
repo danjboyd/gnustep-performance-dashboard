@@ -37,7 +37,10 @@ add_item(NSMenu *menu, NSString *title, SEL action, NSString *key, id target)
 
   NSMenu *app = [[NSMenu alloc] initWithTitle: @"Instruments"];
   add_item(app, @"About Instruments", @selector(showAbout:), nil, self);
+#if !defined(_WIN32)
+  /* Windows attaches by injecting the agent; no helper there */
   add_item(app, @"Install Profiling Helper…", @selector(installHelper:), nil, self);
+#endif
   add_item(app, @"Hide", @selector(hide:), @"h", NSApp);
   add_item(app, @"Quit Instruments", @selector(terminate:), @"q", NSApp);
   item = add_item(main, @"Instruments", NULL, nil, nil);
