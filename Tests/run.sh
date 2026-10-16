@@ -56,11 +56,13 @@ record cburn --instrument time-profiler --instrument allocations --instrument le
 check "cburn recorded" "[ -f '$OUT/cburn.gstrace/Info.plist' ]"
 "$GSTRACE" export "$OUT/cburn.gstrace" --format json -o "$OUT/cburn.json" 2>/dev/null
 check "cburn summary is valid JSON" "python3 -c 'import json,sys; json.load(open(sys.argv[1]))' '$OUT/cburn.json'"
-check "cburn: ~1 s of CPU in hot_inner" "python3 - '$OUT/cburn.json' <<'EOF'
+# The work is fixed but its CPU time is not: on hybrid CPUs it takes about
+# three times longer on an efficiency core than on a performance core.
+check "cburn: 0.3-3 s of CPU, top function hot_inner" "python3 - '$OUT/cburn.json' <<'EOF'
 import json,sys
 d=json.load(open(sys.argv[1]))
 top=d['topFunctions'][0]
-sys.exit(0 if top['symbol']=='hot_inner' and 0.6 < d['cpuSeconds'] < 3.0 else 1)
+sys.exit(0 if top['symbol']=='hot_inner' and 0.3 < d['cpuSeconds'] < 3.0 else 1)
 EOF"
 check "cburn: two threads" "python3 -c 'import json,sys; sys.exit(0 if len(json.load(open(sys.argv[1]))[\"threads\"])==2 else 1)' '$OUT/cburn.json'"
 "$GSTRACE" report "$OUT/cburn.gstrace" leaks >"$OUT/cburn-leaks.txt" 2>/dev/null
