@@ -1,4 +1,15 @@
-# Windows port (planned after phase 3)
+# Windows port
+
+## Status
+
+- **Done — viewer.** `libGSPerformance`, `gstrace` (info, report, export,
+  diff, symbolicate) and Instruments.app build with MSYS2 clang64 and open
+  traces recorded on Linux. CI builds them on `windows-latest`, runs the
+  unit tests with tools-xctest and runs `Tests/viewer-checks.sh` against a
+  Linux-recorded sample trace.
+- **Next — recording.** The agent, the launcher and the helper below.
+
+## Plan for recording
 
 The analysis framework, `gstrace` and the app are portable GNUstep code; the
 platform-specific parts are the recording agent and the helper.

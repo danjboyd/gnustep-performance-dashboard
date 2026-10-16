@@ -18,8 +18,9 @@ It has three parts:
   `<os/log.h>`), so applications can mark intervals that show up as Points of
   Interest.
 
-Status: Linux (x86_64). Windows is planned (see
-[docs/windows.md](docs/windows.md)). Not yet released; see
+Status: recording on Linux (x86_64). On Windows (MSYS2 clang64) the
+framework, `gstrace` and the app build and analyse traces recorded on
+Linux; recording there is in progress (see [docs/windows.md](docs/windows.md)). Not yet released; see
 [docs/release.md](docs/release.md).
 
 ## Instruments
@@ -171,7 +172,7 @@ and `gstrace` use.
 
 ## Limitations
 
-- Linux x86_64 only for now; Windows is planned.
+- Recording is Linux x86_64 only for now; Windows can view traces.
 - Statically linked programs cannot be recorded by launching (no
   `LD_PRELOAD`); use attach.
 - Leak detection is conservative: a stale pointer-sized value can keep a
