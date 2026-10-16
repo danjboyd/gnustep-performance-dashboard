@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: Linux (clang, libobjc2)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    env:
+      PREFIX: ${{ github.workspace }}/../gnustep
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install packages
+        run: |
+          sudo apt-get -q update
+          sudo apt-get -q -y install clang lld cmake ninja-build pkg-config xvfb \
+            libffi-dev libgnutls28-dev libxml2-dev libxslt1-dev libicu-dev zlib1g-dev \
+            libcurl4-gnutls-dev libjpeg-dev libtiff-dev libpng-dev \
+            libcairo2-dev libfreetype-dev libfontconfig-dev \
+            libx11-dev libxext-dev libxft-dev libxrender-dev libxt-dev libxmu-dev \
+            libunwind8 python3
+
+      - name: Cache GNUstep
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.PREFIX }}
+          key: gnustep-${{ runner.os }}-ubuntu-24.04-${{ hashFiles('.github/scripts/install-gnustep.sh') }}
+
+      - name: Build GNUstep and tools-xctest
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: .github/scripts/install-gnustep.sh
+
+      - name: Build
+        run: |
+          . "$PREFIX/System/Library/Makefiles/GNUstep.sh"
+          export LD_LIBRARY_PATH="$PREFIX/System/Library/Libraries${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+          make CC=clang
+
+      - name: make check
+        run: |
+          . "$PREFIX/System/Library/Makefiles/GNUstep.sh"
+          export LD_LIBRARY_PATH="$PREFIX/System/Library/Libraries${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+          sh Tests/run.sh
+
+      - name: Keep test output
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-output
+          path: Tests/out/*.txt
+          if-no-files-found: ignore
