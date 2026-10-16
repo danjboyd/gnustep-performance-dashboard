@@ -12,7 +12,9 @@
 #if defined(_WIN32)
 /* Windows: the agent DLL is injected (docs/windows.md).  */
 #  include <windows.h>
-#  include <psapi.h>
+#  ifndef LIST_MODULES_64
+#    define LIST_MODULES_64 0x02
+#  endif
 #else
 #  include <dlfcn.h>
 #  include <signal.h>
@@ -836,10 +838,17 @@ remote_agent_export(HANDLE process, NSString *agent, const char *name)
   uintptr_t remoteBase = 0;
   WCHAR path[MAX_PATH];
 
-  if (!K32EnumProcessModulesEx(process, mods, sizeof(mods), &needed, LIST_MODULES_64))
+  /* looked up at run time: the headers hide them below Windows 7 */
+  HMODULE k32 = GetModuleHandleA("kernel32.dll");
+  BOOL (WINAPI *enumMods)(HANDLE, HMODULE *, DWORD, LPDWORD, DWORD) =
+    (void *)GetProcAddress(k32, "K32EnumProcessModulesEx");
+  DWORD (WINAPI *baseName)(HANDLE, HMODULE, LPWSTR, DWORD) =
+    (void *)GetProcAddress(k32, "K32GetModuleBaseNameW");
+  if (!enumMods || !baseName
+      || !enumMods(process, mods, sizeof(mods), &needed, LIST_MODULES_64))
     return NULL;
   for (DWORD i = 0; i < needed / sizeof(HMODULE) && i < 1024; i++)
-    if (K32GetModuleBaseNameW(process, mods[i], path, MAX_PATH)
+    if (baseName(process, mods[i], path, MAX_PATH)
         && _wcsicmp(path, L"gsperf-agent.dll") == 0)
       remoteBase = (uintptr_t)mods[i];
   if (remoteBase == 0)
@@ -987,7 +996,9 @@ remote_agent_export(HANDLE process, NSString *agent, const char *name)
     {
       WCHAR exe[MAX_PATH * 2];
       DWORD n = MAX_PATH * 2;
-      if (QueryFullProcessImageNameW(proc, 0, exe, &n))
+      BOOL (WINAPI *imageName)(HANDLE, DWORD, LPWSTR, PDWORD) = (void *)
+        GetProcAddress(GetModuleHandleA("kernel32.dll"), "QueryFullProcessImageNameW");
+      if (imageName && imageName(proc, 0, exe, &n))
         _options.executablePath = [[NSString stringWithCharacters: (unichar *)exe length: n]
                                     stringByReplacingOccurrencesOfString: @"\\" withString: @"/"];
     }
