@@ -4,7 +4,8 @@
    address tables of the loaded modules instead: calls to the UCRT heap
    functions (malloc, calloc, realloc, free, _aligned_*, _recalloc,
    _strdup, _wcsdup) and to libobjc2's allocation entry points
-   (class_createInstance, objc_alloc, ...) go through a hook that calls the
+   (class_createInstance, objc_alloc, ...) and reference counting
+   (objc_retain, objc_release, objc_autorelease) go through a hook that calls the
    original and records the event.  Modules loaded later with LoadLibrary
    are patched when the call returns (LoadLibrary itself is hooked), and
    once a second as a backstop.
@@ -429,6 +430,108 @@ hook_objc_alloc_init(Class cls)
 }
 
 /* ------------------------------------------------------------------ */
+/* reference counting history and zombies (the Zombies template)       */
+
+typedef void *SEL;
+typedef void (*IMP)(void);
+static bool refcounts_on, zombies_on;
+static id (*real_objc_retain)(id);
+static void (*real_objc_release)(id);
+static id (*real_objc_autorelease)(id);
+
+static void
+record_refcount(id obj, int kind)
+{
+  /* small objects (tagged pointers) are not allocations */
+  if (obj == NULL || !refcounts_on || ((uintptr_t)obj & 7) != 0 || !enter())
+    return;
+  gsp_refcount_payload p;
+  p.address = (uint64_t)(uintptr_t)obj;
+  p.stack = hook_caller_stack();
+  p.refcount = -1;
+  gspw_emit(GSP_REC_REFCOUNT, (uint32_t)kind, 0, gspw_now(), GetCurrentThreadId(),
+            &p, sizeof(p), NULL, 0);
+  leave();
+}
+
+static id
+hook_objc_retain(id obj)
+{
+  record_refcount(obj, GSP_RC_RETAIN);
+  return real_objc_retain(obj);
+}
+
+static void
+hook_objc_release(id obj)
+{
+  record_refcount(obj, GSP_RC_RELEASE);
+  real_objc_release(obj);
+}
+
+static id
+hook_objc_autorelease(id obj)
+{
+  record_refcount(obj, GSP_RC_AUTORELEASE);
+  return real_objc_autorelease(obj);
+}
+
+/* GNUstep's GSLogZombie is called inside gnustep-base, out of reach of
+   import tables, from -[NSZombie forwardInvocation:]; that method is
+   replaced through the runtime instead.  */
+static void (*real_zombie_forward)(id, SEL, id);
+static SEL sel_selector;
+static IMP (*p_objc_msg_lookup)(id, SEL);
+static const char *(*p_sel_getName)(SEL);
+
+static void
+zombie_forward(id self, SEL cmd, id invocation)
+{
+  if (enter())
+    {
+      SEL sel = NULL;
+      if (invocation && p_objc_msg_lookup && sel_selector)
+        {
+          SEL (*get)(id, SEL) = (SEL (*)(id, SEL))p_objc_msg_lookup(invocation, sel_selector);
+          if (get)
+            sel = get(invocation, sel_selector);
+        }
+      gsp_zombie_payload z;
+      memset(&z, 0, sizeof(z));
+      z.address = (uint64_t)(uintptr_t)self;
+      z.selector = sel && p_sel_getName ? gspw_intern(p_sel_getName(sel)) : 0;
+      z.stack = hook_caller_stack();
+      gspw_emit(GSP_REC_ZOMBIE, 0, 0, gspw_now(), GetCurrentThreadId(),
+                &z, sizeof(z), NULL, 0);
+      /* zombie messages often end in abort(): make sure it is written */
+      gspw_flush();
+      leave();
+    }
+  if (real_zombie_forward)
+    real_zombie_forward(self, cmd, invocation);
+}
+
+static void
+install_zombie_hook(HMODULE objc)
+{
+  Class (*getClass)(const char *) = (void *)GetProcAddress(objc, "objc_getClass");
+  SEL (*selReg)(const char *) = (void *)GetProcAddress(objc, "sel_registerName");
+  void *(*instMethod)(Class, SEL) = (void *)GetProcAddress(objc, "class_getInstanceMethod");
+  IMP (*setImp)(void *, IMP) = (void *)GetProcAddress(objc, "method_setImplementation");
+  p_objc_msg_lookup = (void *)GetProcAddress(objc, "objc_msg_lookup");
+  p_sel_getName = (void *)GetProcAddress(objc, "sel_getName");
+  if (!getClass || !selReg || !instMethod || !setImp)
+    return;
+  Class zombie = getClass("NSZombie");
+  if (zombie == NULL)
+    return;
+  void *m = instMethod(zombie, selReg("forwardInvocation:"));
+  if (m == NULL)
+    return;
+  sel_selector = selReg("selector");
+  real_zombie_forward = (void (*)(id, SEL, id))setImp(m, (IMP)zombie_forward);
+}
+
+/* ------------------------------------------------------------------ */
 /* exit: the final leak check, before atexit handlers release globals  */
 
 static void (*real_exit)(int);
@@ -528,6 +631,9 @@ static hook_def hooks[] = {
   HOOK("objc_alloc", LIB_OBJC, hook_objc_alloc, real_objc_alloc),
   HOOK("objc_allocWithZone", LIB_OBJC, hook_objc_allocWithZone, real_objc_allocWithZone),
   HOOK("objc_alloc_init", LIB_OBJC, hook_objc_alloc_init, real_objc_alloc_init),
+  HOOK("objc_retain", LIB_OBJC, hook_objc_retain, real_objc_retain),
+  HOOK("objc_release", LIB_OBJC, hook_objc_release, real_objc_release),
+  HOOK("objc_autorelease", LIB_OBJC, hook_objc_autorelease, real_objc_autorelease),
   HOOK("LoadLibraryA", LIB_LOADER, hook_LoadLibraryA, real_LoadLibraryA),
   HOOK("LoadLibraryW", LIB_LOADER, hook_LoadLibraryW, real_LoadLibraryW),
   HOOK("LoadLibraryExA", LIB_LOADER, hook_LoadLibraryExA, real_LoadLibraryExA),
@@ -563,6 +669,8 @@ resolve_objc(const char *dll)
     return;
   p_class_getName = (void *)GetProcAddress(m, "class_getName");
   p_object_getClass = (void *)GetProcAddress(m, "object_getClass");
+  if (zombies_on)
+    install_zombie_hook(m);
 }
 
 static void
@@ -669,8 +777,10 @@ gspw_agent_image(uint64_t *lo, uint64_t *hi)
 }
 
 void
-gspw_heap_start(bool allocations, unsigned frames)
+gspw_heap_start(bool allocations, bool refcounts, bool zombies, unsigned frames)
 {
+  refcounts_on = refcounts;
+  zombies_on = zombies;
   guard_tls = TlsAlloc();
   InitializeCriticalSection(&stack_lock);
   InitializeCriticalSection(&patch_lock);

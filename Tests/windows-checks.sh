@@ -76,6 +76,17 @@ if command -v gnustep-config >/dev/null 2>&1; then
   check "Leaks: all 5 Leaky objects (incl. a retain cycle) found" "grep -E -q '^Leaky +5 ' '$OUT/objleaks.txt'"
   check "Leaks: leak stack names make_leaks" "grep -q make_leaks '$OUT/objleaks.txt'"
   check "Leaks: few other reports (< 50 blocks)" "[ \$(sed -n 2p '$OUT/objleaks.txt' | cut -d' ' -f1) -lt 50 ]"
+
+  # Zombies: a message to a deallocated object
+  rm -rf "$OUT/zombie.gstrace"
+  "$GSTRACE" record --template Zombies -o "$OUT/zombie.gstrace" --launch "$OUT/objcwork.exe" zombie \
+    >"$OUT/zombie-record.log" 2>&1
+  cat "$OUT/zombie-record.log"
+  "$GSTRACE" info "$OUT/zombie.gstrace" 2>&1 | tail -4
+  "$GSTRACE" report "$OUT/zombie.gstrace" zombies >"$OUT/zombie.txt" 2>&1
+  cat "$OUT/zombie.txt"
+  check "Zombies: -description to deallocated NSObject" "grep -q -- '-description sent to deallocated NSObject' '$OUT/zombie.txt'"
+  check "Zombies: history Malloc, Release, Zombie" "grep -q Malloc '$OUT/zombie.txt' && grep -q Release '$OUT/zombie.txt' && grep -q 'Zombie' '$OUT/zombie.txt'"
 fi
 
 echo

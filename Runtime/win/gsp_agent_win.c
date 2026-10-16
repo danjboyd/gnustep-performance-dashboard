@@ -64,7 +64,6 @@ static DWORD self_pid;
 static DWORD main_tid;
 static DWORD sampler_tid;
 static DWORD meta_thread_id;
-static HANDLE sampler_thread;
 static HANDLE meta_thread;
 static HANDLE stop_event;
 static volatile LONG recording;
@@ -695,6 +694,14 @@ gspw_recording(void)
   return recording && !finished;
 }
 
+void
+gspw_flush(void)
+{
+  EnterCriticalSection(&out_lock);
+  flush_locked();
+  LeaveCriticalSection(&out_lock);
+}
+
 bool
 gspw_is_agent_thread(unsigned long tid)
 {
@@ -858,8 +865,11 @@ start(void)
   gspw_leaks_start(env_flag("GSP_LEAKS", false));
   leak_interval_s = env_uint("GSP_LEAK_INTERVAL", 0);
   gspw_heap_start(env_flag("GSP_ALLOCATIONS", false) || env_flag("GSP_LEAKS", false),
+                  env_flag("GSP_REFCOUNTS", false), env_flag("GSP_ZOMBIES", false),
                   env_uint("GSP_ALLOC_FRAMES", 48));
-  sampler_thread = CreateThread(NULL, 0, sampler_main, NULL, 0, &sampler_tid);
+  HANDLE sampler_thread = CreateThread(NULL, 0, sampler_main, NULL, 0, &sampler_tid);
+  if (sampler_thread)
+    CloseHandle(sampler_thread);
   DWORD meta_tid = 0;
   meta_thread = CreateThread(NULL, 0, meta_main, NULL, 0, &meta_tid);
   meta_thread_id = meta_tid;
