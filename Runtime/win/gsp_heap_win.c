@@ -454,25 +454,87 @@ record_refcount(id obj, int kind)
   leave();
 }
 
+/* objc_release may send -release, which is also hooked (below): the
+   object being handled by the C entry point is noted per thread so the
+   message is not counted twice.  */
+static DWORD rc_tls = TLS_OUT_OF_INDEXES;
+
+static inline void
+rc_note(id obj)
+{
+  DWORD e = GetLastError();
+  TlsSetValue(rc_tls, obj);
+  SetLastError(e);
+}
+
+static inline bool
+rc_noted(id obj)
+{
+  DWORD e = GetLastError();
+  bool same = TlsGetValue(rc_tls) == obj;
+  if (same)
+    TlsSetValue(rc_tls, NULL);
+  SetLastError(e);
+  return same;
+}
+
 static id
 hook_objc_retain(id obj)
 {
   record_refcount(obj, GSP_RC_RETAIN);
-  return real_objc_retain(obj);
+  rc_note(obj);
+  id r = real_objc_retain(obj);
+  rc_note(NULL);
+  return r;
 }
 
 static void
 hook_objc_release(id obj)
 {
   record_refcount(obj, GSP_RC_RELEASE);
+  rc_note(obj);
   real_objc_release(obj);
+  rc_note(NULL);
 }
 
 static id
 hook_objc_autorelease(id obj)
 {
   record_refcount(obj, GSP_RC_AUTORELEASE);
-  return real_objc_autorelease(obj);
+  rc_note(obj);
+  id r = real_objc_autorelease(obj);
+  rc_note(NULL);
+  return r;
+}
+
+/* -[NSObject retain/release/autorelease]: clang on Windows sends these as
+   messages rather than calling the runtime's entry points.  */
+static id (*real_msg_retain)(id, SEL);
+static void (*real_msg_release)(id, SEL);
+static id (*real_msg_autorelease)(id, SEL);
+
+static id
+msg_retain(id self, SEL cmd)
+{
+  if (!rc_noted(self))
+    record_refcount(self, GSP_RC_RETAIN);
+  return real_msg_retain(self, cmd);
+}
+
+static void
+msg_release(id self, SEL cmd)
+{
+  if (!rc_noted(self))
+    record_refcount(self, GSP_RC_RELEASE);
+  real_msg_release(self, cmd);
+}
+
+static id
+msg_autorelease(id self, SEL cmd)
+{
+  if (!rc_noted(self))
+    record_refcount(self, GSP_RC_AUTORELEASE);
+  return real_msg_autorelease(self, cmd);
 }
 
 /* GNUstep's GSLogZombie is called inside gnustep-base, out of reach of
@@ -508,6 +570,37 @@ zombie_forward(id self, SEL cmd, id invocation)
     }
   if (real_zombie_forward)
     real_zombie_forward(self, cmd, invocation);
+}
+
+static IMP
+replace_method(HMODULE objc, const char *cls, const char *sel, IMP imp)
+{
+  Class (*getClass)(const char *) = (void *)GetProcAddress(objc, "objc_getClass");
+  SEL (*selReg)(const char *) = (void *)GetProcAddress(objc, "sel_registerName");
+  void *(*instMethod)(Class, SEL) = (void *)GetProcAddress(objc, "class_getInstanceMethod");
+  IMP (*setImp)(void *, IMP) = (void *)GetProcAddress(objc, "method_setImplementation");
+  if (!getClass || !selReg || !instMethod || !setImp)
+    return NULL;
+  Class c = getClass(cls);
+  void *m = c ? instMethod(c, selReg(sel)) : NULL;
+  return m ? setImp(m, imp) : NULL;
+}
+
+static void
+install_refcount_hooks(HMODULE objc)
+{
+  if (rc_tls == TLS_OUT_OF_INDEXES)
+    rc_tls = TlsAlloc();
+  if (rc_tls == TLS_OUT_OF_INDEXES)
+    return;
+  /* installed at injection, while the program's threads are suspended */
+  IMP r;
+  if ((r = replace_method(objc, "NSObject", "retain", (IMP)msg_retain)) != NULL)
+    real_msg_retain = (id (*)(id, SEL))r;
+  if ((r = replace_method(objc, "NSObject", "release", (IMP)msg_release)) != NULL)
+    real_msg_release = (void (*)(id, SEL))r;
+  if ((r = replace_method(objc, "NSObject", "autorelease", (IMP)msg_autorelease)) != NULL)
+    real_msg_autorelease = (id (*)(id, SEL))r;
 }
 
 static void
@@ -671,6 +764,8 @@ resolve_objc(const char *dll)
   p_object_getClass = (void *)GetProcAddress(m, "object_getClass");
   if (zombies_on)
     install_zombie_hook(m);
+  if (refcounts_on)
+    install_refcount_hooks(m);
 }
 
 static void
