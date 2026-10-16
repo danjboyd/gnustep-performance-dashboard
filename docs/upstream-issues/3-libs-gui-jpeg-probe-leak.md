@@ -1,6 +1,8 @@
 **Repository:** gnustep/libs-gui
 
-**Status:** draft, not reviewed. Reproducer: `jpeg_probe_leak.m` (next to
+**Filed:** [gnustep/libs-gui#1010](https://github.com/gnustep/libs-gui/issues/1010), 2026-10-16, as approved (the text below the line, with the reproducer pasted in a collapsed section).
+
+**Status:** sent. Reproducer: `jpeg_probe_leak.m` (next to
 this file).
 
 **Checked before drafting (2026-10-16):** libs-gui issues and pull

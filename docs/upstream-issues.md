@@ -28,8 +28,10 @@ Workaround: `Runtime/gsp_objc.c` asks for exactly the count returned by
 
 ## libs-gui: `-[NSOutlineView frameOfOutlineCellAtRow:]` ignores the outline column
 
-**Status:** drafted, not reviewed:
-`upstream-issues/2-libs-gui-outline-cell-frame-column-0.md`. Reproduced on
+**Status:** filed as
+[gnustep/libs-gui#1009](https://github.com/gnustep/libs-gui/issues/1009)
+on 2026-10-16 (draft:
+`upstream-issues/2-libs-gui-outline-cell-frame-column-0.md`). Reproduced on
 0.32.0 and master: the triangle is drawn in column 0, while clicks are
 detected in the outline column (not "in the wrong column" as noted below).
 
@@ -41,8 +43,9 @@ Workaround: the call tree puts Symbol Name first.
 
 ## libs-gui: `+[NSBitmapImageRep _bitmapIsJPEG:]` leaks 72 bytes per non-JPEG image
 
-**Status:** drafted, not reviewed:
-`upstream-issues/3-libs-gui-jpeg-probe-leak.md`. Reproduced on 0.32.0 and
+**Status:** filed as
+[gnustep/libs-gui#1010](https://github.com/gnustep/libs-gui/issues/1010)
+on 2026-10-16 (draft: `upstream-issues/3-libs-gui-jpeg-probe-leak.md`). Reproduced on 0.32.0 and
 master with TIFF data. PNG data doesn't leak: it is detected before the
 JPEG probe runs. The cause below was confirmed by disassembly.
 

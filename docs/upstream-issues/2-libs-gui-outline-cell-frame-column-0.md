@@ -1,6 +1,8 @@
 **Repository:** gnustep/libs-gui
 
-**Status:** draft, not reviewed. Reproducer: `outline_column_frame.m`
+**Filed:** [gnustep/libs-gui#1009](https://github.com/gnustep/libs-gui/issues/1009), 2026-10-16, as approved (the text below the line, with the reproducer pasted in a collapsed section).
+
+**Status:** sent. Reproducer: `outline_column_frame.m`
 (next to this file); screenshot: `outline_column_frame.png`.
 
 **Checked before drafting (2026-10-16):** libs-gui issues and pull
