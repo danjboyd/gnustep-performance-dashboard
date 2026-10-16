@@ -122,8 +122,47 @@ jobs:
       run-smoke: true
       artifact-name: windows
 
+  # The installed MSI records a program: its gstrace.exe launches
+  # defaults.exe (a GNUstep program in the package) with the Leaks template;
+  # the trace must finish cleanly with a leak check.
+  windows-record:
+    needs: windows
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-packages
+          path: msi
+
+      - name: Install
+        run: |
+          $msi = Get-ChildItem msi -Recurse -Filter *.msi | Select-Object -First 1
+          $p = Start-Process msiexec.exe -Wait -PassThru -ArgumentList @("/i", "`"$($msi.FullName)`"", "/qn", "/l*v", "install.log")
+          if ($p.ExitCode -ne 0) { Get-Content install.log -Tail 40; throw "msiexec exited with $($p.ExitCode)" }
+
+      - name: Record with the installed gstrace
+        run: |
+          $root = Join-Path $env:LOCALAPPDATA "Performance Dashboard"
+          $bin = Join-Path $root "runtime\bin"
+          $env:PATH = "$bin;$env:PATH"
+          $trace = Join-Path $env:RUNNER_TEMP "defaults.gstrace"
+          & (Join-Path $bin "gstrace.exe") record --template Leaks --time-limit 30s -o $trace `
+            --launch (Join-Path $bin "defaults.exe") read NSGlobalDomain GSTheme
+          if ($LASTEXITCODE -ne 0) { throw "gstrace record exited with $LASTEXITCODE" }
+          $info = & (Join-Path $bin "gstrace.exe") info $trace | Out-String
+          $leaks = & (Join-Path $bin "gstrace.exe") report $trace leaks | Out-String
+          Write-Host $info
+          Write-Host $leaks
+          if ($info -notmatch "finished cleanly: yes") { throw "the trace did not finish cleanly" }
+          if ($leaks -notmatch "leak check\(s\)") { throw "the trace has no leak check" }
+          "Windows: the installed gstrace recorded defaults.exe with the Leaks template" >> $env:GITHUB_STEP_SUMMARY
+
   release:
-    needs: [version, linux, windows]
+    needs: [version, linux, windows, windows-record]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/download-artifact@v4

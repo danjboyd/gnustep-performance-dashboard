@@ -71,6 +71,8 @@ Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path $stage "app\Performa
 Get-ChildItem -Path (Join-Path $repoRoot "GSPerformance\obj") -Filter "*.dll" -File |
   ForEach-Object { Copy-Item $_.FullName (Join-Path $runtimeBin $_.Name) -Force }
 Copy-Item (Join-Path $repoRoot "Tools\gstrace\obj\gstrace.exe") (Join-Path $runtimeBin "gstrace.exe") -Force
+# gstrace looks for the recording agent next to the GSPerformance DLL.
+Copy-Item (Join-Path $appSource "Resources\gsperf-agent.dll") (Join-Path $runtimeBin "gsperf-agent.dll") -Force
 
 # GNUstep: fonts configuration, the back bundle and the gui's shared resources.
 Copy-Tree (Join-Path $clang64 "etc\fonts") (Join-Path $runtime "etc\fonts") | Out-Null

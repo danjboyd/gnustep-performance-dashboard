@@ -102,6 +102,8 @@ for tool in defaults gpbs gdnc make_services; do
   cp "$gnustep_tools/$tool" "$runtime/bin/$tool"
 done
 cp "$repo_root/Tools/gstrace/obj/gstrace" "$runtime/bin/gstrace"
+# gstrace looks for the recording agent next to libGSPerformance.
+cp "$app_source/Resources/libgsperf-agent.so" "$runtime/lib/libgsperf-agent.so"
 
 # The libraries themselves: this project's framework, then the GNUstep
 # install; remaining dependencies come from the host

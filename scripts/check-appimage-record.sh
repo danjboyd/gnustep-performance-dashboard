@@ -5,7 +5,7 @@
 # template (the recording agent is copied out of the AppImage mount and
 # preloaded into the program), sends SIGTERM, and checks that the app exits
 # with status 0 and that the trace finished cleanly with the program's ten
-# leaked blocks.
+# leaked blocks, and that the bundled gstrace records the same.
 #
 #   scripts/check-appimage-record.sh APPIMAGE
 set -euo pipefail
@@ -54,10 +54,22 @@ done
 [ -n "$trace" ] || { tail -20 "$work/app.log" >&2; die "no trace was written"; }
 sleep 2
 # Signal the app. In extract-and-run mode (no FUSE, as in CI containers)
-# the AppImage runtime runs it as a child and dies on SIGTERM itself,
-# leaving the app behind; with FUSE the AppImage's process is the app.
-target="$(pgrep -P "$app_pid" -f 'PerformanceDashboard\.app/PerformanceDashboard' | head -1 || true)"
-kill -TERM "${target:-$app_pid}"
+# the AppImage runtime runs it below itself (through AppRun) and dies on
+# SIGTERM, leaving the app behind; with FUSE the AppImage's process can be
+# the app. Look through all the runtime's descendants, never by name alone:
+# the user may have their own copy running.
+descendants() { # pid: its descendants
+  local child
+  for child in $(ps -o pid= --ppid "$1"); do
+    echo "$child"
+    descendants "$child"
+  done
+}
+target="$app_pid"
+for pid in $(descendants "$app_pid"); do
+  [ "$(cat "/proc/$pid/comm" 2>/dev/null)" = PerformanceDash ] && target="$pid"
+done
+kill -TERM "$target"
 status=0
 for _ in $(seq 1 10); do kill -0 "$app_pid" 2>/dev/null || break; sleep 1; done
 if kill -0 "$app_pid" 2>/dev/null; then die "the app did not exit on SIGTERM"; fi
@@ -73,4 +85,15 @@ leaks="$(LD_LIBRARY_PATH="$runtime/lib" GNUSTEP_CONFIG_FILE="$runtime/etc/GNUste
   HOME="$work/home" "$runtime/bin/gstrace" report "$trace" leaks 2>/dev/null)"
 grep -q 'finished cleanly: yes' <<<"$info" || { echo "$info" >&2; die "the trace did not finish cleanly"; }
 grep -q '^10 leaked block(s), 480 Bytes' <<<"$leaks" || { echo "$leaks" >&2; die "the trace does not have the fixture's 10 leaks"; }
-echo "check-appimage-record: passed (recorded, 10 leaks found, exit status 0 on SIGTERM)"
+
+# The bundled gstrace records too (it finds the agent next to libGSPerformance).
+cli_trace="$work/cli.gstrace"
+gst() {
+  env -i HOME="$work/home" PATH=/usr/bin:/bin LD_LIBRARY_PATH="$runtime/lib" \
+    GNUSTEP_CONFIG_FILE="$runtime/etc/GNUstep/GNUstep.conf" "$runtime/bin/gstrace" "$@"
+}
+gst record --template Leaks -o "$cli_trace" --launch "$work/cburn" >"$work/cli.log" 2>&1 \
+  || { tail -20 "$work/cli.log" >&2; die "the bundled gstrace could not record"; }
+gst report "$cli_trace" leaks 2>/dev/null | grep -q '^10 leaked block(s), 480 Bytes' \
+  || die "the bundled gstrace's trace does not have the fixture's 10 leaks"
+echo "check-appimage-record: passed (the app and the bundled gstrace recorded the 10 leaks; exit status 0 on SIGTERM)"
