@@ -1,9 +1,16 @@
 # Upstream issues found while building Performance Dashboard
 
-None of these have been reported yet — they need Dan's go-ahead (public
-issues on other projects). Each has a workaround here.
+Leads found while building and using Performance Dashboard. None has been
+reported. Anything sent upstream follows `upstream-policy.md`: a draft
+and reproducer under `upstream-issues/`, re-checked on current master,
+reviewed and signed off by Dan (`upstream-signoff.md`), then sent only when
+he asks. The notes below are from earlier sessions and are not yet
+verified to that standard. Each has a workaround here.
 
 ## libobjc2: `objc_getClassList` double-frees its enumerator
+
+**Status:** not sending. libobjc2 accepts no LLM-derived changes or
+reports (`upstream-policy.md`).
 
 `objc_getClassList(buffer, n)` with `n` larger than the number of registered
 classes walks off the end of the class table; `class_table_internal_next`
@@ -17,6 +24,8 @@ Workaround: `Runtime/gsp_objc.c` asks for exactly the count returned by
 
 ## libs-gui: `-[NSOutlineView frameOfOutlineCellAtRow:]` ignores the outline column
 
+**Status:** lead; no draft yet (Stage 1 of `upstream-policy.md`).
+
 It always uses column 0 (`frameOfCellAtColumn: 0`), so when the outline
 column is not the first column the disclosure triangles are drawn — and
 clicks are detected — in the wrong column.
@@ -24,6 +33,9 @@ clicks are detected — in the wrong column.
 Workaround: the call tree puts Symbol Name first.
 
 ## libs-gui: `+[NSBitmapImageRep _bitmapIsJPEG:]` leaks 72 bytes per non-JPEG image
+
+**Status:** lead; no draft yet. The cause below is a hypothesis to test,
+not a finding.
 
 Found with the Leaks template on Gorm (185 leaks) and reproduced with a
 ten-line program that calls `+imageRepsWithData:` on a TIFF ten times: all

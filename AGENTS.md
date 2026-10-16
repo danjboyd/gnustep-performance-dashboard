@@ -21,8 +21,8 @@ trademark); "instrument" stays as the generic word for a recording type.
 - `Tests/Unit/` — tools-xctest bundle with a synthetic trace builder.
   `Tests/fixtures/` — C, Objective-C and AppKit programs with known
   behaviour. `Tests/run.sh` — the regression suite.
-- `docs/` — architecture, trace format, release process, upstream issues,
-  xctest integration, Windows plan.
+- `docs/` — architecture, trace format, release process, upstream issues
+  and the upstream policy, xctest integration, Windows plan.
 
 ## Build and validation
 
@@ -50,4 +50,8 @@ other theme (Sombre). Use standard controls and theme colours (`PDTheme`).
   brace style; match the surrounding code.
 - Commits as Daniel Boyd <danieljboyd@icloud.com>. Releases follow
   docs/release.md; every tag and publish needs Dan's approval in-session.
+- Anything sent to another project (issues, pull requests, patches,
+  comments) follows docs/upstream-policy.md: nothing leaves without Dan's
+  sign-off on the exact hash, recorded in docs/upstream-signoff.md, and
+  nothing at all goes to libobjc2.
 - Never mention private package repositories or build hosts in this repo.
