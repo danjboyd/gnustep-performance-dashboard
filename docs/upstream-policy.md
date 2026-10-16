@@ -228,6 +228,5 @@ Findings are listed in `upstream-issues.md`:
   [libobjc2#433](https://github.com/gnustep/libobjc2/issues/433) on
   2026-10-16, a bug report with no code. Our workaround stays until it is
   fixed upstream.
-- **libs-gui outline column** and **libs-gui JPEG probe leak:** leads
-  only. Neither has a draft, a GCC-clean reproducer, a run on current
-  master or a duplicate check yet (Stage 1).
+- **libs-gui outline column** and **libs-gui JPEG probe leak:** drafted
+  with GCC-clean reproducers, run on master fdc5cfe83, not reviewed.
