@@ -378,6 +378,7 @@ child(GSPCallTreeNode *n, NSString *name)
   XCTAssertEqualObjects([env objectForKey: @"NSZombieEnabled"], @"YES");
 }
 
+#if !defined(_WIN32)
 - (void) testHelperStagingIsPrivate
 {
   NSError *error = nil;
@@ -399,6 +400,7 @@ child(GSPCallTreeNode *n, NSString *name)
   [fm removeItemAtPath: dir error: NULL];
   [fm removeItemAtPath: again error: NULL];
 }
+#endif
 
 - (void) testAppImageEnvironmentIsScrubbed
 {

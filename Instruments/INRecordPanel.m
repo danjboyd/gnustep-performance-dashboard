@@ -1,8 +1,10 @@
 #import "INRecordPanel.h"
 #import "INTheme.h"
 
-#include <unistd.h>
 #include <sys/stat.h>
+#if !defined(_WIN32)
+#  include <unistd.h>
+#endif
 
 static NSTextField *
 make_label(NSString *text, NSRect frame)
@@ -348,13 +350,14 @@ make_button(NSString *title, NSRect frame, id target, SEL action)
 
 - (void) refresh: (id)sender
 {
+  [_procs removeAllObjects];
+#if !defined(_WIN32)
   NSFileManager *fm = [NSFileManager defaultManager];
   uid_t me = getuid();
-  [_procs removeAllObjects];
   for (NSString *name in [fm contentsOfDirectoryAtPath: @"/proc" error: NULL])
     {
       int pid = [name intValue];
-      if (pid <= 0 || pid == getpid())
+      if (pid <= 0 || pid == [[NSProcessInfo processInfo] processIdentifier])
         continue;
       struct stat st;
       NSString *dir = [@"/proc" stringByAppendingPathComponent: name];
@@ -369,6 +372,7 @@ make_button(NSString *title, NSRect frame, id target, SEL action)
       [_procs addObject: [NSDictionary dictionaryWithObjectsAndKeys:
         [NSNumber numberWithInt: pid], @"pid", comm, @"name", exe ?: @"", @"exe", nil]];
     }
+#endif
   [_procs sortUsingComparator: ^NSComparisonResult(NSDictionary *a, NSDictionary *b) {
     return [[a objectForKey: @"name"] caseInsensitiveCompare: [b objectForKey: @"name"]];
   }];

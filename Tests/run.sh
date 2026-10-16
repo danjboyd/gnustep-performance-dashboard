@@ -125,6 +125,14 @@ check "diff of a trace with itself shows no change" "'$GSTRACE' diff '$OUT/objcw
 check "diff --fail-above fails when CPU time grows" "! '$GSTRACE' diff '$OUT/objcwork.gstrace' '$OUT/cburn.gstrace' --fail-above 50 >/dev/null 2>&1"
 check "diff --fail-above passes when it shrinks" "'$GSTRACE' diff '$OUT/cburn.gstrace' '$OUT/objcwork.gstrace' --fail-above 50 >/dev/null 2>&1"
 
+echo "== Viewer checks on the checked-in sample trace"
+if sh "$ROOT/Tests/viewer-checks.sh" "$GSTRACE" >"$OUT/viewer.log" 2>&1; then
+  pass "viewer checks: $(tail -1 "$OUT/viewer.log")"
+else
+  cat "$OUT/viewer.log"
+  fail "viewer checks"
+fi
+
 echo "== CLI behaviour"
 check "unknown template is rejected" "! '$GSTRACE' record --template Nope --launch /bin/true >/dev/null 2>&1"
 check "list templates" "'$GSTRACE' list templates 2>/dev/null | grep -q '^Time Profiler'"

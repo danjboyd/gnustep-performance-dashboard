@@ -2,8 +2,12 @@
 #import "GSPTrace.h"
 #import "GSPStackTable.h"
 
-#include <dlfcn.h>
-#include <elf.h>
+#include "GSPELF.h"
+#if defined(_WIN32)
+#  include <windows.h>
+#else
+#  include <dlfcn.h>
+#endif
 #include <stdlib.h>
 #include <string.h>
 
@@ -367,6 +371,16 @@ static char *(*cxa_demangle)(const char *, char *, size_t *, int *);
 
 + (void) initialize
 {
+#if defined(_WIN32)
+  const char *runtimes[] = { "libc++.dll", "libstdc++-6.dll", NULL };
+  for (int i = 0; runtimes[i] && cxa_demangle == NULL; i++)
+    {
+      HMODULE h = LoadLibraryA(runtimes[i]);
+      if (h)
+        cxa_demangle = (char *(*)(const char *, char *, size_t *, int *))
+          GetProcAddress(h, "__cxa_demangle");
+    }
+#else
   cxa_demangle = dlsym(RTLD_DEFAULT, "__cxa_demangle");
   if (cxa_demangle == NULL)
     {
@@ -374,6 +388,7 @@ static char *(*cxa_demangle)(const char *, char *, size_t *, int *);
       if (h)
         cxa_demangle = dlsym(h, "__cxa_demangle");
     }
+#endif
 }
 
 - (instancetype) initWithProcess: (GSPProcess *)process

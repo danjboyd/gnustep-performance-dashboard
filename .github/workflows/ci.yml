@@ -59,3 +59,62 @@ jobs:
           name: test-output
           path: Tests/out/*.txt
           if-no-files-found: ignore
+
+  windows:
+    name: Windows viewer (MSYS2 clang64)
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: CLANG64
+          update: true
+          install: >-
+            make
+            git
+            mingw-w64-clang-x86_64-clang
+            mingw-w64-clang-x86_64-libobjc2
+            mingw-w64-clang-x86_64-libdispatch
+            mingw-w64-clang-x86_64-gnustep-make
+            mingw-w64-clang-x86_64-gnustep-base
+            mingw-w64-clang-x86_64-gnustep-gui
+            mingw-w64-clang-x86_64-gnustep-back
+
+      # MSYS2's gnustep-base 1.31.1-10 puts __block on an instance variable,
+      # which newer clang rejects (gnustep/libs-base#809).
+      - name: Patch gnustep-base header
+        run: |
+          sed -i 's/BLOCK_SCOPE GSScheduledBlock _block;/GSScheduledBlock _block;/' \
+            /clang64/include/Foundation/NSBackgroundActivityScheduler.h
+
+      - name: Build and install tools-xctest
+        run: |
+          . /clang64/share/GNUstep/Makefiles/GNUstep.sh
+          export ADDITIONAL_CPPFLAGS=-DHAVE_MODE_T
+          git clone -q --depth 1 --branch v0.5.1 https://github.com/danjboyd/tools-xctest.git "$RUNNER_TEMP/tools-xctest"
+          make -C "$RUNNER_TEMP/tools-xctest"
+          make -C "$RUNNER_TEMP/tools-xctest" install
+
+      - name: Build (framework, gstrace, Instruments.app)
+        run: |
+          . /clang64/share/GNUstep/Makefiles/GNUstep.sh
+          export ADDITIONAL_CPPFLAGS=-DHAVE_MODE_T
+          make
+
+      - name: Unit tests
+        run: |
+          . /clang64/share/GNUstep/Makefiles/GNUstep.sh
+          export ADDITIONAL_CPPFLAGS=-DHAVE_MODE_T
+          export PATH="$PWD/GSPerformance/obj:$PATH"
+          make -C Tests/Unit check
+
+      - name: Viewer checks on a trace recorded on Linux
+        run: |
+          . /clang64/share/GNUstep/Makefiles/GNUstep.sh
+          export PATH="$PWD/GSPerformance/obj:$PATH"
+          sh Tests/viewer-checks.sh "$PWD/Tools/gstrace/obj/gstrace.exe"

@@ -6,3 +6,4 @@ obj/
 *.gstrace/
 Tests/out/
 build/
+*.xctest/

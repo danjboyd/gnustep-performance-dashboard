@@ -4,18 +4,24 @@
 #import "GSPRecorder.h"
 #import "GSPInstruments.h"
 
-#include <dlfcn.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <signal.h>
-#include <spawn.h>
 #include <string.h>
-#include <unistd.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <sys/utsname.h>
-#include <sys/wait.h>
-#include <sys/xattr.h>
+#if defined(_WIN32)
+/* Recording is not implemented on Windows yet (see docs/windows.md); the
+   framework still reads, analyses and exports traces there.  */
+#  include <windows.h>
+#else
+#  include <dlfcn.h>
+#  include <signal.h>
+#  include <spawn.h>
+#  include <unistd.h>
+#  include <sys/utsname.h>
+#  include <sys/wait.h>
+#  include <sys/xattr.h>
+#endif
 
 NSString * const GSPRecorderErrorDomain = @"GSPRecorderErrorDomain";
 
@@ -85,6 +91,9 @@ make_error(NSInteger code, NSString *message)
 
 + (NSString *) agentLibraryPath
 {
+#if defined(_WIN32)
+  return nil;
+#else
   NSFileManager *fm = [NSFileManager defaultManager];
   NSMutableArray *candidates = [NSMutableArray array];
   const char *env = getenv("GSP_AGENT_PATH");
@@ -122,6 +131,7 @@ make_error(NSInteger code, NSString *message)
     if ([fm isReadableFileAtPath: c])
       return c;
   return nil;
+#endif
 }
 
 + (NSString *) helperInstallLocation
@@ -142,6 +152,9 @@ make_error(NSInteger code, NSString *message)
 
 + (NSString *) bundledHelperPath
 {
+#if defined(_WIN32)
+  return nil;
+#else
   NSFileManager *fm = [NSFileManager defaultManager];
   NSMutableArray *candidates = [NSMutableArray array];
   NSString *exe = [[NSBundle mainBundle] executablePath];
@@ -173,8 +186,10 @@ make_error(NSInteger code, NSString *message)
         return p;
     }
   return nil;
+#endif
 }
 
+#if !defined(_WIN32)
 static BOOL
 copy_private(NSString *from, NSString *to, mode_t mode)
 {
@@ -260,6 +275,26 @@ copy_private(NSString *from, NSString *to, mode_t mode)
     return [NSString stringWithFormat: @"%@ is not executable.", path];
   return nil;
 }
+
+#else
++ (NSString *) stageHelperForInstall: (NSError **)error
+{
+  if (error)
+    *error = make_error(11, @"The profiling helper is not available on Windows yet.");
+  return nil;
+}
+
++ (NSString *) installedHelperPath
+{
+  return nil;
+}
+
++ (NSString *) preloadProblemForExecutable: (NSString *)path
+{
+  return @"Recording is not supported on Windows yet; traces recorded on Linux can be opened and analysed.";
+}
+
+#endif
 
 /* When running from an AppImage, copy the agent out of the mount: the
    target may outlive Instruments and the mount disappears with it.  */
@@ -378,7 +413,9 @@ under(NSString *value, NSString *root)
 - (void) writeInfo: (BOOL)final
 {
   NSMutableDictionary *info = [NSMutableDictionary dictionary];
+#if !defined(_WIN32)
   struct utsname u;
+#endif
 
   [info setObject: [NSNumber numberWithInt: 1] forKey: @"FormatVersion"];
   [info setObject: GSP_VERSION forKey: @"RecorderVersion"];
@@ -399,9 +436,11 @@ under(NSString *value, NSString *root)
     }
   else
     [info setObject: [NSNumber numberWithBool: YES] forKey: @"Recording"];
+#if !defined(_WIN32)
   if (uname(&u) == 0)
     [info setObject: [NSString stringWithFormat: @"%s %s %s %s", u.nodename,
                       u.sysname, u.release, u.machine] forKey: @"Host"];
+#endif
   [info setObject: [NSNumber numberWithUnsignedInt: _options.sampleIntervalMicroseconds
                     ? _options.sampleIntervalMicroseconds : 1000]
            forKey: @"SampleIntervalMicroseconds"];
@@ -409,6 +448,7 @@ under(NSString *value, NSString *root)
          atomically: YES];
 }
 
+#if !defined(_WIN32)
 static char **
 c_environment(NSDictionary *env)
 {
@@ -686,6 +726,16 @@ send_control(int pid, int request)
     }
 }
 
+#else
+- (BOOL) start: (NSError **)error
+{
+  if (error)
+    *error = make_error(12, @"Recording is not supported on Windows yet; traces recorded on Linux can be opened and analysed.");
+  return NO;
+}
+
+#endif
+
 - (void) notifyFinished
 {
   NSError *error = nil;
@@ -717,14 +767,18 @@ send_control(int pid, int request)
 
 - (void) requestLeakCheck
 {
+#if !defined(_WIN32)
   if (_recording && _pid > 0 && !_options.attachPID)
     send_control(_pid, CTL_LEAKS);
+#endif
 }
 
 - (void) addMark
 {
+#if !defined(_WIN32)
   if (_recording && _pid > 0 && !_options.attachPID)
     send_control(_pid, CTL_MARK);
+#endif
 }
 
 @end
