@@ -143,7 +143,9 @@ pipe.
 
 ## Lead: libs-back labels a UTF-8 window title as STRING when Xlib can't convert it
 
-**Status:** lead, seen 2026-10-16, not drafted. `-[XGServer titlewindow::]`
+**Status:** drafted 2026-10-17 (re-checked on master 36ac709 built from
+source), waiting for Dan's review: `upstream-issues/6-libs-back-wm-name-string.md`,
+reproducer `wm_name_title.m`. Seen 2026-10-16. `-[XGServer titlewindow::]`
 (`Source/x11/XGServerWindow.m`, same on master 36ac709 and 0.32.0) asks
 `Xutf8TextListToTextProperty` for a UTF8_STRING `WM_NAME`; when that fails
 (here: the app run with no locale in the environment), it falls back to
