@@ -54,7 +54,8 @@ make_button(NSString *title, NSRect frame, id target, SEL action)
   NSTableView *_templates;
   NSTextField *_summary;
   NSTextField *_instruments;
-  NSTextField *_target, *_args, *_env, *_cwd, *_limit;
+  NSComboBox *_target;
+  NSTextField *_args, *_env, *_cwd, *_limit;
   NSTextField *_warning;
   NSArray *_list;
   BOOL _ok;
@@ -116,7 +117,12 @@ make_button(NSString *title, NSRect frame, id target, SEL action)
 
   CGFloat y = 206;
   [c addSubview: make_label(@"Target:", NSMakeRect(16, y, 110, 22))];
-  _target = make_field(NSMakeRect(132, y, 470, 24));
+  /* The programs recorded before, newest first.  */
+  _target = [[NSComboBox alloc] initWithFrame: NSMakeRect(132, y, 470, 24)];
+  [_target setEditable: YES];
+  [_target setCompletes: YES];
+  [_target addItemsWithObjectValues:
+    [[NSUserDefaults standardUserDefaults] arrayForKey: @"PDRecentTargets"] ?: [NSArray array]];
   [_target setTarget: self];
   [_target setAction: @selector(targetChanged:)];
   [c addSubview: _target];
@@ -226,6 +232,16 @@ make_button(NSString *title, NSRect frame, id target, SEL action)
   NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
   [d setObject: t.name forKey: @"PDLastTemplate"];
   [d setObject: [_target stringValue] forKey: @"PDLastTarget"];
+  NSMutableArray *recent = [[d arrayForKey: @"PDRecentTargets"] mutableCopy] ?: [NSMutableArray array];
+  NSString *target = [_target stringValue];
+  if ([target length])
+    {
+      [recent removeObject: target];
+      [recent insertObject: target atIndex: 0];
+      while ([recent count] > 10)
+        [recent removeLastObject];
+      [d setObject: recent forKey: @"PDRecentTargets"];
+    }
   [d setObject: [_args stringValue] forKey: @"PDLastArguments"];
   [d setObject: [_env stringValue] forKey: @"PDLastEnvironment"];
   [d setObject: [_cwd stringValue] forKey: @"PDLastDirectory"];
