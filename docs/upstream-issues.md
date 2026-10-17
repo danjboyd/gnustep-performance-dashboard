@@ -136,8 +136,16 @@ build, half of the segmented-control leaks (`NSMutableParagraphStyle`,
 `GSDictionary`, ...) have `-[NSCell _nonAutoreleasedTypingAttributes]`
 called straight from `-[GnomeTheme _overrideNSSegmentedCellMethod_drawSegment:inFrame:withView:]`,
 with no libs-gui frame between, so the known-leak entry for libs-gui 0664f51
-does not cover them. The theme's current source does not call that method,
-so the installed build may be older; to check against a current build.
+does not cover them. Checked 2026-10-17 by reading the source (not by a
+run): the theme does call it, at c866d4a (0.1.0-alpha15, the installed
+build's source) in `Source/Rendering/GnomeThemeControls.m`. The theme is
+built without ARC, and `-_nonAutoreleasedTypingAttributes` returns a
+retained dictionary that its callers in libs-gui `RELEASE`. Line 1385
+releases it, but lines 4300 and 5184 (`[[cell
+_nonAutoreleasedTypingAttributes] mutableCopy]`) and 4351 (`objectForKey:`
+on it) never do: one dictionary leaks per segment label and template image
+drawn, and per drop-down label. A fix for the theme's own project, not for
+GNUstep.
 
 ## (Retracted) libs-back font strings
 
