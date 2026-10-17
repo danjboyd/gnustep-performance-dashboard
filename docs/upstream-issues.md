@@ -88,6 +88,29 @@ crashes seen on SIGTERM were the Sombre teardown above, which happens on a
 menu Quit too. Workaround: the app installs a handler that only writes to a
 pipe.
 
+## Lead: libs-back labels a UTF-8 window title as STRING when Xlib can't convert it
+
+**Status:** lead, seen 2026-10-16, not drafted. `-[XGServer titlewindow::]`
+(`Source/x11/XGServerWindow.m`, same on master 36ac709 and 0.32.0) asks
+`Xutf8TextListToTextProperty` for a UTF8_STRING `WM_NAME`; when that fails
+(here: the app run with no locale in the environment), it falls back to
+`XStringListToTextProperty` with `-lossyCString`, which on these systems is
+still UTF-8, typed STRING (Latin-1 by ICCCM). `xprop` then shows
+`WM_NAME(STRING) = "objcwork \342\200\224 Custom"`, and anything reading
+`WM_NAME` sees mojibake for non-ASCII titles. `_NET_WM_NAME` is right.
+Workaround: none needed in the app; the test suite matches titles loosely.
+
+## Lead: the Adwaita theme's segmented control may leak like libs-gui 0.32.0's
+
+**Status:** lead for the Adwaita theme (danjboyd/plugins-themes-Adwaita),
+not upstream GNUstep. Recording ScreenshotTool under the installed Adwaita
+build, half of the segmented-control leaks (`NSMutableParagraphStyle`,
+`GSDictionary`, ...) have `-[NSCell _nonAutoreleasedTypingAttributes]`
+called straight from `-[GnomeTheme _overrideNSSegmentedCellMethod_drawSegment:inFrame:withView:]`,
+with no libs-gui frame between, so the known-leak entry for libs-gui 0664f51
+does not cover them. The theme's current source does not call that method,
+so the installed build may be older; to check against a current build.
+
 ## (Retracted) libs-back font strings
 
 About 1,900 `GSCInlineString`s from `FCFontEnumerator` were reported as
