@@ -28,6 +28,8 @@ PerformanceDashboard_MAIN_MODEL_FILE =
 PerformanceDashboard_APPLICATION_ICON = PerformanceDashboard.png
 
 ADDITIONAL_OBJCFLAGS += -fobjc-arc -Wall -Wno-deprecated-declarations -Wno-protocol
+# main.m keeps a real NSAutoreleasePool at the bottom (see the comment there).
+main.m_FILE_FILTER_OUT_FLAGS = -fobjc-arc
 ADDITIONAL_INCLUDE_DIRS += -I../Runtime/include -I..
 ADDITIONAL_LIB_DIRS += -L../GSPerformance/obj
 ADDITIONAL_GUI_LIBS += -lGSPerformance
