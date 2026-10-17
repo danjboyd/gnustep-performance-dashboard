@@ -67,9 +67,37 @@ pointer in a volatile local and free that. Same pattern in
 (2026-10-16), waiting for Dan's review:
 `upstream-issues/4-libs-gui-state-signature-mismatch.md`. Workaround: `PDIsOn` asks the cell through an `NSCell *`.
 
+## Lead: libs-base's pool list breaks when only libobjc2's pool is at the bottom
+
+**Status:** lead, seen 2026-10-17 with the installed libs-base 1.31.1 and
+libs-gui 0.32.0; not checked on master, where `NSAutoreleasePool.m` has
+changed a lot since. Reproducer (not a draft):
+`upstream-issues/modal_table_pool.m`, which passes the GCC check and
+crashed 3 runs out of 3 under the default theme.
+
+A program whose outermost pool is libobjc2's (`@autoreleasepool`, or
+`objc_autoreleasePoolPush()`, so no `NSAutoreleasePool` object at the
+bottom) runs a modal panel holding an `NSTableView` from a button's
+action. Under the default theme and Sombre, once the modal session ends,
+`-[NSNotificationCenter _postAndRelease:]` releases its pool and
+`-dealloc` → `-emptyPool` → `-_emptyChild` → `-dealloc` recurses on the
+same pool until the stack overflows (gdb against an unstripped build of
+our libs-base checkout). With an `NSAutoreleasePool` at the bottom
+instead, it doesn't crash. A guess, not checked: `-init` takes over its
+parent's existing child (`_child = _parent->_child`), so a child left on
+the list with a `_parent` that skips the new pool makes `-_emptyChild`'s
+walk back up reach the new pool's parent and dealloc the new pool again.
+Performance Dashboard's template chooser crashed this way with no user
+defaults (Adwaita in the defaults hid it).
+
+Workaround: `Dashboard/main.m` is built without ARC and keeps an
+`NSAutoreleasePool` at the bottom.
+
 ## Lead: quitting under the Sombre theme recurses until the stack overflows
 
-**Status:** lead, not reproduced outside Performance Dashboard. With libs-gui
+**Status:** lead, not reproduced outside Performance Dashboard; probably
+the pool-list lead above (same recursion, and the app had only libobjc2's
+pool at the bottom until 2026-10-17). With libs-gui
 0.32.0 and Sombre, `-[NSApplication replyToApplicationShouldTerminate:]`
 closes every window (`makeObjectsPerformSelector: @selector(close)`), and
 `-[NSWindow close]` ↔ `-[NSAutoreleasePool emptyPool]` recursed through 19
