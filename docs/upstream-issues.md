@@ -93,6 +93,22 @@ defaults (Adwaita in the defaults hid it).
 Workaround: `Dashboard/main.m` is built without ARC and keeps an
 `NSAutoreleasePool` at the bottom.
 
+## Lead: libs-base can't map a file of 2 GiB or more
+
+**Status:** lead, seen 2026-10-17 with the installed libs-base 1.31.1;
+the code is unchanged on master a767a1623 (read, not run). Not drafted.
+
+`+[NSData dataWithContentsOfMappedFile:]` on a file of 2 GiB or more logs
+"mapping failed for ... Error Domain=NSPOSIXErrorDomain Code=22" and
+returns an `NSDataMalloc` holding the whole file: a test program mapping
+sparse files had a peak RSS of 22 MB at 1 GiB and 2047 MiB, and 2.1, 3.2,
+4.2 and 5.3 GB at 2, 3, 4 and 5 GiB. `getContentsOfFile()`
+(`Source/NSData.m`) sets the length to 0 when `ftello()` reports 2147483647
+or more, and `-[NSDataMappedFile initWithContentsOfFile:options:error:]`
+then calls `mmap()` with that length, which fails with EINVAL.
+
+Workaround: `GSPTrace` maps event streams with `mmap()` itself.
+
 ## Lead: quitting under the Sombre theme recurses until the stack overflows
 
 **Status:** lead, not reproduced outside Performance Dashboard; probably
