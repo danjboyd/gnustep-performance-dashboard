@@ -823,7 +823,7 @@ col(NSString *ident, NSString *title, CGFloat width)
   la.hidesKnownLeaks = PDIsOn(_hideKnown);
   [self setColumns: [NSArray arrayWithObjects: col(@"object", @"Leaked Object", 240),
     col(@"count", @"#", 60), col(@"address", @"Address", 130), col(@"size", @"Size", 100),
-    col(@"caller", @"Responsible Frame", 240), col(@"known", @"Known Issue", 120), nil]
+    col(@"known", @"Known Issue", 130), col(@"caller", @"Responsible Frame", 300), nil]
            outline: nil];
   for (GSPLeakGroup *g in [la groupsForSnapshot: snap])
     {

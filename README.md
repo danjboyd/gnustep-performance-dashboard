@@ -108,7 +108,7 @@ traces, speedscope profiles, folded stacks or CSV.
 
 | | |
 |---|---|
-| ![Allocations](docs/screenshots/allocations.png) | ![Leaks](docs/screenshots/leaks.png) |
+| ![Allocations](docs/screenshots/allocations.png) | ![Leaks, with known GNUstep leaks labelled (a recording of ScreenshotTool)](docs/screenshots/leaks.png) |
 | ![Inspection range](docs/screenshots/inspection-range.png) | ![Sombre theme](docs/screenshots/sombre-theme.png) |
 
 ## Using gstrace
