@@ -228,9 +228,24 @@ if [ "${SKIP_GUI:-0}" != 1 ] && command -v Xvfb >/dev/null 2>&1; then
       -GSFirstControlKey Alt_L -GSSecondControlKey Alt_R
       -GSFirstAlternateKey Super_L -GSSecondAlternateKey Super_R"
 
+    # The app gets a defaults directory of its own, so it starts from no
+    # user defaults, as on CI (here they had hidden the Control key
+    # problem), and what it records doesn't reach the user's defaults.
+    # GNUstep ignores $HOME, and only the main configuration file may name
+    # an absolute defaults directory: a copy of it, without the user's
+    # ~/.GNUstep.conf. Themes in the user's Library still load.
+    APPDEFAULTS=$OUT/app-defaults
+    rm -rf "$APPDEFAULTS"; mkdir -p "$APPDEFAULTS"
+    CONF=$(gnustep-config --variable=GNUSTEP_CONFIG_FILE 2>/dev/null)
+    { [ -f "$CONF" ] && grep -v '^GNUSTEP_USER_CONFIG_FILE=\|^GNUSTEP_USER_DEFAULTS_DIR=' "$CONF"
+      echo "GNUSTEP_USER_CONFIG_FILE="
+      echo "GNUSTEP_USER_DEFAULTS_DIR=$APPDEFAULTS"; } >"$OUT/app-GNUstep.conf"
+    chmod 600 "$OUT/app-GNUstep.conf"   # GNUstep ignores a group-writable one
+    APPENV="GNUSTEP_CONFIG_FILE=$OUT/app-GNUstep.conf"
+
     # Open a trace, Record from it, quit.
     mkdir -p "$TRACES"; touch "$OUT/gui.mark"
-    DISPLAY=$DISP XAUTHORITY= "$APP" $KEYS -GSFilePath "$SAMPLE" >"$OUT/gui.log" 2>&1 &
+    env "$APPENV" DISPLAY=$DISP XAUTHORITY= "$APP" $KEYS -GSFilePath "$SAMPLE" >"$OUT/gui.log" 2>&1 &
     APID=$!
     W=$(window_id "objcwork — Custom")
     check "app: opens a trace" "[ -n '$W' ]"
@@ -273,6 +288,10 @@ if [ "${SKIP_GUI:-0}" != 1 ] && command -v Xvfb >/dev/null 2>&1; then
       kill -0 $APID 2>/dev/null && diagnose no-quit
       wait_app $APID
       check "app: Quit exits with status 0 ($STATUS)" "[ $STATUS = 0 ]"
+      # The sample trace names its target relatively (Tests/out/objcwork);
+      # the defaults are on disk once the app has quit.
+      check "app: the recent target is stored as an absolute path" \
+        "grep -q '>$OUT/objcwork<' '$APPDEFAULTS/io.github.danjboyd.PerformanceDashboard.plist'"
     fi
     check "app: no selector type mismatches logged" "! grep -q 'incorrect signature' '$OUT/gui.log'"
 
@@ -288,13 +307,13 @@ if [ "${SKIP_GUI:-0}" != 1 ] && command -v Xvfb >/dev/null 2>&1; then
         echo "     ($theme theme not installed; skipped)"
         continue
       fi
-      DISPLAY=$DISP XAUTHORITY= "$APP" $KEYS -GSFilePath "$SAMPLE" -GSTheme $theme >"$OUT/gui-$theme.log" 2>&1 &
+      env "$APPENV" DISPLAY=$DISP XAUTHORITY= "$APP" $KEYS -GSFilePath "$SAMPLE" -GSTheme $theme >"$OUT/gui-$theme.log" 2>&1 &
       APID=$!
       W=$(window_id "objcwork — Custom")
       [ -n "$W" ] && key "$W" ctrl+q
       wait_app $APID
       check "app ($theme): Quit exits with status 0 ($STATUS)" "[ $STATUS = 0 ]"
-      DISPLAY=$DISP XAUTHORITY= "$APP" $KEYS -GSFilePath "$SAMPLE" -GSTheme $theme >>"$OUT/gui-$theme.log" 2>&1 &
+      env "$APPENV" DISPLAY=$DISP XAUTHORITY= "$APP" $KEYS -GSFilePath "$SAMPLE" -GSTheme $theme >>"$OUT/gui-$theme.log" 2>&1 &
       APID=$!
       window_id "objcwork — Custom" >/dev/null
       sleep 2   # the handler is installed once launching has finished
