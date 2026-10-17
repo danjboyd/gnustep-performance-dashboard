@@ -183,10 +183,9 @@ if [ "${SKIP_GUI:-0}" != 1 ] && command -v Xvfb >/dev/null 2>&1; then
     SAMPLE=$ROOT/Tests/data/sample.gstrace
     TRACES="/tmp/GNUstepSecure$(id -u)/Performance Dashboard"
     # window_id <title> [seconds]: the visible window with that title.
-    # Stock libs-back 0.32.0 sets WM_NAME as STRING holding UTF-8 bytes,
-    # so xdotool reads "—" as three Latin-1 characters and an exact title
-    # never matches (this is what lost the shortcuts on GitHub's runner):
-    # the dash matches anything.
+    # Without a UTF-8 locale libs-back sets WM_NAME as STRING holding UTF-8
+    # bytes, so xdotool reads "—" as three Latin-1 characters and an exact
+    # title never matches: the dash matches anything.
     window_id() {
       pattern=$(printf '%s' "$1" | sed 's/ — / .* /g')
       n=0
@@ -232,11 +231,10 @@ if [ "${SKIP_GUI:-0}" != 1 ] && command -v Xvfb >/dev/null 2>&1; then
     [ -n "$W" ] && key "$W" ctrl+r
     P=$(window_id "Choose a Profiling Template" 10)
     if [ -z "$P" ]; then
-      # Where Ctrl+R does not open the chooser on this display (it did not
-      # on GitHub's runner until window_id stopped matching the title's
-      # em dash exactly; Tests/out/gui-no-chooser.*), say so and skip what
-      # depends on shortcuts rather than fail; SIGTERM still has to quit
-      # cleanly.
+      # On GitHub's runner Ctrl+R does not open the chooser, though the
+      # window is found and has the focus (Tests/out/gui-no-chooser.*); the
+      # cause is not known yet. Say so and skip what depends on shortcuts
+      # rather than fail; SIGTERM still has to quit cleanly.
       diagnose no-chooser
       echo "     (keyboard shortcuts do not reach the app on this display: Record, chooser and Quit checks skipped)"
       kill -TERM $APID
