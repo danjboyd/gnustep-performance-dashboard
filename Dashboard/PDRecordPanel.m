@@ -212,7 +212,15 @@ make_button(NSString *title, NSRect frame, id target, SEL action)
   GSPRecordingOptions *o = [GSPRecordingOptions new];
   o.templateName = t.name;
   o.instrumentIdentifiers = t.instrumentIdentifiers;
-  o.executablePath = [[_target stringValue] stringByExpandingTildeInPath];
+  /* Resolve a relative path now, as the recorder would, so the recent
+     targets don't hold paths that only mean something from one folder
+     (traces recorded before the recorder made them absolute have them).  */
+  NSString *exe = [[_target stringValue] stringByExpandingTildeInPath];
+  if ([exe length] && ![exe isAbsolutePath]
+      && [exe rangeOfString: @"/"].location != NSNotFound)
+    exe = [[[[NSFileManager defaultManager] currentDirectoryPath]
+      stringByAppendingPathComponent: exe] stringByStandardizingPath];
+  o.executablePath = exe;
   NSString *args = [[_args stringValue] stringByTrimmingCharactersInSet:
     [NSCharacterSet whitespaceCharacterSet]];
   o.arguments = [args length] ? [self splitArguments: args] : [NSArray array];
@@ -231,9 +239,9 @@ make_button(NSString *title, NSRect frame, id target, SEL action)
 
   NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
   [d setObject: t.name forKey: @"PDLastTemplate"];
-  [d setObject: [_target stringValue] forKey: @"PDLastTarget"];
+  NSString *target = [exe length] ? exe : [_target stringValue];
+  [d setObject: target forKey: @"PDLastTarget"];
   NSMutableArray *recent = [[d arrayForKey: @"PDRecentTargets"] mutableCopy] ?: [NSMutableArray array];
-  NSString *target = [_target stringValue];
   if ([target length])
     {
       [recent removeObject: target];
