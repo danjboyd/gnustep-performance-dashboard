@@ -1,7 +1,16 @@
 **Repository:** gnustep/libs-gui
 
-**Status:** draft, not reviewed. Reproducer: `button_state_signature.m`
-(next to this file).
+**Status:** draft, re-checked 2026-10-16 (below), not yet reviewed by Dan.
+Reproducer: `button_state_signature.m` (next to this file).
+
+**Re-checked 2026-10-16:** master is still fdc5cfe83 (`git fetch`); the
+reproducer, built with clang 19.1.7, prints the two messages below against
+the installed 0.32.0 and against master's headers and library
+(`Source/obj/libgnustep-gui.so`, confirmed with `ldd`);
+`Tests/Scripts/gcc-syntax-check.sh --files button_state_signature.m`
+exits 0; the four searches below were run again with `gh search issues
+--include-prs` and found only #362 again. The line numbers were checked on
+fdc5cfe83.
 
 **Checked before drafting (2026-10-16):** libs-gui issues and pull
 requests, open and closed, searched for "NSControlStateValue",
@@ -30,7 +39,7 @@ Calling [NSButtonCell -state] with incorrect signature.  Method has q16@0:8 (q16
 ```
 
 libs-gui makes one of these calls itself: `-[NSButton state]`
-(`Source/NSButton.m`, line 227) returns `[_cell state]`, and `_cell` is an
+(`Source/NSButton.m`, lines 227–230) returns `[_cell state]`, and `_cell` is an
 `id` (`NSControl.h`, line 71). So every application that reads a check box
 or radio button's state through `NSButton` logs this once per call. The
 value is still right on x86_64, where both types are 64 bits wide, but the

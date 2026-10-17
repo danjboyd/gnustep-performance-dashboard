@@ -1,6 +1,6 @@
 /* -[NSButton state] and libobjc2's selector type check.
 
-   cc `gnustep-config --objc-flags` button_state_signature.m \
+   clang `gnustep-config --objc-flags` button_state_signature.m \
      -o button_state_signature `gnustep-config --gui-libs`  */
 
 #import <Foundation/Foundation.h>

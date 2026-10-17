@@ -63,9 +63,9 @@ pointer in a volatile local and free that. Same pattern in
 
 ## libs-gui: `-state` declared both `NSInteger` and `NSControlStateValue` (`NSUInteger`)
 
-**Status:** drafted, not reviewed:
-`upstream-issues/4-libs-gui-state-signature-mismatch.md`. Reproduced on
-0.32.0 and master. Workaround: `PDIsOn` asks the cell through an `NSCell *`.
+**Status:** drafted and re-checked on master fdc5cfe83 and 0.32.0
+(2026-10-16), waiting for Dan's review:
+`upstream-issues/4-libs-gui-state-signature-mismatch.md`. Workaround: `PDIsOn` asks the cell through an `NSCell *`.
 
 ## Lead: quitting under the Sombre theme recurses until the stack overflows
 
