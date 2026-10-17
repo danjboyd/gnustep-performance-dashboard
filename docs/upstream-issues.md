@@ -69,11 +69,14 @@ pointer in a volatile local and free that. Same pattern in
 
 ## Lead: libs-base's pool list breaks when only libobjc2's pool is at the bottom
 
-**Status:** lead, seen 2026-10-17 with the installed libs-base 1.31.1 and
-libs-gui 0.32.0; not checked on master, where `NSAutoreleasePool.m` has
-changed a lot since. Reproducer (not a draft):
-`upstream-issues/modal_table_pool.m`, which passes the GCC check and
-crashed 3 runs out of 3 under the default theme.
+**Status:** fixed on master, nothing to report. Seen 2026-10-17 with the
+installed libs-base 1.31.1 and libs-gui 0.32.0: the reproducer
+`upstream-issues/modal_table_pool.m` (passes the GCC check) crashed 3 runs
+out of 3 under the default theme. Run against libs-base master a767a1623
+(built from source, confirmed with `ldd`), it didn't crash in 3 runs.
+`NSAutoreleasePool.m` was reworked in June 2026, after 1.31.1 (still the
+latest release); probably 26012a4af "Fix libobjc2 integration issue", not
+bisected. Our workaround stays until a release has it.
 
 A program whose outermost pool is libobjc2's (`@autoreleasepool`, or
 `objc_autoreleasePoolPush()`, so no `NSAutoreleasePool` object at the
