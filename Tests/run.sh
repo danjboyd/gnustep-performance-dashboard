@@ -219,8 +219,14 @@ if [ "${SKIP_GUI:-0}" != 1 ] && command -v Xvfb >/dev/null 2>&1; then
         echo "== app log"; tail -40 "$OUT/gui.log"; } >"$OUT/gui-$1.txt" 2>&1
     }
     # Ctrl+R and Ctrl+Q are the shortcuts only when Control is GNUstep's
-    # Command key; its default is Alt (CI has no user defaults).
-    KEYS="-GSFirstCommandKey Control_L -GSSecondCommandKey Control_R"
+    # Command key; its default is Alt (CI has no user defaults). Control
+    # must then move off Control_L too, or it claims the key first and
+    # Ctrl+R arrives as Control+R, which no menu item answers (what lost
+    # the shortcuts on GitHub's runner); Alternate moves off Alt to make
+    # room. The same mapping as the AppImage's packaged defaults.
+    KEYS="-GSFirstCommandKey Control_L -GSSecondCommandKey Control_R
+      -GSFirstControlKey Alt_L -GSSecondControlKey Alt_R
+      -GSFirstAlternateKey Super_L -GSSecondAlternateKey Super_R"
 
     # Open a trace, Record from it, quit.
     mkdir -p "$TRACES"; touch "$OUT/gui.mark"
@@ -231,10 +237,9 @@ if [ "${SKIP_GUI:-0}" != 1 ] && command -v Xvfb >/dev/null 2>&1; then
     [ -n "$W" ] && key "$W" ctrl+r
     P=$(window_id "Choose a Profiling Template" 10)
     if [ -z "$P" ]; then
-      # On GitHub's runner Ctrl+R does not open the chooser, though the
-      # window is found and has the focus (Tests/out/gui-no-chooser.*); the
-      # cause is not known yet. Say so and skip what depends on shortcuts
-      # rather than fail; SIGTERM still has to quit cleanly.
+      # Where Ctrl+R still does not open the chooser on this display
+      # (Tests/out/gui-no-chooser.*), say so and skip what depends on
+      # shortcuts rather than fail; SIGTERM still has to quit cleanly.
       diagnose no-chooser
       echo "     (keyboard shortcuts do not reach the app on this display: Record, chooser and Quit checks skipped)"
       kill -TERM $APID
