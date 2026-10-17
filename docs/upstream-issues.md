@@ -98,8 +98,10 @@ Workaround: `Dashboard/main.m` is built without ARC and keeps an
 
 ## Lead: libs-base can't map a file of 2 GiB or more
 
-**Status:** lead, seen 2026-10-17 with the installed libs-base 1.31.1;
-the code is unchanged on master a767a1623 (read, not run). Not drafted.
+**Status:** lead, not drafted. Seen 2026-10-17 with the installed libs-base
+1.31.1, and the same with master a767a1623 built from source (the test
+program below, `ldd` showing master's library: 22 MB at 2047 MiB, 2.1 GB
+at 2 GiB, 3.2 GB at 3 GiB, "mapping failed" from 2 GiB).
 
 `+[NSData dataWithContentsOfMappedFile:]` on a file of 2 GiB or more logs
 "mapping failed for ... Error Domain=NSPOSIXErrorDomain Code=22" and
