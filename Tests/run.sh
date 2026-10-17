@@ -182,11 +182,16 @@ if [ "${SKIP_GUI:-0}" != 1 ] && command -v Xvfb >/dev/null 2>&1; then
     APP=$ROOT/Dashboard/PerformanceDashboard.app/PerformanceDashboard
     SAMPLE=$ROOT/Tests/data/sample.gstrace
     TRACES="/tmp/GNUstepSecure$(id -u)/Performance Dashboard"
-    # window_id <title> [seconds]: the visible window with that title
+    # window_id <title> [seconds]: the visible window with that title.
+    # Stock libs-back 0.32.0 sets WM_NAME as STRING holding UTF-8 bytes,
+    # so xdotool reads "—" as three Latin-1 characters and an exact title
+    # never matches (this is what lost the shortcuts on GitHub's runner):
+    # the dash matches anything.
     window_id() {
+      pattern=$(printf '%s' "$1" | sed 's/ — / .* /g')
       n=0
       while [ $n -lt "${2:-20}" ]; do
-        w=$(DISPLAY=$DISP xdotool search --onlyvisible --name "^$1\$" 2>/dev/null | head -1)
+        w=$(DISPLAY=$DISP xdotool search --onlyvisible --name "^$pattern\$" 2>/dev/null | head -1)
         [ -n "$w" ] && { echo "$w"; return 0; }
         sleep 1; n=$((n + 1))
       done
@@ -200,9 +205,7 @@ if [ "${SKIP_GUI:-0}" != 1 ] && command -v Xvfb >/dev/null 2>&1; then
       if kill -0 "$1" 2>/dev/null; then kill -9 "$1"; wait "$1" 2>/dev/null; STATUS=running
       else wait "$1"; STATUS=$?; fi
     }
-    # key <window> <keys>: focus the window and type through XTEST. Keys
-    # sent to a window with XSendEvent (key --window) reach the app here
-    # but not on GitHub's runner.
+    # key <window> <keys>: focus the window and type through XTEST.
     key() { DISPLAY=$DISP xdotool windowfocus --sync "$1" key "$2"; }
     # diagnose <name>: the screen, the windows and the app's log, kept in
     # Tests/out (CI uploads them when the suite fails).
@@ -229,10 +232,11 @@ if [ "${SKIP_GUI:-0}" != 1 ] && command -v Xvfb >/dev/null 2>&1; then
     [ -n "$W" ] && key "$W" ctrl+r
     P=$(window_id "Choose a Profiling Template" 10)
     if [ -z "$P" ]; then
-      # On GitHub's runner no keyboard shortcut reaches the app, whether
-      # sent with XSendEvent or XTEST (the window is open and has the
-      # focus; Tests/out/gui-no-chooser.*). Say so and skip what depends
-      # on them, rather than fail; SIGTERM still has to quit cleanly.
+      # Where Ctrl+R does not open the chooser on this display (it did not
+      # on GitHub's runner until window_id stopped matching the title's
+      # em dash exactly; Tests/out/gui-no-chooser.*), say so and skip what
+      # depends on shortcuts rather than fail; SIGTERM still has to quit
+      # cleanly.
       diagnose no-chooser
       echo "     (keyboard shortcuts do not reach the app on this display: Record, chooser and Quit checks skipped)"
       kill -TERM $APID
