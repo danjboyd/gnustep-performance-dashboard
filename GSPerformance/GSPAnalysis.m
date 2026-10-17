@@ -306,6 +306,14 @@ slot_for(addr_slot *slots, uint64_t mask, uint64_t address)
   _cap = ne + 1;
   _records = malloc(_cap * sizeof(GSPAllocationRecord));
 
+  /* Category numbers for malloc sizes and for class name IDs, so each
+     name is formatted and looked up once, not once per event (a GUI app's
+     trace has millions).  Direct-mapped; a miss takes the slow path.  */
+  enum { CATEGORY_CACHE = 4096 };
+  struct { uint64_t key; uint32_t category; uint32_t used; }
+    *bySize = calloc(CATEGORY_CACHE, sizeof(*bySize)),
+    *byClass = calloc(CATEGORY_CACHE, sizeof(*byClass));
+
   for (NSUInteger i = 0; i <= ne; i++)
     {
       GSPTime now = i < ne ? ev[i].time : UINT64_MAX;
@@ -322,9 +330,22 @@ slot_for(addr_slot *slots, uint64_t mask, uint64_t address)
             sl = slot_for(slots, mask, tags[ti].address - sizeof(intptr_t));
           if (sl->used && sl->record != UINT32_MAX)
             {
-              NSString *cls = [process stringForID: tags[ti].className];
-              if (cls != nil)
-                _records[sl->record].category = [self categoryNamed: cls object: YES];
+              uint32_t id = tags[ti].className;
+              uint64_t h = id & (CATEGORY_CACHE - 1);
+              if (byClass[h].used && byClass[h].key == id)
+                _records[sl->record].category = byClass[h].category;
+              else
+                {
+                  NSString *cls = [process stringForID: id];
+                  if (cls != nil)
+                    {
+                      uint32_t c = [self categoryNamed: cls object: YES];
+                      _records[sl->record].category = c;
+                      byClass[h].key = id;
+                      byClass[h].category = c;
+                      byClass[h].used = 1;
+                    }
+                }
             }
           ti++;
         }
@@ -353,8 +374,17 @@ slot_for(addr_slot *slots, uint64_t mask, uint64_t address)
           r->size = e->size;
           r->stack = e->stack;
           r->tid = e->tid;
-          r->category = [self categoryNamed:
-            [GSPAllocationAnalysis mallocCategoryNameForSize: e->size] object: NO];
+          uint64_t h = (e->size * 0x9E3779B97F4A7C15ull) >> 52;
+          if (bySize[h].used && bySize[h].key == e->size)
+            r->category = bySize[h].category;
+          else
+            {
+              r->category = [self categoryNamed:
+                [GSPAllocationAnalysis mallocCategoryNameForSize: e->size] object: NO];
+              bySize[h].key = e->size;
+              bySize[h].category = r->category;
+              bySize[h].used = 1;
+            }
           r->reserved = 0;
           addr_slot *sl = slot_for(slots, mask, e->address);
           if (sl->used && sl->record != UINT32_MAX)
@@ -372,6 +402,8 @@ slot_for(addr_slot *slots, uint64_t mask, uint64_t address)
             _peak = live;
         }
     }
+  free(bySize);
+  free(byClass);
   free(slots);
   return self;
 }
