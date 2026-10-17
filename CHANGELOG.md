@@ -5,8 +5,9 @@
 Since the first implementation:
 
 - Leaks: leaks GNUstep itself is known to have, recognised by their
-  allocation stack, are labelled with the upstream issue (for now
-  libs-gui#1010, TIFF images and the JPEG check) and can be hidden: a
+  allocation stack, are labelled with the upstream issue or fix
+  (libs-gui#1010, TIFF images and the JPEG check; libs-gui 0664f51,
+  segmented controls in 0.32.0) and can be hidden: a
   Known Issue column and a Hide Known GNUstep Leaks check box in the app,
   `--hide-known` in `gstrace report leaks`, `knownIssue` in JSON exports.
 - Quitting under the Sombre theme no longer crashes; quitting stops

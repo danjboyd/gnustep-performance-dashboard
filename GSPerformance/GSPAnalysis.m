@@ -568,6 +568,12 @@ alive_at(const GSPAllocationRecord *r, GSPTime t)
                    summary: @"libs-gui: 72 bytes per TIFF image in the JPEG check"
                        URL: @"https://github.com/gnustep/libs-gui/issues/1010"
                  functions: [NSArray arrayWithObject: @"+[NSBitmapImageRep _bitmapIsJPEG:]"]],
+      /* Fixed on libs-gui master by 0664f51 (2026-07-26), after 0.32.0.  */
+      [[GSPKnownLeak alloc]
+        initWithIdentifier: @"libs-gui 0664f51"
+                   summary: @"libs-gui 0.32.0: segmented controls leak text attributes each time a segment is drawn (fixed after 0.32.0)"
+                       URL: @"https://github.com/gnustep/libs-gui/commit/0664f51d3b7a52033999a250098aceca2d43b4f7"
+                 functions: [NSArray arrayWithObject: @"-[NSSegmentedCell drawSegment:inFrame:withView:]"]],
       nil];
   return all;
 }
