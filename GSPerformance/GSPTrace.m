@@ -12,6 +12,12 @@
 #include <GSPerformance/gsp_format.h>
 #include <stdlib.h>
 #include <string.h>
+#if !defined(_WIN32)
+#  include <fcntl.h>
+#  include <sys/mman.h>
+#  include <sys/stat.h>
+#  include <unistd.h>
+#endif
 
 NSString * const GSPTraceErrorDomain = @"GSPTraceErrorDomain";
 
@@ -823,11 +829,47 @@ compare_raw_signposts(const void *a, const void *b)
 
 - (BOOL) parseMore: (NSError **)error
 {
+  const uint8_t *bytes = NULL;
+  NSUInteger length = 0;
+  BOOL ok = NO;
+#if defined(_WIN32)
   NSData *data = [NSData dataWithContentsOfMappedFile: _streamPath];
-  const uint8_t *bytes = [data bytes];
-  NSUInteger length = [data length];
 
-  if (data == nil)
+  if (data != nil)
+    {
+      bytes = [data bytes];
+      length = [data length];
+      ok = YES;
+    }
+#else
+  /* Mapped here rather than with NSData: libs-base can't map a file of
+     2 GiB or more and reads it all into memory instead.  */
+  void *map = NULL;
+  int fd = open([_streamPath fileSystemRepresentation], O_RDONLY);
+  struct stat st;
+
+  if (fd >= 0 && fstat(fd, &st) == 0)
+    {
+      length = (NSUInteger)st.st_size;
+      if (length == 0)
+        ok = YES;
+      else
+        {
+          map = mmap(NULL, length, PROT_READ, MAP_SHARED, fd, 0);
+          if (map != MAP_FAILED)
+            {
+              bytes = map;
+              ok = YES;
+            }
+          else
+            map = NULL;
+        }
+    }
+  if (fd >= 0)
+    close(fd);
+#endif
+
+  if (!ok)
     {
       if (error)
         *error = [NSError errorWithDomain: GSPTraceErrorDomain code: 1
@@ -836,6 +878,17 @@ compare_raw_signposts(const void *a, const void *b)
                                                 forKey: NSLocalizedDescriptionKey]];
       return NO;
     }
+  ok = [self parseBytes: bytes length: length error: error];
+#if !defined(_WIN32)
+  if (map != NULL)
+    munmap(map, length);
+#endif
+  return ok;
+}
+
+- (BOOL) parseBytes: (const uint8_t *)bytes length: (NSUInteger)length
+              error: (NSError **)error
+{
   if (!_haveHeader)
     {
       const gsp_file_header *h = (const gsp_file_header *)bytes;
