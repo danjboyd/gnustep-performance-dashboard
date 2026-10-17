@@ -30,6 +30,7 @@ OBJCFLAGS=$(gnustep-config --objc-flags | sed 's/-MMD//; s/-MP//')
 cc -O0 -g "$ROOT/Tests/fixtures/cburn.c" -o "$OUT/cburn" -lpthread || exit 1
 cc -O1 -g -fno-omit-frame-pointer "$ROOT/Tests/fixtures/stress.c" -o "$OUT/stress" -lpthread || exit 1
 cc -O0 -g -Wno-unused-result "$ROOT/Tests/fixtures/iofix.c" -o "$OUT/iofix" || exit 1
+cc -shared -fPIC "$ROOT/Tests/fixtures/preloadmark.c" -o "$OUT/libpreloadmark.so" || exit 1
 clang $OBJCFLAGS -O0 -Wno-unused-but-set-variable -I"$ROOT/Runtime/include" \
   "$ROOT/Tests/fixtures/objcwork.m" -o "$OUT/objcwork" $(gnustep-config --base-libs) \
   -L"$ROOT/Runtime/obj" -lgsperf -Wl,-rpath,"$ROOT/Runtime/obj" || exit 1
@@ -59,6 +60,13 @@ record cburn --instrument time-profiler --instrument allocations --instrument le
 check "cburn recorded" "[ -f '$OUT/cburn.gstrace/Info.plist' ]"
 "$GSTRACE" export "$OUT/cburn.gstrace" --format json -o "$OUT/cburn.json" 2>/dev/null
 check "cburn summary is valid JSON" "python3 -c 'import json,sys; json.load(open(sys.argv[1]))' '$OUT/cburn.json'"
+
+# A preload of the user's own goes after the agent, not instead of it.
+rm -f "$OUT/preload.mark"
+record preload --instrument time-profiler --env LD_PRELOAD="$OUT/libpreloadmark.so" \
+  --env PRELOAD_MARK="$OUT/preload.mark" --launch "$OUT/cburn"
+check "--env LD_PRELOAD: the user's library is loaded" "[ -f '$OUT/preload.mark' ]"
+check "--env LD_PRELOAD: the agent still records" "'$GSTRACE' info '$OUT/preload.gstrace' 2>/dev/null | grep -q 'CPU samples: [1-9]'"
 # The work is fixed but its CPU time is not: on hybrid CPUs it takes about
 # three times longer on an efficiency core than on a performance core.
 check "cburn: 0.3-3 s of CPU, top function hot_inner" "python3 - '$OUT/cburn.json' <<'EOF'

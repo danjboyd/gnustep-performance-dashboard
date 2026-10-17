@@ -539,11 +539,13 @@ free_c_strings(char **list)
     [add setObject: @"1" forKey: @"GSP_FOLLOW_CHILDREN"];
   NSDictionary *base = [GSPRecorder targetEnvironmentWithAdditions: add];
   NSMutableDictionary *env = [base mutableCopy];
+  /* The agent goes first in LD_PRELOAD, before any the user sets (--env)
+     or the environment has, rather than being replaced by them.  */
+  [env addEntriesFromDictionary: _options.environment];
   NSString *preload = [env objectForKey: @"LD_PRELOAD"];
   [env setObject: [preload length] ? [NSString stringWithFormat: @"%@:%@", agent, preload]
                                    : agent
           forKey: @"LD_PRELOAD"];
-  [env addEntriesFromDictionary: _options.environment];
 
   NSMutableArray *argv = [NSMutableArray arrayWithObject: _options.executablePath];
   [argv addObjectsFromArray: _options.arguments];
