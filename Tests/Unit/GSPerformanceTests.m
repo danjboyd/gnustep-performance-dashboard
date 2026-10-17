@@ -167,6 +167,55 @@ child(GSPCallTreeNode *n, NSString *name)
   XCTAssertNil(child(focus.root, @"main"));
 }
 
+- (void) testCallTreeGroupsRepeatedStacks
+{
+  /* The tree adds up the samples of each stack before walking it: counts,
+     weights and the heaviest stack must be as if walked one by one.  */
+  GSPTrace *t = [self traceFrom: [self cpuBuilder] name: @"groups" instruments: nil];
+  GSPProcess *p = t.targetProcess;
+  uint32_t a = p.samples[0].stack;   /* main > run > compute */
+  uint32_t h = p.samples[3].stack;   /* main > run > helper */
+  GSPWeightedStack in[] = {
+    { a, 1, 1 }, { h, 1, 5 }, { a, 2, 5 }, { a, 1, 5 }, { h, 1, 2 }, { a, 1, 3 }
+  };
+
+  GSPCallTree *tree = [[GSPCallTree alloc] initWithProcess: p];
+  [tree buildFromStacks: in count: 6];
+  GSPCallTreeNode *run = child(child(tree.root, @"main"), @"-[Worker run]");
+  GSPCallTreeNode *compute = child(run, @"-[Worker compute]");
+  XCTAssertEqual(tree.totalWeight, (uint64_t)21);
+  XCTAssertEqual(run.sampleCount, (uint64_t)6);
+  XCTAssertEqual(compute.sampleCount, (uint64_t)4);
+  XCTAssertEqual(compute.selfWeight, (uint64_t)14);
+  XCTAssertEqual(child(run, @"helper").sampleCount, (uint64_t)2);
+  /* the first sample of weight 5 is the helper's (index 1) */
+  XCTAssertEqual(run.heaviestStack, h);
+  XCTAssertEqual(run.heaviestStackWeight, (uint64_t)5);
+  XCTAssertEqual(compute.heaviestStack, a);
+  XCTAssertEqual(compute.heaviestStackWeight, (uint64_t)5);
+
+  GSPCallTree *threads = [[GSPCallTree alloc] initWithProcess: p];
+  threads.options = GSPCallTreeSeparateByThread;
+  [threads buildFromStacks: in count: 6];
+  NSUInteger samples = 0;
+  for (GSPCallTreeNode *n in threads.root.children)
+    {
+      XCTAssertTrue(n.isThread);
+      samples += n.sampleCount;
+      if (n.tid == 2)
+        XCTAssertEqual(n.totalWeight, (uint64_t)5);
+    }
+  XCTAssertEqual([threads.root.children count], (NSUInteger)2);
+  XCTAssertEqual(samples, (NSUInteger)6);
+
+  GSPCallTree *top = [[GSPCallTree alloc] initWithProcess: p];
+  top.options = GSPCallTreeTopFunctions;
+  [top buildFromStacks: in count: 6];
+  XCTAssertEqual(child(top.root, @"-[Worker run]").sampleCount, (uint64_t)6);
+  XCTAssertEqual(child(top.root, @"-[Worker run]").heaviestStack, h);
+  XCTAssertEqual(child(top.root, @"-[Worker compute]").heaviestStack, a);
+}
+
 - (void) testFlattenRecursion
 {
   TraceBuilder *b = named_builder();

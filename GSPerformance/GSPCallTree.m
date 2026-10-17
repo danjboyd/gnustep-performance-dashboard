@@ -3,6 +3,14 @@
 #import "GSPSymbolicator.h"
 
 #include <GSPerformance/gsp_format.h>
+#include <stdlib.h>
+#include <string.h>
+
+@interface GSPCallTreeNode ()
+/* The input index of the sample heaviestStack came from: of equally
+   heavy samples, the first one wins.  */
+@property (nonatomic) NSUInteger heaviestIndex;
+@end
 
 @implementation GSPCallTreeNode
 {
@@ -210,9 +218,105 @@
   [self buildFromStacks: [input bytes] count: [input length] / sizeof(GSPWeightedStack)];
 }
 
+/* The samples of one stack on one thread, added up.  */
+typedef struct stack_group
+{
+  uint32_t stack;
+  uint32_t tid;
+  uint64_t weight;      /* sum */
+  uint64_t count;       /* samples */
+  uint64_t maxWeight;   /* heaviest single sample */
+  NSUInteger maxIndex;  /* its input index (the first, of equal ones) */
+} stack_group;
+
+/* Groups the samples by stack and thread, in order of first appearance,
+   so that the tree is walked once per distinct stack rather than once per
+   sample (millions, for an Allocations trace).  Returns the number of
+   groups; *out is malloc'd.  */
+static NSUInteger
+group_stacks(const GSPWeightedStack *stacks, NSUInteger count, stack_group **out)
+{
+  NSUInteger cap = 64, used = 0;
+  while (cap < count * 2 && cap < ((NSUInteger)1 << 30))
+    cap <<= 1;
+  /* open addressing: slot holds a group index + 1, 0 = empty */
+  NSUInteger *slots = calloc(cap, sizeof(NSUInteger));
+  NSUInteger gcap = 256;
+  stack_group *groups = malloc(gcap * sizeof(stack_group));
+
+  for (NSUInteger i = 0; i < count; i++)
+    {
+      uint64_t key = ((uint64_t)stacks[i].stack << 32) | stacks[i].tid;
+      NSUInteger h = (NSUInteger)((key * 0x9E3779B97F4A7C15ull) >> 17) & (cap - 1);
+      stack_group *g = NULL;
+
+      while (slots[h] != 0)
+        {
+          stack_group *c = &groups[slots[h] - 1];
+          if (c->stack == stacks[i].stack && c->tid == stacks[i].tid)
+            {
+              g = c;
+              break;
+            }
+          h = (h + 1) & (cap - 1);
+        }
+      if (g == NULL)
+        {
+          if (used == gcap)
+            {
+              gcap *= 2;
+              groups = realloc(groups, gcap * sizeof(stack_group));
+            }
+          g = &groups[used];
+          memset(g, 0, sizeof(*g));
+          g->stack = stacks[i].stack;
+          g->tid = stacks[i].tid;
+          g->maxIndex = i;
+          g->maxWeight = stacks[i].weight;
+          slots[h] = ++used;
+          if (used * 2 > cap)
+            {
+              /* full enough: rehash into a table twice the size */
+              free(slots);
+              cap <<= 1;
+              slots = calloc(cap, sizeof(NSUInteger));
+              for (NSUInteger j = 0; j < used; j++)
+                {
+                  uint64_t k = ((uint64_t)groups[j].stack << 32) | groups[j].tid;
+                  NSUInteger hh = (NSUInteger)((k * 0x9E3779B97F4A7C15ull) >> 17) & (cap - 1);
+                  while (slots[hh] != 0)
+                    hh = (hh + 1) & (cap - 1);
+                  slots[hh] = j + 1;
+                }
+            }
+        }
+      g->weight += stacks[i].weight;
+      g->count++;
+      if (stacks[i].weight > g->maxWeight)
+        {
+          g->maxWeight = stacks[i].weight;
+          g->maxIndex = i;
+        }
+    }
+  free(slots);
+  *out = groups;
+  return used;
+}
+
+/* Whether a group's heaviest sample beats the node's: heavier, or as
+   heavy and earlier, as if the samples were visited one by one.  */
+static BOOL
+heavier(const stack_group *g, GSPCallTreeNode *node)
+{
+  return node.heaviestStack == 0 || g->maxWeight > node.heaviestStackWeight
+    || (g->maxWeight == node.heaviestStackWeight && g->maxIndex < node.heaviestIndex);
+}
+
 - (void) buildFromStacks: (const GSPWeightedStack *)stacks count: (NSUInteger)count
 {
   NSMutableDictionary *cache = [NSMutableDictionary dictionary];
+  stack_group *groups = NULL;
+  NSUInteger ngroups;
 
   if (stacks != [_input bytes])
     _input = [NSData dataWithBytes: stacks length: count * sizeof(GSPWeightedStack)];
@@ -224,31 +328,33 @@
   _root.name = @"All";
   _total = 0;
 
-  for (NSUInteger i = 0; i < count; i++)
+  ngroups = group_stacks(stacks, count, &groups);
+  for (NSUInteger i = 0; i < ngroups; i++)
     {
-      id framesObj = [self framesFor: stacks[i].stack cache: cache];
+      const stack_group *g = &groups[i];
+      id framesObj = [self framesFor: g->stack cache: cache];
       if (framesObj == (id)[NSNull null])
         continue;
       NSArray *frames = framesObj;
-      uint64_t w = stacks[i].weight;
+      uint64_t w = g->weight;
       GSPCallTreeNode *node = _root;
 
       _total += w;
       _root.totalWeight += w;
-      _root.sampleCount++;
+      _root.sampleCount += g->count;
 
       if (byThread)
         {
           GSPThreadInfo *t = [_process.threads objectForKey:
-            [NSNumber numberWithUnsignedInt: stacks[i].tid]];
+            [NSNumber numberWithUnsignedInt: g->tid]];
           NSString *tname = t ? t.displayName
-            : [NSString stringWithFormat: @"Thread %u", stacks[i].tid];
-          node = [node childFor: [NSString stringWithFormat: @"thread:%u", stacks[i].tid]];
+            : [NSString stringWithFormat: @"Thread %u", g->tid];
+          node = [node childFor: [NSString stringWithFormat: @"thread:%u", g->tid]];
           node.name = tname;
           node.isThread = YES;
-          node.tid = stacks[i].tid;
+          node.tid = g->tid;
           node.totalWeight += w;
-          node.sampleCount++;
+          node.sampleCount += g->count;
         }
 
       if (top)
@@ -268,13 +374,16 @@
               c.imageName = s.imageName;
               c.symbol = s;
               c.totalWeight += w;
-              c.sampleCount++;
+              c.sampleCount += g->count;
               if (k == nf - 1)
                 c.selfWeight += w;
-              if (w > c.heaviestStackWeight)
+              if (g->maxWeight > c.heaviestStackWeight
+                  || (c.heaviestStack != 0 && g->maxWeight == c.heaviestStackWeight
+                      && g->maxIndex < c.heaviestIndex))
                 {
-                  c.heaviestStackWeight = w;
-                  c.heaviestStack = stacks[i].stack;
+                  c.heaviestStackWeight = g->maxWeight;
+                  c.heaviestStack = g->stack;
+                  c.heaviestIndex = g->maxIndex;
                 }
             }
           continue;
@@ -289,11 +398,12 @@
           node.imageName = s.imageName;
           node.symbol = s;
           node.totalWeight += w;
-          node.sampleCount++;
-          if (w > node.heaviestStackWeight || node.heaviestStack == 0)
+          node.sampleCount += g->count;
+          if (heavier(g, node))
             {
-              node.heaviestStackWeight = w;
-              node.heaviestStack = stacks[i].stack;
+              node.heaviestStackWeight = g->maxWeight;
+              node.heaviestStack = g->stack;
+              node.heaviestIndex = g->maxIndex;
             }
         }
       if (nf > 0)
@@ -312,6 +422,7 @@
       else
         _root.selfWeight += w;
     }
+  free(groups);
 }
 
 static void
