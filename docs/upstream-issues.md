@@ -111,9 +111,11 @@ Workaround: `GSPTrace` maps event streams with `mmap()` itself.
 
 ## Lead: quitting under the Sombre theme recurses until the stack overflows
 
-**Status:** lead, not reproduced outside Performance Dashboard; probably
-the pool-list lead above (same recursion, and the app had only libobjc2's
-pool at the bottom until 2026-10-17). With libs-gui
+**Status:** explained 2026-10-17: the pool-list lead above. Built without
+the `exit(0)` workaround, the app with its old `main.m` (`@autoreleasepool`)
+crashed with status 139 on all 6 quits under Sombre (3 by menu, 3 by
+SIGTERM); with the `NSAutoreleasePool` `main.m`, all 6 exited with status
+0. Nothing separate to report. The original notes: with libs-gui
 0.32.0 and Sombre, `-[NSApplication replyToApplicationShouldTerminate:]`
 closes every window (`makeObjectsPerformSelector: @selector(close)`), and
 `-[NSWindow close]` ↔ `-[NSAutoreleasePool emptyPool]` recursed through 19
