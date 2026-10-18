@@ -124,6 +124,14 @@ jobs:
       run-validation: true
       run-smoke: true
       artifact-name: windows
+      # Signing (docs/release.md, Code signing): off until the repository
+      # variable PD_SIGN_MSI is "true" and the certificate is in its secrets.
+      sign-artifacts: ${{ vars.PD_SIGN_MSI == 'true' }}
+      sign-timestamp-url: ${{ vars.PD_SIGN_TIMESTAMP_URL }}
+    secrets:
+      sign_pfx_base64: ${{ secrets.PD_SIGN_PFX_BASE64 }}
+      sign_pfx_password: ${{ secrets.PD_SIGN_PFX_PASSWORD }}
+      sign_cert_sha1: ${{ secrets.PD_SIGN_CERT_SHA1 }}
 
   # The installed MSI records a program: its gstrace.exe launches
   # defaults.exe (a GNUstep program in the package) with the Leaks template;

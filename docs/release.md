@@ -81,7 +81,28 @@ and by hand (with a version such as `0.1.0-rc1`):
 Nothing is signed, tagged or published by the workflow: a tag, and
 publishing the artifact as a GitHub release, each need Dan's approval.
 
-Not done yet: code signing.
+## Code signing
+
+Nothing is signed yet: there is no certificate. The release workflow is
+ready for one. gnustep-packager's MSI backend signs the launcher EXE and
+the MSI (signtool) when the Windows job runs with `sign-artifacts`, which
+`release.yml` sets from the repository variable `PD_SIGN_MSI` (`true` to
+sign), with:
+
+- secrets `PD_SIGN_PFX_BASE64` (the PFX, base64), `PD_SIGN_PFX_PASSWORD`,
+  and optionally `PD_SIGN_CERT_SHA1`;
+- variable `PD_SIGN_TIMESTAMP_URL` (the certificate authority's RFC 3161
+  timestamp server).
+
+What Dan has to decide: how to sign. Since 2023 a new code-signing
+certificate's key (OV or EV) has to live on a hardware token or in a
+cloud HSM, so the PFX secrets above only suit an existing exportable
+certificate; with a new one, the likely route is a cloud signing service
+(signtool through the provider's key storage provider, selected by
+`PD_SIGN_CERT_SHA1`, or the provider's own GitHub action), which needs a
+change to the Windows job once one is chosen. Open-source projects can
+get signing free from some services (SignPath Foundation). The AppImage
+is not signed; the update feed's SHA-256 covers its downloads.
 
 ## Updates
 
