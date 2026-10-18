@@ -68,6 +68,13 @@ commit="$(git rev-parse HEAD)" || die "cannot read the source commit"
 version="${version_override:-$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["package"]["version"])' "$manifest")}"
 version_args=()
 [ -n "$version_override" ] && version_args=(-PackageVersion "$version_override")
+# A prerelease (0.1.0-rc1) checks the prerelease update feed, from a copy of
+# the manifest beside it (its relative paths still resolve).
+case "$version" in
+  *-*)
+    python3 scripts/prerelease-manifest.py "$manifest" packaging/package.manifest.prerelease.json
+    manifest=packaging/package.manifest.prerelease.json ;;
+esac
 packager_commit="$(git -C "$packager_root" rev-parse HEAD)"
 echo "package-linux: Performance Dashboard $version from ${commit:0:7}, gnustep-packager ${packager_commit:0:7}"
 

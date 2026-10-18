@@ -3,6 +3,7 @@
 #import "PDRecordPanel.h"
 #import "PDTimelineView.h"
 #import <GSPerformance/GSPerformance.h>
+#import "GPStandardUpdaterController.h"
 
 #if !defined(_WIN32)
 #  include <fcntl.h>
@@ -16,6 +17,8 @@
   NSMutableArray *_windows;
   BOOL _openedAtLaunch;
   NSFileHandle *_terminationPipe;
+  /* nil unless packaged: the packager writes the updater's configuration */
+  GPStandardUpdaterController *_updater;
 }
 
 - (instancetype) init
@@ -45,6 +48,7 @@ add_item(NSMenu *menu, NSString *title, SEL action, NSString *key, id target)
 
   NSMenu *app = [[NSMenu alloc] initWithTitle: @"Performance Dashboard"];
   add_item(app, @"About Performance Dashboard", @selector(showAbout:), nil, self);
+  add_item(app, @"Check for Updates…", @selector(checkForUpdates:), nil, self);
 #if !defined(_WIN32)
   /* Windows attaches by injecting the agent; no helper there */
   add_item(app, @"Install Profiling Helper…", @selector(installHelper:), nil, self);
@@ -155,6 +159,7 @@ termination_signal(int sig)
 #if !defined(_WIN32)
   [self installTerminationHandler];
 #endif
+  [self startUpdater];
   /* Automation (tests, screenshots): -PDRecordTarget path
      [-PDRecordTemplate name] [-PDRecordArguments "a b"] [-PDRecordTimeLimit s] */
   NSString *target = [d stringForKey: @"PDRecordTarget"];
@@ -281,6 +286,27 @@ termination_signal(int sig)
   GSPRecordingOptions *o = [PDAttachPanel runPanel];
   if (o != nil)
     [self startRecordingWithOptions: o];
+}
+
+- (void) startUpdater
+{
+  NSError *error = nil;
+  _updater = [[GPStandardUpdaterController alloc] initWithPackagedConfiguration: &error];
+  if (_updater == nil)
+    return;   /* not packaged (a build from source): no updates */
+  [_updater start];
+}
+
+- (void) checkForUpdates: (id)sender
+{
+  [_updater checkForUpdates: sender];
+}
+
+- (BOOL) validateMenuItem: (NSMenuItem *)item
+{
+  if ([item action] == @selector(checkForUpdates:))
+    return _updater != nil;
+  return YES;
 }
 
 - (void) showAbout: (id)sender

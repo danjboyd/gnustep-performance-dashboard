@@ -121,7 +121,17 @@
     }
   },
   "updates": {
-    "enabled": false
+    "enabled": true,
+    "provider": "github-release-feed",
+    "channel": "stable",
+    "minimumCheckIntervalHours": 24,
+    "startupDelaySeconds": 15,
+    "github": {
+      "owner": "danjboyd",
+      "repo": "gnustep-performance-dashboard",
+      "tagPattern": "v{version}",
+      "releaseNotesUrlPattern": "https://github.com/{owner}/{repo}/releases/tag/{tag}"
+    }
   },
   "integrations": {
     "shortcutName": "Performance Dashboard",
@@ -201,7 +211,10 @@
   },
   "backends": {
     "msi": {
-      "enabled": false
+      "enabled": false,
+      "updates": {
+        "feedUrl": "https://danjboyd.github.io/gnustep-performance-dashboard/updates/windows/stable.json"
+      }
     },
     "appimage": {
       "enabled": true,
@@ -212,6 +225,11 @@
       },
       "smoke": {
         "mode": "launch-only"
+      },
+      "updates": {
+        "feedUrl": "https://danjboyd.github.io/gnustep-performance-dashboard/updates/linux/stable.json",
+        "embedUpdateInformation": true,
+        "releaseSelector": "latest"
       }
     }
   },

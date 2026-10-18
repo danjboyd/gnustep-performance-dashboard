@@ -116,6 +116,9 @@ jobs:
       manifest-path: packaging/package.manifest.json
       backend: msi
       package-version: ${{ needs.version.outputs.version }}
+      # a prerelease checks the prerelease update feed (scripts/prerelease-manifest.py)
+      preflight-shell: bash
+      preflight-command: ${{ contains(needs.version.outputs.version, '-') && 'python scripts/prerelease-manifest.py packaging/package.manifest.json packaging/package.manifest.json' || '' }}
       packager-repository: danjboyd/gnustep-packager
       packager-ref: 362f270baf442c57f0736522530b82dd6a164e2e
       run-validation: true

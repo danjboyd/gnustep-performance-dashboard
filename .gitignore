@@ -11,3 +11,7 @@ build/
 Tools/gstrace-helper/gstrace-helper
 out/
 dist/
+*.a
+third_party/gnustep-packager-updater/objc/gp-update-helper/gp-update-helper
+third_party/gnustep-packager-updater/objc/gp-update-helper/gp-update-helper.exe
+packaging/package.manifest.prerelease.json
