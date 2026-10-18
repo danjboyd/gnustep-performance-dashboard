@@ -182,12 +182,33 @@ jobs:
         run: |
           find dist/ci/windows -name '*.msi' -exec cp {} dist/ci/release/ \;
           ls dist/ci/release/*.msi >/dev/null || { echo "::error::no MSI in the windows artifact"; exit 1; }
+          find dist/ci/windows -name '*.update-feed.json' -exec cp {} dist/ci/release/ \;
           (cd dist/ci/release && sha256sum -- *.AppImage *.msi > SHA256SUMS)
           {
             echo '```'
             cat dist/ci/release/SHA256SUMS
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+      # The update feeds for GitHub Pages, at the URLs the manifest packages
+      # (updates/<platform>/<channel>.json), from the packager's feed
+      # sidecars. Deploying them, like publishing the release, needs Dan's
+      # approval; the release assets must be published first, since the
+      # feeds point at them.
+      - name: Update feeds
+        run: |
+          python3 - <<'PY'
+          import glob, json, os
+          platforms = {"appimage": "linux", "msi": "windows"}
+          for path in glob.glob("dist/ci/release/*.update-feed.json"):
+              feed = json.load(open(path))
+              backend = feed["releases"][0]["assets"][0]["backend"]
+              out = "dist/ci/release/site/updates/%s/%s.json" % (platforms[backend], feed["channel"])
+              os.makedirs(os.path.dirname(out), exist_ok=True)
+              json.dump(feed, open(out, "w"), indent=2)
+              print(out, "->", feed["feedUrl"])
+          PY
+          ls -R dist/ci/release/site
 
       - uses: actions/upload-artifact@v4
         with:

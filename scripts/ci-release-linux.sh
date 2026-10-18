@@ -53,7 +53,7 @@ step "Collect"
 out="dist/ci/linux"
 rm -rf "$out"
 mkdir -p "$out"
-for pattern in '*.AppImage' '*.provenance.json'; do
+for pattern in '*.AppImage' '*.AppImage.zsync' '*.update-feed.json' '*.provenance.json'; do
   # shellcheck disable=SC2086
   set -- dist/packages/$pattern
   [ -f "$1" ] || die "packaging did not produce $pattern"

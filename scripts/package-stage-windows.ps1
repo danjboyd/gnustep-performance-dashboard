@@ -185,6 +185,10 @@ Write-Notice "libobjc2.txt" "libobjc2 (GNUstep Objective-C runtime)" "MIT" `
   "https://github.com/gnustep/libobjc2" (Join-Path $licenseTexts "libobjc2-COPYING")
 Write-Notice "libdispatch.txt" "libdispatch (swift-corelibs-libdispatch)" "Apache-2.0" `
   "https://github.com/swiftlang/swift-corelibs-libdispatch" (Join-Path $licenseTexts "libdispatch-LICENSE")
+Write-Notice "gnustep-packager-updater.txt" "gnustep-packager updater (GPUpdaterCore, GPUpdaterUI, gp-update-helper)" "MIT" `
+  "https://github.com/danjboyd/gnustep-packager" (Join-Path $licenseTexts "gnustep-packager-LICENSE")
+Write-Notice "Monocypher.txt" "Monocypher (in gp-update-helper)" "BSD-2-Clause OR CC0-1.0" `
+  "https://monocypher.org" (Join-Path $repoRoot "third_party\gnustep-packager-updater\objc\gp-update-helper\Source\monocypher\LICENCE.md")
 Write-Notice "WinUITheme.txt" "WinUITheme, the default Windows theme (plugins-themes-winuitheme)" "LGPL-2.1-or-later" `
   "https://github.com/danjboyd/plugins-themes-winuitheme" (Join-Path $licenseTexts "libs-gui-COPYING.LIB")
 $clangDlls = @(Get-ChildItem -Path $runtimeBin -Filter "*.dll" -File | Where-Object { $_.Name -notmatch '^(libgnustep-|libobjc|dispatch|libdispatch|GSPerformance|libGSPerformance)' } | ForEach-Object Name | Sort-Object)

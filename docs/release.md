@@ -11,9 +11,10 @@ the packages are built.
   `vX.Y.Z-rcN` published as GitHub pre-releases and tested on every platform
   (install, launch, in-app update) before the final.
 - Every tag and publish is approved by Dan directly in this session.
-- Assets: `PerformanceDashboard-<version>-x86_64.AppImage`,
-  `PerformanceDashboard-<version>-win64.msi`, plus `SHA256SUMS` and the
-  provenance files (later: the AppImage's `.zsync` and the update feed).
+- Assets: `PerformanceDashboard-<version>-x86_64.AppImage` and its
+  `.zsync`, `PerformanceDashboard-<version>-win64.msi`, plus `SHA256SUMS`
+  and the provenance files; the update feeds go to GitHub Pages (Updates,
+  below).
 - README leads with a download table, per-platform install steps (including
   the unsigned-binary SmartScreen workaround), real screenshots, then
   build-from-source.
@@ -80,8 +81,37 @@ and by hand (with a version such as `0.1.0-rc1`):
 Nothing is signed, tagged or published by the workflow: a tag, and
 publishing the artifact as a GitHub release, each need Dan's approval.
 
-Not done yet: the update feed and in-app updates (`updates` is disabled in
-the manifest), and code signing.
+Not done yet: code signing.
+
+## Updates
+
+The packages update themselves through gnustep-packager's updater
+(`third_party/gnustep-packager-updater/VENDORED.md`): the app links
+GPUpdaterCore and GPUpdaterUI and carries `gp-update-helper` in its
+bundle; it checks its feed 15 seconds after launch (once the template
+chooser is closed) and at most daily, and **Performance Dashboard ▸ Check
+for Updates…** checks by hand. A build from source has no packaged
+configuration, so the updater stays off.
+
+- Feeds, on GitHub Pages:
+  `https://danjboyd.github.io/gnustep-performance-dashboard/updates/{linux,windows}/{stable,prerelease}.json`.
+  A version with a suffix (`0.1.0-rc1`) is built for the prerelease
+  channel and feeds (`scripts/prerelease-manifest.py`), so release
+  candidates follow candidates and then the final release.
+- Each package build writes the feed for its package beside it
+  (`*.update-feed.json`; the AppImage also gets `.zsync` and embedded
+  update information). The release workflow's `release` artifact holds
+  them under `site/updates/...`, at the paths of the feed URLs.
+- Publishing order: the release assets (the feeds point at them), then the
+  feeds to GitHub Pages. Both need Dan's approval; GitHub Pages also
+  needs the repository to be public (or a paid plan).
+- Tested 2026-10-17 with the AppImage: rc1 pointed at a local test feed
+  (`GP_UPDATER_FEED_URL=http://127.0.0.1:...`) offered rc2, downloaded
+  it, and on **Restart and Install** replaced its own file and started
+  rc2. The MSI path is not tested yet.
+- Feeds are not signed (`updates.publicEDKey` is unset): the helper checks
+  each download's SHA-256 from the feed, which is only as trustworthy as
+  the HTTPS feed itself.
 
 ## Design constraints that follow from packaging
 

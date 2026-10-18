@@ -195,6 +195,20 @@
         "stageRelativePath": "metadata/licenses/libdispatch.txt"
       },
       {
+        "name": "gnustep-packager updater",
+        "license": "MIT",
+        "source": "GPUpdaterCore and GPUpdaterUI in the app, app/PerformanceDashboard.app/gp-update-helper",
+        "homepage": "https://github.com/danjboyd/gnustep-packager",
+        "stageRelativePath": "metadata/licenses/gnustep-packager-updater.txt"
+      },
+      {
+        "name": "Monocypher",
+        "license": "BSD-2-Clause OR CC0-1.0",
+        "source": "app/PerformanceDashboard.app/gp-update-helper",
+        "homepage": "https://monocypher.org",
+        "stageRelativePath": "metadata/licenses/Monocypher.txt"
+      },
+      {
         "name": "Adwaita GNUstep theme",
         "license": "LGPL-2.1-or-later",
         "source": "runtime/System/Library/Themes/Adwaita.theme",

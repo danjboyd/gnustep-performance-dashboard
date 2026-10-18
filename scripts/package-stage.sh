@@ -196,6 +196,10 @@ notice libdispatch.txt "libdispatch (swift-corelibs-libdispatch)" "Apache-2.0" \
   "https://github.com/swiftlang/swift-corelibs-libdispatch" "$license_texts/libdispatch-LICENSE"
 notice GNUstep-tools.txt "GNUstep tools: defaults, make_services (libs-base, libs-gui; GPL-3.0-or-later), gpbs (libs-back; GPL-3.0-or-later), gdnc (libs-base; GPL-2.0-or-later)" \
   "GPL-3.0-or-later AND GPL-2.0-or-later" "https://github.com/gnustep" "$license_texts/GPL-3.0.txt"
+notice gnustep-packager-updater.txt "gnustep-packager updater (GPUpdaterCore, GPUpdaterUI, gp-update-helper)" "MIT" \
+  "https://github.com/danjboyd/gnustep-packager" "$license_texts/gnustep-packager-LICENSE"
+notice Monocypher.txt "Monocypher (in gp-update-helper)" "BSD-2-Clause OR CC0-1.0" \
+  "https://monocypher.org" "$repo_root/third_party/gnustep-packager-updater/objc/gp-update-helper/Source/monocypher/LICENCE.md"
 notice Adwaita-theme.txt "Adwaita GNUstep theme (plugins-themes-adwaita)" "LGPL-2.1-or-later" \
   "https://github.com/danjboyd/plugins-themes-Adwaita" "$adwaita_theme/../COPYING.LIB"
 
