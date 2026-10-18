@@ -174,6 +174,16 @@ on it) never do: one dictionary leaks per segment label and template image
 drawn, and per drop-down label. A fix for the theme's own project, not for
 GNUstep.
 
+2026-10-17: reported to the theme's own session, which released the
+dictionary at all three sites (branch typing-attributes-leak on c866d4a,
+not yet committed there). Recorded with the Leaks template, a test app
+drawing a segmented control and a pop-up button 50 times: alpha15, 1872
+leaked blocks (911 known GNUstep leaks), with the theme's override in the
+heaviest leak stacks; the fixed build, 761 (756 known), and no theme frame
+in any stack through `_nonAutoreleasedTypingAttributes`. The rest is
+libs-gui's own `-[NSSegmentedCell drawSegment:inFrame:withView:]`
+(`NSSegmentedCell.m`:579), already labelled as known.
+
 ## (Retracted) libs-back font strings
 
 About 1,900 `GSCInlineString`s from `FCFontEnumerator` were reported as
