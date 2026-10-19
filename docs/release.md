@@ -61,6 +61,12 @@ workflow artifact with checksums and Linux update feeds. No Windows job or
 MSI is required for v0.1.0. A successful workflow still needs the independent
 acceptance evidence in the release plan before approval.
 
+For the v0.1.1 integration work, `assemble-candidate.yml` can collect successful
+Linux and Windows producer runs at the same commit. It verifies provenance,
+payload checksums, channel URLs and application source-archive identity before
+creating a combined review artifact. See [the assembly contract](v0.1.1-plan.md#release-assembly-contract).
+It does not replace native acceptance or publish anything.
+
 The bootstrap, signed release manifest and both payload archives are locked by
 SHA256 in `packaging/release-inputs.json`. `fetch-toolchain.py` verifies the
 cache on every use; changed upstream assets fail closed. The bootstrap uses

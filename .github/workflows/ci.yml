@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 75
     env:
-      PREFIX: ${{ github.workspace }}/../gnustep
+      PREFIX: ${{ runner.temp }}/gnustep
     steps:
       - uses: actions/checkout@v4
 
@@ -197,7 +197,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
-      PREFIX: ${{ github.workspace }}/../gnustep
+      PREFIX: ${{ runner.temp }}/gnustep
     steps:
       - uses: actions/checkout@v4
       - name: Reader runtime dependencies

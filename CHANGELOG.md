@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Embedded symbol snapshots preserve unnamed frame labels, so moving a trace
+  between hosts does not change its call-tree labels by consulting different
+  local libraries. Existing readers can open the same sidecar format.
+- Release preparation adds signed Windows toolchain pins, source inventory
+  checks, and combined artifact validation. Windows binary release acceptance
+  remains in progress; see [the v0.1.1 plan](docs/v0.1.1-plan.md).
+
+## 0.1.0
+
+The first binary release supports Debian 13 amd64. Windows code and CI are
+experimental and do not constitute a supported Windows binary release.
+
 Since the first implementation:
 
 - Leaks: leaks GNUstep itself is known to have, recognised by their
@@ -13,7 +25,7 @@ Since the first implementation:
 - Quitting under the Sombre theme no longer crashes; quitting stops
   running recordings so their traces are complete; SIGTERM quits the
   app safely.
-- Renamed from "GNUstep Instruments" to Performance Dashboard: the app
+- Standardized the product name as Performance Dashboard: the app
   is `PerformanceDashboard.app`, the bundle id
   `io.github.danjboyd.PerformanceDashboard`, the polkit policy
   `org.gnustep.performancedashboard.policy` (installing or removing the
