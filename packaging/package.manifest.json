@@ -334,10 +334,17 @@
           {
             "name": "Performance Dashboard",
             "version": "0.1.0",
-            "license": "LGPL-2.1-or-later",
-            "source": "Performance Dashboard application, framework, recording agent and gstrace",
+            "license": "GPL-3.0-or-later",
+            "source": "Dashboard and gstrace",
             "homepage": "https://github.com/danjboyd/gnustep-performance-dashboard",
             "stageRelativePath": "metadata/licenses/PerformanceDashboard.txt"
+          },
+          {
+            "name": "GSPerformance and recording libraries",
+            "license": "LGPL-2.1-or-later",
+            "source": "GSPerformance, gsperf-agent.dll, gsperf.dll and public headers",
+            "homepage": "https://github.com/danjboyd/gnustep-performance-dashboard",
+            "stageRelativePath": "metadata/licenses/GSPerformance.txt"
           },
           {
             "name": "GNUstep Base",
@@ -380,6 +387,20 @@
             "source": "runtime/bin",
             "homepage": "https://github.com/swiftlang/swift-corelibs-libdispatch",
             "stageRelativePath": "metadata/licenses/libdispatch.txt"
+          },
+          {
+            "name": "gnustep-packager updater",
+            "license": "MIT",
+            "source": "GPUpdaterCore and GPUpdaterUI in the app, app/PerformanceDashboard.app/gp-update-helper.exe",
+            "homepage": "https://github.com/danjboyd/gnustep-packager",
+            "stageRelativePath": "metadata/licenses/gnustep-packager-updater.txt"
+          },
+          {
+            "name": "Monocypher",
+            "license": "BSD-2-Clause OR CC0-1.0",
+            "source": "app/PerformanceDashboard.app/gp-update-helper.exe",
+            "homepage": "https://monocypher.org",
+            "stageRelativePath": "metadata/licenses/Monocypher.txt"
           },
           {
             "name": "WinUITheme",
