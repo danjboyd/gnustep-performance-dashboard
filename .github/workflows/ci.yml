@@ -58,6 +58,28 @@ jobs:
           export LD_LIBRARY_PATH="$PREFIX/System/Library/Libraries${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
           bash Tests/compiler-checks.sh
 
+      - name: Portable trace fixtures and native capture
+        run: |
+          . "$PREFIX/System/Library/Makefiles/GNUstep.sh"
+          export LD_LIBRARY_PATH="$PREFIX/System/Library/Libraries${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+          python3 Tests/trace-portability.py --gstrace Tools/gstrace/obj/gstrace --synthetic
+          python3 Tests/trace-portability.py --gstrace Tools/gstrace/obj/gstrace \
+            --capture Tests/out/cburn.gstrace --output Tests/out/native-linux
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-linux-trace
+          path: Tests/out/native-linux
+          retention-days: 7
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-trace-reader
+          path: |
+            Tools/gstrace/obj/gstrace
+            GSPerformance/obj/libGSPerformance.so*
+          retention-days: 7
+
       - name: Keep test output
         if: failure()
         uses: actions/upload-artifact@v4
@@ -70,6 +92,7 @@ jobs:
           if-no-files-found: ignore
 
   windows:
+    needs: linux
     name: Windows (MSYS2 clang64)
     runs-on: windows-latest
     timeout-minutes: 30
@@ -134,6 +157,26 @@ jobs:
           export PATH="$PWD/GSPerformance/obj:$PWD/Runtime/obj:$PATH"
           sh Tests/windows-checks.sh
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: native-linux-trace
+          path: Tests/out/native-linux
+
+      - name: Cross-platform trace acceptance
+        run: |
+          . /clang64/share/GNUstep/Makefiles/GNUstep.sh
+          export PATH="$PWD/GSPerformance/obj:$PWD/Runtime/obj:$PATH"
+          python Tests/trace-portability.py --gstrace Tools/gstrace/obj/gstrace.exe --synthetic
+          python Tests/trace-portability.py --gstrace Tools/gstrace/obj/gstrace.exe --verify Tests/out/native-linux
+          python Tests/trace-portability.py --gstrace Tools/gstrace/obj/gstrace.exe \
+            --capture Tests/out/spin.gstrace --output Tests/out/native-windows
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-windows-trace
+          path: Tests/out/native-windows
+          retention-days: 7
+
       - name: Keep Windows test output
         if: failure()
         uses: actions/upload-artifact@v4
@@ -141,3 +184,35 @@ jobs:
           name: windows-test-output
           path: Tests/out
           if-no-files-found: ignore
+
+  windows-trace-on-linux:
+    name: Read native Windows trace on Linux
+    needs: [linux, windows]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PREFIX: ${{ github.workspace }}/../gnustep
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reader runtime dependencies
+        run: |
+          sudo apt-get -q update
+          sudo apt-get -q -y install libgnutls28-dev libxml2-dev libxslt1-dev libicu-dev libcurl4-gnutls-dev
+      - uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.PREFIX }}
+          key: gnustep-${{ runner.os }}-ubuntu-24.04-${{ hashFiles('.github/scripts/install-gnustep.sh') }}
+          fail-on-cache-miss: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-trace-reader
+          path: .
+      - uses: actions/download-artifact@v4
+        with:
+          name: native-windows-trace
+          path: Tests/out/native-windows
+      - name: Compare native Windows summary and exports
+        run: |
+          chmod +x Tools/gstrace/obj/gstrace
+          export LD_LIBRARY_PATH="$PWD/GSPerformance/obj:$PREFIX/System/Library/Libraries"
+          python3 Tests/trace-portability.py --gstrace Tools/gstrace/obj/gstrace --verify Tests/out/native-windows
