@@ -486,6 +486,29 @@ child(GSPCallTreeNode *n, NSString *name)
   XCTAssertFalse([GSPSymbolicator isSystemLibraryPath: @"/home/me/MyApp.app/MyApp"]);
 }
 
+- (void) testEmbeddedSymbolsPreserveUnknownFrames
+{
+  TraceBuilder *b = [[TraceBuilder alloc] initWithPID: 4242];
+  uint64_t frames[] = { 0x140000010ull, 0x140000020ull, 0 };
+  [b sampleAt: b.start + MS tid: 4242 kind: GSP_SAMPLE_CPU weight: 1
+       frames: frames count: 3];
+  [b end: b.start + 2 * MS];
+  GSPTrace *t = [self traceFrom: b name: @"embed-unknown" instruments: nil];
+  GSPSymbolicator *symbols = t.targetProcess.symbolicator;
+  XCTAssertTrue([symbols symbolForFrame: frames[0] index: 0].isUnknown);
+  NSDictionary *table = [symbols symbolTableForAllStacks];
+  XCTAssertEqualObjects([table objectForKey: @"140000010"], @"0x140000010");
+  XCTAssertEqualObjects([table objectForKey: @"14000001f"], @"0x14000001f");
+  XCTAssertEqualObjects([table objectForKey: @"0"], @"0x0");
+  XCTAssertNil([table objectForKey: @"ffffffffffffffff"]);
+  NSString *file = [t.path stringByAppendingPathComponent: @"symbols-4242.plist"];
+  XCTAssertTrue([table writeToFile: file atomically: YES]);
+  GSPTrace *reopened = [GSPTrace traceWithPath: t.path error: NULL];
+  for (NSUInteger i = 0; i < 3; i++)
+    XCTAssertEqualObjects([symbols symbolForFrame: frames[i] index: i].name,
+      [reopened.targetProcess.symbolicator symbolForFrame: frames[i] index: i].name);
+}
+
 - (void) testExporters
 {
   TraceBuilder *b = [self cpuBuilder];

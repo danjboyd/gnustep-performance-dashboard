@@ -50,8 +50,8 @@
 /* Forget caches after the process' images or methods changed. */
 - (void) invalidate;
 
-/* Address -> name for every frame of every stack, for embedding in the
-   trace bundle. */
+/* Address -> display name for every frame of every stack, including fallback
+   address labels, for embedding a portable snapshot in the trace bundle. */
 - (NSDictionary *) symbolTableForAllStacks;
 
 + (BOOL) isSystemLibraryPath: (NSString *)path;

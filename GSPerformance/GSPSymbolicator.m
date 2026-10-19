@@ -984,13 +984,17 @@ is_agent(GSPSymbol *s)
       const uint64_t *f = [stacks framesForStack: i count: &n];
       for (NSUInteger k = 0; k < n; k++)
         {
-          uint64_t a = k > 0 ? f[k] - 1 : f[k];
+          uint64_t a = k > 0 && f[k] > 0 ? f[k] - 1 : f[k];
           NSString *hex = [NSString stringWithFormat: @"%llx", (unsigned long long)a];
           if ([table objectForKey: hex] != nil)
             continue;
           GSPSymbol *s = [self symbolForAddress: a];
-          if (!s.isUnknown)
-            [table setObject: s.name forKey: hex];
+          /* Preserve fallback labels too. A stripped image may still supply
+             function boundaries here; another host without that exact image
+             would otherwise group the same frames under different offsets
+             (or resolve them against an unrelated local library). Keep the
+             existing address-to-string sidecar format for older readers. */
+          [table setObject: s.name forKey: hex];
         }
     }
   return table;
