@@ -8,6 +8,16 @@ Debian 13’s legacy GNU runtime passes at -O0 and -O2. Objective-C allocation
 class labels and Zombies with that runtime remain unverified. Musl, static launch recording,
 32-bit binaries and Windows packages are outside this release's contract.
 
+Run GCC/legacy-runtime targets from an environment configured for their own
+runtime. The managed libobjc2 toolchain uses SONAME `libobjc.so.4.6`, but also
+provides a compatibility symlink `libobjc.so.4` pointing to it. If its library
+directory remains on `LD_LIBRARY_PATH` after sourcing its `GNUstep.sh`, a
+legacy target needing `libobjc.so.4` can load libobjc2 instead of the GNU
+runtime. Before profiling, check `ldd /path/to/target` in the target's intended
+environment and confirm that `libobjc.so.4` resolves to the distribution's
+legacy runtime, outside the managed toolchain. The issue is the compatibility
+alias and search path, not identical SONAMEs.
+
 ## Build a useful target
 
 Keep debug information (`-g`) alongside your optimized build (`-O2`).
