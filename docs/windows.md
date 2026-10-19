@@ -1,7 +1,9 @@
 # Windows port
 
 Windows packages are deferred beyond v0.1.0. The code and CI remain for
-continued development; the first release is Linux-only.
+continued development; the first release is Linux-only. The v0.1.1 candidate
+and its outstanding acceptance gates are tracked in
+[v0.1.1-plan.md](v0.1.1-plan.md).
 
 ## Status
 
@@ -40,10 +42,12 @@ continued development; the first release is Linux-only.
   llvm-addr2line or addr2line is available on PATH; the packaged experience
   still needs validation.
 
-## Plan for recording
+## Platform mapping and future options
 
 The analysis framework, `gstrace` and the app are portable GNUstep code; the
-platform-specific parts are the recording agent and the helper.
+platform-specific parts are the recording agent and the helper. The table
+includes future options such as PDB and ETW; it is not a list of features
+already implemented. The status above describes the current implementation.
 
 | Linux | Windows equivalent |
 |---|---|
@@ -60,4 +64,10 @@ libobjc2 on Windows allocates objects with `_aligned_malloc`, so the 8-byte
 object offset used for class tagging on Linux differs; tagging must look the
 block up by containment instead.
 
-The trace format is unchanged; `gsp_file_header` gains a platform field.
+Both agents write the same little-endian format-v1 records. The current
+`gsp_file_header` has no platform field. Cross-platform readers use recorded
+image paths and embedded symbols; native target files and symbolication tools
+may not be available on the other host. Embed symbols before moving a trace
+when the original executables will not accompany it. CI exchanges native
+fixture recordings between Linux and Windows and compares their summaries
+with `Tests/trace-portability.py`.
