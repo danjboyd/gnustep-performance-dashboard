@@ -51,7 +51,7 @@ Recording programs you launch needs no privileges. To attach to running
 processes, use **Performance Dashboard ▸ Install Profiling Helper…** once
 (see [Privileges](#privileges)). The command-line recorder is inside the
 AppImage: after `--appimage-extract`, run
-`squashfs-root/usr/bin/gstrace`. This launcher sets up the bundled CLI
+`squashfs-root/usr/runtime/bin/gstrace`. This launcher sets up the bundled CLI
 while preserving the target application’s own GNUstep runtime.
 
 See [Profiling your app](docs/profiling.md) for compiler compatibility,

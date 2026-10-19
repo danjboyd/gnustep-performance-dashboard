@@ -15,7 +15,7 @@ runtime=/tmp/squashfs-root/usr/runtime
 mkdir -p /tmp/pd-home
 rm -rf /evidence/optimized.gstrace /evidence/lines.gstrace /evidence/no-unwind.gstrace /evidence/legacy-O0.gstrace /evidence/legacy-O2.gstrace
 gst() {
-  env -i HOME=/tmp/pd-home PATH=/usr/bin:/bin /tmp/squashfs-root/usr/bin/gstrace "$@"
+  env -i HOME=/tmp/pd-home PATH=/usr/bin:/bin /tmp/squashfs-root/usr/runtime/bin/gstrace "$@"
 }
 gcc -O2 -g -fomit-frame-pointer /src/Tests/fixtures/optimized.c -o /tmp/optimized -lpthread
 gst record --template 'Time Profiler' -o /evidence/optimized.gstrace --launch /tmp/optimized

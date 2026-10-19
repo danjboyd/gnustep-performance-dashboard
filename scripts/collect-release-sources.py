@@ -26,6 +26,7 @@ for component in lock["components"] + [dict(inputs["adwaita"], name="adwaita"),
         dict(inputs["gnustep-packager"], name="gnustep-packager"),
         dict(name="gnustep-cli-new", url="https://github.com/danjboyd/gnustep-cli-new.git",
              revision="e7915a3984f851a4137591899b047f40ee1f7713"),
+        dict(name="appimage-runtime", url="https://github.com/AppImage/type2-runtime.git", revision="caf24f9f712084686bfc24a70b75e50df0aefb9c"),
         dict(name="robin-map-fallback", url="https://github.com/Tessil/robin-map.git", revision="v1.2.1")]:
     repository = component["url"].removesuffix(".git").removeprefix("https://github.com/")
     revision = component["revision"]
