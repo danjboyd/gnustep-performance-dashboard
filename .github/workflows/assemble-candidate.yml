@@ -30,6 +30,24 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - name: Require successful producers at this exact commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LINUX_RUN_ID: ${{ inputs.linux-run-id }}
+          WINDOWS_RUN_ID: ${{ inputs.windows-run-id }}
+        run: |
+          for run_id in "$LINUX_RUN_ID" "$WINDOWS_RUN_ID"; do
+            [[ "$run_id" =~ ^[0-9]+$ ]] || { echo 'Invalid producer run ID'; exit 1; }
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" > "$RUNNER_TEMP/producer.json"
+            python3 - "$RUNNER_TEMP/producer.json" <<'PY'
+          import json, os, sys
+          run = json.load(open(sys.argv[1]))
+          if (run['status'] != 'completed' or run['conclusion'] != 'success'
+                  or run['head_sha'] != os.environ['GITHUB_SHA']):
+              raise SystemExit('Producer must have succeeded at the exact candidate commit')
+          print('Verified producer:', run['html_url'])
+          PY
+          done
       - uses: actions/download-artifact@v4
         with:
           name: linux
