@@ -52,6 +52,12 @@ jobs:
           export LD_LIBRARY_PATH="$PREFIX/System/Library/Libraries${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
           sh Tests/run.sh
 
+      - name: GCC and Clang recording compatibility
+        run: |
+          . "$PREFIX/System/Library/Makefiles/GNUstep.sh"
+          export LD_LIBRARY_PATH="$PREFIX/System/Library/Libraries${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+          bash Tests/compiler-checks.sh
+
       - name: Keep test output
         if: failure()
         uses: actions/upload-artifact@v4

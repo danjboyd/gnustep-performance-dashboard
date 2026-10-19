@@ -9,9 +9,6 @@
 #   scripts/ci-release-linux.sh [VERSION]   # default: package.version
 set -euo pipefail
 
-bootstrap_url="https://github.com/danjboyd/gnustep-cli-new/releases/download/v0.1.0/gnustep-bootstrap.sh"
-bootstrap_sha256="3bdfa7a29a6442ce1bb994b027bfcba78beec649ae820391f009ac9eeb40ba63"
-
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
 pin="$repo_root/scripts/pinned-checkout.sh"
@@ -26,11 +23,11 @@ version_args=()
 [ -n "${1:-}" ] && version_args=(--version "$1")
 
 step "GNUstep toolchain (gnustep-cli-new v0.1.0)"
-if [ ! -f "$gnustep_root/System/Library/Makefiles/GNUstep.sh" ]; then
-  curl -fsSL -o "$work/gnustep-bootstrap.sh" "$bootstrap_url"
-  echo "$bootstrap_sha256  $work/gnustep-bootstrap.sh" | sha256sum -c -
-  sh "$work/gnustep-bootstrap.sh" setup --user --yes
-fi
+[ ! -e "$gnustep_root" ] || die "use a clean build home; an existing toolchain is not release provenance"
+python3 scripts/fetch-toolchain.py "$work/toolchain"
+sh "$work/toolchain/gnustep-bootstrap.sh" --yes --json setup --user \
+  --manifest "$work/toolchain/release-manifest.json"
+export PD_VERIFIED_TOOLCHAIN_CACHE="$work/toolchain"
 
 step "PowerShell $("$pin" --field powershell version)"
 if ! command -v pwsh >/dev/null 2>&1; then

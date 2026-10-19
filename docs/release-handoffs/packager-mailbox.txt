@@ -1,0 +1,19 @@
+We’re preparing Performance Dashboard v0.1.0 as a Linux-only x86_64/glibc release. Please coordinate with its Codex agent through me; I’ll relay your response.
+
+Our AppImage currently uses gnustep-packager commit:
+362f270baf442c57f0736522530b82dd6a164e2e
+
+Local package validation, GUI recording, and bundled-gstrace recording checks passed. Nothing has been tagged or published.
+
+Please investigate and return:
+
+1. The immutable packager revision/tag we should freeze. Identify relevant AppImage/updater fixes since our current pin.
+2. The supported clean-machine Linux baseline and how to verify host dependencies. Our staging leaves glibc/display/GTK libraries to the host. The recording agent separately dlopens host libunwind; source-line lookup uses host addr2line. DT_NEEDED closure alone doesn’t validate these capabilities.
+3. Reproducible RC1→RC2 AppImage update acceptance steps, including failed-download/recovery checks.
+4. Whether our vendored GPUpdaterCore, GPUpdaterUI, and helper need updating together, and which exact revision to use.
+
+Please provide exact revisions, documentation references, commands, actual test evidence, and any proposed changes. Separate verified facts from recommendations.
+
+This is an information request. Don’t publish, tag, deploy feeds, or modify Performance Dashboard. Propose cross-project changes before implementing them.
+
+Context: this coordination prompt was prepared with Codex assistance.

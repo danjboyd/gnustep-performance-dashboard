@@ -6,10 +6,10 @@
     "revision": "b74231f84bc139a50ad50459acfaed10a07a4642"
   },
   "gnustep-packager": {
-    "comment": "The merge of #57 (the reusable workflow checks out its own commit). No tag yet: move to v0.1.1 when it is cut.",
+    "comment": "Stable packager v0.1.1, including the smoke validation alert fix.",
     "url": "https://github.com/danjboyd/gnustep-packager.git",
-    "tag": null,
-    "revision": "362f270baf442c57f0736522530b82dd6a164e2e"
+    "tag": "v0.1.1",
+    "revision": "23f17080e37ef73e786aed9d34f65abd07eeb97e"
   },
   "appimagetool": {
     "comment": "gnustep-packager's default is appimagetool's moving continuous build; 0.1.3 was made with build 295 (8c8c91f). Release 1.9.1 is build 296 from the same commit. scripts/fetch-appimagetool.sh installs it where the packager looks, and the packager takes the AppImage runtime from it.",
@@ -22,5 +22,18 @@
     "url": "https://github.com/PowerShell/PowerShell/releases/download/v7.4.6/powershell-7.4.6-linux-x64.tar.gz",
     "version": "7.4.6",
     "sha256": "6f6015203c47806c5cc444c19d8ed019695e610fbd948154264bf9ca8e157561"
+  },
+  "gnustep-toolchain": {
+    "release": "v0.1.0",
+    "platform": "linux-amd64-clang",
+    "supportedHost": "Debian 13 amd64",
+    "baseUrl": "https://github.com/danjboyd/gnustep-cli-new/releases/download/v0.1.0",
+    "files": {
+      "gnustep-bootstrap.sh": "3bdfa7a29a6442ce1bb994b027bfcba78beec649ae820391f009ac9eeb40ba63",
+      "release-manifest.json": "9a7d88fd934d3c941de2541ae80427f444d91fef8653d2e13b3a8b9f47f25d1f",
+      "release-manifest.json.sig": "29e137dd20c65b9429e192950ed492d0ea454b3d7ffbd46d5107b190c4814298",
+      "gnustep-cli-linux-amd64-clang-0.1.0.tar.gz": "39a79b9b679dbc3a8e2426e6fb4b05397bc417bc64bd606ff7219be6857ff5f1",
+      "gnustep-toolchain-linux-amd64-clang-0.1.0.tar.gz": "41fd4b8323f877d70b5cb1fa08403f0c6edbea2afe799de2c0d0024781a73acb"
+    }
   }
 }

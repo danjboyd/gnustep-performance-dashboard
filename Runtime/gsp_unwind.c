@@ -32,12 +32,12 @@ gsp_unwind_init(void)
   void *h;
 
   if (gsp_cfg.unwind_fp)
-    return;
+    goto limited;
   h = dlopen("libunwind.so.8", RTLD_NOW | RTLD_LOCAL);
   if (h == NULL)
     h = dlopen("libunwind.so", RTLD_NOW | RTLD_LOCAL);
   if (h == NULL)
-    return;
+    goto limited;
   unw_init_local2_fn = dlsym(h, "_ULx86_64_init_local2");
   unw_step_fn = dlsym(h, "_ULx86_64_step");
   unw_get_reg_fn = dlsym(h, "_ULx86_64_get_reg");
@@ -47,6 +47,17 @@ gsp_unwind_init(void)
   if (set_policy && space)
     set_policy(*space, GSP_UNW_CACHE_PER_THREAD);
   have_libunwind = unw_init_local2_fn && unw_step_fn && unw_get_reg_fn;
+  if (have_libunwind)
+    return;
+limited:
+  {
+    /* Called before the writer thread starts, after the stream header. */
+    const char *message = gsp_cfg.unwind_fp
+      ? "Frame-pointer unwinding selected; stacks require frame pointers."
+      : "Full stack unwinding unavailable: install libunwind; using frame pointers.";
+    gsp_writer_emit(GSP_REC_DIAGNOSTIC, GSP_DIAGNOSTIC_UNWIND_LIMITED,
+                    gsp_now(), 0, message, strlen(message) + 1, NULL, 0);
+  }
 }
 
 /* libunwind calls dl_iterate_phdr, which takes the loader lock; while the

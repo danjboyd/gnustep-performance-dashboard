@@ -816,6 +816,12 @@ col(NSString *ident, NSString *title, CGFloat width)
 
 - (void) buildLeaks
 {
+  if (_renderer.process.leakScanUnavailable)
+    {
+      [self setColumns: [NSArray arrayWithObject: col(@"object", @"Leak Scan", 400)] outline: nil];
+      [_status setStringValue: @"Leak scan unavailable. See the recording warning; no reliable result for the latest attempt."];
+      return;
+    }
   GSPLeakAnalysis *la = _renderer.leakAnalysis;
   GSPProcess *p = _renderer.process;
   GSPLeakSnapshot *snap = la.latestSnapshot;

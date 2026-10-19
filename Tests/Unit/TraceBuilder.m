@@ -32,6 +32,18 @@
 
 - (uint64_t) start { return _start; }
 
+- (void) diagnosticAt: (uint64_t)t message: (const char *)message
+{
+  [self record: GSP_REC_DIAGNOSTIC aux: GSP_DIAGNOSTIC_LEAK_SCAN_UNAVAILABLE
+          time: t tid: 0 a: message alen: strlen(message) + 1 b: NULL blen: 0];
+}
+
+- (void) dropped: (uint64_t)count
+{
+  [self record: GSP_REC_DROPPED aux: GSP_REC_SAMPLE time: _start tid: 0
+             a: &count alen: sizeof(count) b: NULL blen: 0];
+}
+
 - (void) record: (uint16_t)type aux: (uint32_t)aux time: (uint64_t)t tid: (uint32_t)tid
               a: (const void *)a alen: (size_t)alen b: (const void *)b blen: (size_t)blen
 {

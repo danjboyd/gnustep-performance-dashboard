@@ -10,8 +10,8 @@ with one local change:
   twice, in libdispatch's `os/generic_win_base.h` and in the CRT. Re-apply
   it after a sync until the packager has it.
 
-- Source commit: `362f270baf442c57f0736522530b82dd6a164e2e` (gnustep-packager
-  main, 2026-10-15)
+- Source commit: `23f17080e37ef73e786aed9d34f65abd07eeb97e` (gnustep-packager
+  v0.1.1, 2026-10-19)
 
 `Dashboard/GNUmakefile` builds GPUpdaterCore, GPUpdaterUI and
 gp-update-helper from this copy and puts the helper in the app bundle. A

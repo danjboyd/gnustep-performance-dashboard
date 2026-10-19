@@ -138,6 +138,8 @@ typedef struct pending_ref
   BOOL _clean, _fromPerf;
   uint32_t _interval, _wallInterval;
   uint64_t _dropped;
+  NSMutableArray *_diagnostics;
+  BOOL _leakScanUnavailable;
   BOOL _samplesSorted;
 @public
   BOOL _changed;
@@ -155,6 +157,7 @@ typedef struct pending_ref
       _signposts = [NSMutableArray array];
       _logs = [NSMutableArray array];
       _snapshots = [NSMutableArray array];
+      _diagnostics = [NSMutableArray array];
       _zombies = [NSMutableArray array];
       _messages = [NSMutableArray array];
       _pendingLeaks = [NSMutableArray array];
@@ -187,6 +190,8 @@ typedef struct pending_ref
 - (uint32_t) sampleIntervalMicroseconds { return _interval; }
 - (uint32_t) wallIntervalMicroseconds { return _wallInterval; }
 - (uint64_t) droppedSamples { return _dropped; }
+- (NSArray *) diagnostics { return [_diagnostics copy]; }
+- (BOOL) leakScanUnavailable { return _leakScanUnavailable; }
 - (NSDictionary *) threads { return _threads; }
 - (NSArray *) images { return _images; }
 - (NSArray *) signposts { return _signposts; }
@@ -522,6 +527,7 @@ payload_string(const uint8_t *p, size_t max)
     case GSP_REC_LEAK_END:
       if (plen >= sizeof(gsp_leak_summary_payload))
         {
+          _leakScanUnavailable = NO;
           const gsp_leak_summary_payload *lp = (const gsp_leak_summary_payload *)p;
           GSPLeakSnapshot *s = [self snapshot: r->aux];
           s.leakedBytes = lp->bytes;
@@ -566,6 +572,16 @@ payload_string(const uint8_t *p, size_t max)
 
     case GSP_REC_END:
       _clean = YES;
+      break;
+
+    case GSP_REC_DIAGNOSTIC:
+      if (r->aux == GSP_DIAGNOSTIC_LEAK_SCAN_UNAVAILABLE)
+        _leakScanUnavailable = YES;
+      {
+        NSString *message = payload_string(p, plen);
+        if ([message length] && ![_diagnostics containsObject: message])
+          [_diagnostics addObject: message];
+      }
       break;
 
     default:
@@ -1080,6 +1096,73 @@ compare_raw_signposts(const void *a, const void *b)
 {
   NSArray *a = [_info objectForKey: @"Instruments"];
   return a ? a : [NSArray array];
+}
+
+- (NSArray *) qualityWarningsIncludingIncomplete: (BOOL)includeIncomplete
+{
+  NSMutableArray *warnings = [NSMutableArray array];
+  for (GSPProcess *p in self.processes)
+    {
+      if (includeIncomplete && !p.finishedCleanly)
+        [warnings addObject: [NSString stringWithFormat:
+          @"Process %d: recording incomplete.", p.pid]];
+      if (p.droppedSamples)
+        [warnings addObject: [NSString stringWithFormat:
+          @"Process %d: %llu samples dropped.", p.pid,
+          (unsigned long long)p.droppedSamples]];
+      for (NSString *message in p.diagnostics)
+        [warnings addObject: [NSString stringWithFormat: @"Process %d: %@", p.pid, message]];
+    }
+  return warnings;
+}
+
+- (BOOL) copyToPath: (NSString *)path error: (NSError **)error
+{
+  NSFileManager *fm = [NSFileManager defaultManager];
+  NSString *source = [[self.path stringByStandardizingPath] stringByResolvingSymlinksInPath];
+  NSString *dest = [[path stringByStandardizingPath] stringByResolvingSymlinksInPath];
+  if ([source isEqual: dest])
+    return YES;
+  /* Never recursively copy into ourselves, or replace an ancestor. */
+  if (![dest isAbsolutePath]
+      || [dest hasPrefix: [source stringByAppendingString: @"/"]]
+      || [source hasPrefix: [dest stringByAppendingString: @"/"]])
+    {
+      if (error)
+        *error = [NSError errorWithDomain: GSPTraceErrorDomain code: 3 userInfo:
+          [NSDictionary dictionaryWithObject: @"Choose a destination outside the source trace."
+                                      forKey: NSLocalizedDescriptionKey]];
+      return NO;
+    }
+  NSString *parent = [dest stringByDeletingLastPathComponent];
+  NSString *token = [[NSProcessInfo processInfo] globallyUniqueString];
+  NSString *stage = [parent stringByAppendingPathComponent:
+    [@".gstrace-save-" stringByAppendingString: token]];
+  NSString *backup = [stage stringByAppendingString: @"-previous"];
+  if (![fm copyItemAtPath: source toPath: stage error: error])
+    {
+      [fm removeItemAtPath: stage error: NULL];
+      return NO;
+    }
+  BOOL replaced = [fm fileExistsAtPath: dest];
+  if (replaced && ![fm moveItemAtPath: dest toPath: backup error: error])
+    {
+      [fm removeItemAtPath: stage error: NULL];
+      return NO;
+    }
+  if (![fm moveItemAtPath: stage toPath: dest error: error])
+    {
+      if (replaced && ![fm moveItemAtPath: backup toPath: dest error: NULL] && error)
+        *error = [NSError errorWithDomain: GSPTraceErrorDomain code: 4 userInfo:
+          [NSDictionary dictionaryWithObject: [NSString stringWithFormat:
+            @"Cannot finish saving. The previous trace is preserved at %@.", backup]
+                                      forKey: NSLocalizedDescriptionKey]];
+      [fm removeItemAtPath: stage error: NULL];
+      return NO;
+    }
+  if (replaced)
+    [fm removeItemAtPath: backup error: NULL];
+  return YES;
 }
 
 - (double) relativeTime: (GSPTime)time

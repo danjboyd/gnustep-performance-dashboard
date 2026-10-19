@@ -229,6 +229,8 @@
             [GSPAllocationAnalysis formatBytes: [self allocationAnalysis].peakLiveBytes]];
   if ([ident isEqual: GSPInstrumentLeaks])
     {
+      if (_process.leakScanUnavailable)
+        return @"Scan unavailable";
       GSPLeakSnapshot *s = [self leakAnalysis].latestSnapshot;
       if (s == nil)
         return @"No checks yet";

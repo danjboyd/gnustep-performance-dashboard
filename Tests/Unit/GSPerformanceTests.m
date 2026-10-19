@@ -99,6 +99,50 @@ child(GSPCallTreeNode *n, NSString *name)
   XCTAssertEqualWithAccuracy(t.duration, 0.05, 0.0001);
 }
 
+- (void) testUnavailableScanAndRecordingWarnings
+{
+  TraceBuilder *b = [self cpuBuilder];
+  [b dropped: 7];
+  [b diagnosticAt: b.start + 50 * MS message: "Leak scan unavailable: denied."];
+  [b diagnosticAt: b.start + 60 * MS message: "Leak scan unavailable: denied."];
+  GSPTrace *t = [self traceFrom: b name: @"unavailable" instruments: nil];
+  XCTAssertTrue(t.targetProcess.leakScanUnavailable);
+  XCTAssertEqual([t.targetProcess.leakSnapshots count], (NSUInteger)0);
+  XCTAssertEqual([t qualityWarningsIncludingIncomplete: NO].count, (NSUInteger)2);
+  XCTAssertEqual([t qualityWarningsIncludingIncomplete: YES].count, (NSUInteger)3);
+  NSDictionary *summary = [GSPExporter summaryOfTrace: t process: t.targetProcess];
+  XCTAssertTrue([[summary objectForKey: @"leakScanUnavailable"] boolValue]);
+  XCTAssertNil([summary objectForKey: @"leaks"]);
+  /* A later successful attempt restores the result, but preserves the warning. */
+  [b leakSnapshot: 2 at: b.start + 70 * MS leaks: [NSArray array]];
+  [b end: b.start + 80 * MS];
+  t = [self traceFrom: b name: @"recovered-scan" instruments: nil];
+  XCTAssertFalse(t.targetProcess.leakScanUnavailable);
+  XCTAssertEqual([t qualityWarningsIncludingIncomplete: YES].count, (NSUInteger)2);
+}
+
+- (void) testSavingPreservesSourceAndDestination
+{
+  GSPTrace *source = [self traceFrom: [self cpuBuilder] name: @"save-source" instruments: nil];
+  GSPTrace *dest = [self traceFrom: named_builder() name: @"save-dest" instruments: nil];
+  NSFileManager *fm = [NSFileManager defaultManager];
+  NSError *error = nil;
+  XCTAssertTrue([source copyToPath: source.path error: &error], @"%@", error);
+  XCTAssertNotNil([GSPTrace traceWithPath: source.path error: NULL]);
+  NSString *alias = [source.path stringByAppendingString: @"-alias"];
+  [_bundles addObject: alias];
+  XCTAssertTrue([fm createSymbolicLinkAtPath: alias withDestinationPath: source.path error: &error]);
+  XCTAssertTrue([source copyToPath: alias error: &error]);
+  XCTAssertFalse([source copyToPath: [source.path stringByAppendingPathComponent: @"nested.gstrace"] error: &error]);
+  XCTAssertTrue([source copyToPath: dest.path error: &error], @"%@", error);
+  XCTAssertEqual([GSPTrace traceWithPath: dest.path error: NULL].targetProcess.sampleCount, (NSUInteger)4);
+  XCTAssertEqual([GSPTrace traceWithPath: source.path error: NULL].targetProcess.sampleCount, (NSUInteger)4);
+  /* Failed copying must not remove an existing destination. */
+  [fm removeItemAtPath: source.path error: NULL];
+  XCTAssertFalse([source copyToPath: dest.path error: &error]);
+  XCTAssertEqual([GSPTrace traceWithPath: dest.path error: NULL].targetProcess.sampleCount, (NSUInteger)4);
+}
+
 - (void) testCallTreeTopDown
 {
   GSPTrace *t = [self traceFrom: [self cpuBuilder] name: @"tree" instruments: nil];

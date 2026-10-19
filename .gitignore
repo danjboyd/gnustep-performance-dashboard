@@ -15,3 +15,6 @@ dist/
 third_party/gnustep-packager-updater/objc/gp-update-helper/gp-update-helper
 third_party/gnustep-packager-updater/objc/gp-update-helper/gp-update-helper.exe
 packaging/package.manifest.prerelease.json
+.codex/
+
+__pycache__/

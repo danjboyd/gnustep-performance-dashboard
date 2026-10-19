@@ -65,6 +65,8 @@ csv_escape(NSString *s)
   [d setObject: [NSNumber numberWithInt: p.pid] forKey: @"pid"];
   [d setObject: p.executablePath ?: @"" forKey: @"executable"];
   [d setObject: [NSNumber numberWithBool: p.finishedCleanly] forKey: @"finishedCleanly"];
+  [d setObject: [trace qualityWarningsIncludingIncomplete: YES] forKey: @"warnings"];
+  [d setObject: [NSNumber numberWithBool: p.leakScanUnavailable] forKey: @"leakScanUnavailable"];
 
   NSMutableArray *threads = [NSMutableArray array];
   for (GSPThreadInfo *t in [p sortedThreads])
@@ -143,7 +145,7 @@ csv_escape(NSString *s)
             forKey: @"peakLiveBytes"];
     }
 
-  if ([p.leakSnapshots count])
+  if ([p.leakSnapshots count] && !p.leakScanUnavailable)
     {
       GSPLeakAnalysis *la = [[GSPLeakAnalysis alloc] initWithProcess: p];
       NSMutableArray *l = [NSMutableArray array];

@@ -45,3 +45,12 @@ recording; readers stop at it.
 
 Frame 0 of a sample is the interrupted PC; later frames are return addresses
 and are symbolicated at `address - 1`.
+
+Record 22, `DIAGNOSTIC`, adds an optional NUL-terminated UTF-8 warning.
+`aux=1` means a leak scan was unavailable; no leak snapshot is emitted for
+that attempt. A later successful LEAK_END restores latest-scan availability,
+while diagnostics remain in the recording history. `aux=2` means stack
+unwinding is limited to frame pointers. Readers expose these in the CLI and
+GUI. Version 1 is retained because unknown record types are skipped; older
+readers will not display these diagnostics and should not be used to assess
+recording quality for v0.1.0.

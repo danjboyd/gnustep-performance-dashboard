@@ -143,6 +143,8 @@ typedef struct GSPIOEvent
 @property (nonatomic, readonly) uint32_t sampleIntervalMicroseconds;
 @property (nonatomic, readonly) uint32_t wallIntervalMicroseconds;
 @property (nonatomic, readonly) uint64_t droppedSamples;
+@property (nonatomic, readonly) NSArray *diagnostics; /* unique agent warnings */
+@property (nonatomic, readonly) BOOL leakScanUnavailable; /* latest attempt failed */
 
 @property (nonatomic, readonly) NSDictionary *threads;   /* NSNumber tid -> GSPThreadInfo */
 @property (nonatomic, readonly) NSArray *images;         /* GSPImage, by start */
@@ -178,6 +180,11 @@ typedef struct GSPIOEvent
 
 /* Re-read event streams that grew (live recording). */
 - (BOOL) reload: (NSError **)error;
+/* Copy a completed bundle without deleting an existing destination first.
+   The source remains owned by the caller. Same-path copies are harmless. */
+- (BOOL) copyToPath: (NSString *)path error: (NSError **)error;
+/* Include missing END records only after recording has stopped. */
+- (NSArray *) qualityWarningsIncludingIncomplete: (BOOL)includeIncomplete;
 /* Whether the last -reload: found new data. */
 @property (nonatomic, readonly) BOOL changedOnLastReload;
 

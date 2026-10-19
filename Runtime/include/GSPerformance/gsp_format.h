@@ -83,7 +83,14 @@ enum gsp_record_type
   GSP_REC_LOG = 19,         /* aux = level; gsp_signpost_payload (name unused) */
   GSP_REC_MARK = 20,        /* aux = GSP_MARK_*; payload = optional text */
   GSP_REC_IO = 21,          /* aux = GSP_IO_*; gsp_io_payload (time = start) */
+  GSP_REC_DIAGNOSTIC = 22,  /* aux = GSP_DIAGNOSTIC_*; NUL-terminated text */
   GSP_REC_TYPE_COUNT
+};
+
+enum
+{
+  GSP_DIAGNOSTIC_LEAK_SCAN_UNAVAILABLE = 1,
+  GSP_DIAGNOSTIC_UNWIND_LIMITED = 2
 };
 
 enum { GSP_THREAD_MAIN = 1, GSP_THREAD_INTERNAL = 2 };

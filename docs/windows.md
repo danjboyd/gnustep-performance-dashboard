@@ -1,5 +1,8 @@
 # Windows port
 
+Windows packages are deferred beyond v0.1.0. The code and CI remain for
+continued development; the first release is Linux-only.
+
 ## Status
 
 - **Viewer.** `libGSPerformance`, `gstrace` and PerformanceDashboard.app build with
@@ -33,7 +36,9 @@
 - **CI** records C and Objective-C fixtures on `windows-latest` with every
   template and with attach (`Tests/windows-checks.sh`).
 - **Not yet:** the System Time Profiler (ETW kernel sampling through a
-  UAC-elevated helper), DWARF/PDB source lines, ARM64.
+  UAC-elevated helper), native PDB source lines, ARM64. DWARF source lines can be resolved when
+  llvm-addr2line or addr2line is available on PATH; the packaged experience
+  still needs validation.
 
 ## Plan for recording
 

@@ -1,9 +1,5 @@
-# Release builds on GitHub's runners (docs/release.md): the Linux AppImage on
-# Debian 13 (scripts/ci-release-linux.sh) and the Windows MSI through
-# gnustep-packager's reusable workflow, from the inputs pinned in
-# packaging/release-inputs.json. The result is a workflow artifact,
-# "release", with SHA256SUMS. Nothing is signed, tagged or published: every
-# tag and publish needs Dan's approval.
+# Linux-only v0.1.0 release artifacts. No tags or publication are created here.
+# Windows remains experimental and is exercised by the ordinary CI workflow.
 name: Release
 
 on:
@@ -62,7 +58,7 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends \
-            ca-certificates curl git make gcc libc6-dev pkg-config python3 sudo file binutils \
+            ca-certificates curl git make gcc libc6-dev pkg-config python3 sudo file binutils libunwind8 \
             libx11-dev libxext-dev libxft-dev libxrender-dev libfreetype-dev \
             libfontconfig-dev libcairo2-dev libglib2.0-dev \
             xvfb xauth x11-utils fonts-dejavu-core \
@@ -105,75 +101,8 @@ jobs:
           path: dist/logs
           if-no-files-found: warn
 
-  windows:
-    needs: version
-    # The pinned gnustep-packager (packaging/release-inputs.json): the
-    # gnustep-cli-new toolchain on windows-latest, then the manifest's
-    # Windows build and stage (scripts/package-*-windows.ps1), the MSI, its
-    # validation and a smoke launch.
-    uses: danjboyd/gnustep-packager/.github/workflows/package-gnustep-app.yml@362f270baf442c57f0736522530b82dd6a164e2e
-    with:
-      manifest-path: packaging/package.manifest.json
-      backend: msi
-      package-version: ${{ needs.version.outputs.version }}
-      # a prerelease checks the prerelease update feed (scripts/prerelease-manifest.py)
-      preflight-shell: bash
-      preflight-command: ${{ contains(needs.version.outputs.version, '-') && 'python scripts/prerelease-manifest.py packaging/package.manifest.json packaging/package.manifest.json' || '' }}
-      packager-repository: danjboyd/gnustep-packager
-      packager-ref: 362f270baf442c57f0736522530b82dd6a164e2e
-      run-validation: true
-      run-smoke: true
-      artifact-name: windows
-      # Signing (docs/release.md, Code signing): off until the repository
-      # variable PD_SIGN_MSI is "true" and the certificate is in its secrets.
-      sign-artifacts: ${{ vars.PD_SIGN_MSI == 'true' }}
-      sign-timestamp-url: ${{ vars.PD_SIGN_TIMESTAMP_URL }}
-    secrets:
-      sign_pfx_base64: ${{ secrets.PD_SIGN_PFX_BASE64 }}
-      sign_pfx_password: ${{ secrets.PD_SIGN_PFX_PASSWORD }}
-      sign_cert_sha1: ${{ secrets.PD_SIGN_CERT_SHA1 }}
-
-  # The installed MSI records a program: its gstrace.exe launches
-  # defaults.exe (a GNUstep program in the package) with the Leaks template;
-  # the trace must finish cleanly with a leak check.
-  windows-record:
-    needs: windows
-    runs-on: windows-latest
-    timeout-minutes: 20
-    defaults:
-      run:
-        shell: pwsh
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: windows-packages
-          path: msi
-
-      - name: Install
-        run: |
-          $msi = Get-ChildItem msi -Recurse -Filter *.msi | Select-Object -First 1
-          $p = Start-Process msiexec.exe -Wait -PassThru -ArgumentList @("/i", "`"$($msi.FullName)`"", "/qn", "/l*v", "install.log")
-          if ($p.ExitCode -ne 0) { Get-Content install.log -Tail 40; throw "msiexec exited with $($p.ExitCode)" }
-
-      - name: Record with the installed gstrace
-        run: |
-          $root = Join-Path $env:LOCALAPPDATA "Performance Dashboard"
-          $bin = Join-Path $root "runtime\bin"
-          $env:PATH = "$bin;$env:PATH"
-          $trace = Join-Path $env:RUNNER_TEMP "defaults.gstrace"
-          & (Join-Path $bin "gstrace.exe") record --template Leaks --time-limit 30s -o $trace `
-            --launch (Join-Path $bin "defaults.exe") read NSGlobalDomain GSTheme
-          if ($LASTEXITCODE -ne 0) { throw "gstrace record exited with $LASTEXITCODE" }
-          $info = & (Join-Path $bin "gstrace.exe") info $trace | Out-String
-          $leaks = & (Join-Path $bin "gstrace.exe") report $trace leaks | Out-String
-          Write-Host $info
-          Write-Host $leaks
-          if ($info -notmatch "finished cleanly: yes") { throw "the trace did not finish cleanly" }
-          if ($leaks -notmatch "leak check\(s\)") { throw "the trace has no leak check" }
-          "Windows: the installed gstrace recorded defaults.exe with the Leaks template" >> $env:GITHUB_STEP_SUMMARY
-
   release:
-    needs: [version, linux, windows, windows-record]
+    needs: [version, linux]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/download-artifact@v4
@@ -181,17 +110,9 @@ jobs:
           name: linux
           path: dist/ci/release
 
-      - uses: actions/download-artifact@v4
-        with:
-          name: windows-packages
-          path: dist/ci/windows
-
       - name: Collect and SHA256SUMS
         run: |
-          find dist/ci/windows -name '*.msi' -exec cp {} dist/ci/release/ \;
-          ls dist/ci/release/*.msi >/dev/null || { echo "::error::no MSI in the windows artifact"; exit 1; }
-          find dist/ci/windows -name '*.update-feed.json' -exec cp {} dist/ci/release/ \;
-          (cd dist/ci/release && sha256sum -- *.AppImage *.msi > SHA256SUMS)
+          (cd dist/ci/release && sha256sum -- *.AppImage *.AppImage.zsync > SHA256SUMS)
           {
             echo '```'
             cat dist/ci/release/SHA256SUMS
@@ -207,7 +128,7 @@ jobs:
         run: |
           python3 - <<'PY'
           import glob, json, os
-          platforms = {"appimage": "linux", "msi": "windows"}
+          platforms = {"appimage": "linux"}
           for path in glob.glob("dist/ci/release/*.update-feed.json"):
               feed = json.load(open(path))
               backend = feed["releases"][0]["assets"][0]["backend"]

@@ -39,6 +39,10 @@ die() { echo "package-linux: $*" >&2; exit 1; }
 warn() { echo "package-linux: warning: $*" >&2; }
 
 [ "$release" = 0 ] || [ -z "$(git status --porcelain)" ] || die "a release builds only from a clean tree"
+if [ "$release" = 1 ]; then
+  [ -n "${PD_VERIFIED_TOOLCHAIN_CACHE:-}" ] || die "release builds use ci-release-linux.sh in a clean Debian 13 build home"
+  python3 scripts/fetch-toolchain.py "$PD_VERIFIED_TOOLCHAIN_CACHE"
+fi
 
 # Inputs. A tree named in the environment may be used for a dry run, but a
 # release is built only from trees at their pins.
@@ -65,6 +69,9 @@ if [ -n "${LIBS_BACK_BUNDLE:-}" ]; then
 fi
 
 commit="$(git rev-parse HEAD)" || die "cannot read the source commit"
+source_dirty=false
+[ -z "$(git status --porcelain)" ] || source_dirty=true
+source_diff_sha256="$(git diff --binary HEAD | sha256sum | cut -d' ' -f1)"
 version="${version_override:-$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["package"]["version"])' "$manifest")}"
 version_args=()
 [ -n "$version_override" ] && version_args=(-PackageVersion "$version_override")
@@ -126,26 +133,37 @@ toolchain_ids="$(for lib in libgnustep-base.so.1.31 libgnustep-gui.so.0.32 libob
   printf '%s=%s\n' "$lib" "$(build_id "$root/runtime/lib/$lib")"
 done)"
 python3 - "dist/packages/PerformanceDashboard-$version-x86_64.provenance.json" <<PY
-import json, sys
+import json, sys, pathlib, subprocess, os
 inputs = json.load(open("packaging/release-inputs.json"))
 lock = json.load(open("packaging/linux/libs-back/libs-back.lock.json"))
+toolchain_root = pathlib.Path(os.environ.get("GNUSTEP_CLI_ROOT", str(pathlib.Path.home() / ".local/share/gnustep-cli")))
+metadata = {name: json.loads((toolchain_root / name).read_text())
+            for name in ("source-lock.json", "component-inventory.json", "toolchain-manifest.json")
+            if (toolchain_root / name).exists()}
 def pin(name):
     return {k: v for k, v in inputs[name].items() if k != "comment"}
 json.dump({
     "package": "PerformanceDashboard",
     "version": "$version",
     "commit": "$commit",
+    "sourceDirty": "$source_dirty" == "true",
+    "trackedDiffSha256": "$source_diff_sha256",
     "builtBy": "${GITHUB_ACTIONS:+github-actions}" or "local",
     "inputs": {
         "adwaita": pin("adwaita"),
         "gnustep-packager": dict(pin("gnustep-packager"), used="$packager_commit"),
         "appimagetool": pin("appimagetool"),
+        "gnustep-toolchain": pin("gnustep-toolchain"),
         "libs-back": {"revision": lock["revision"], "patches": [{"path": p["path"], "sha256": p["sha256"]} for p in lock["patches"]]},
     },
     "buildIds": {"app": "$app_id", "agent": "$agent_id", "adwaita": "$theme_id", "libs-back": "$back_id"},
     # The toolchain the AppImage bundles (the gnustep-cli-new install it was
     # built against), to compare builds made on different machines.
     "toolchainBuildIds": dict(line.split("=", 1) for line in """$toolchain_ids""".split()),
+    "toolchainPayloadsVerified": bool(os.environ.get("PD_VERIFIED_TOOLCHAIN_CACHE")),
+    "toolchainMetadata": metadata,
+    "compiler": subprocess.check_output(["clang", "--version"], text=True).strip(),
+    "distributionPackages": subprocess.check_output(["dpkg-query", "-W", "-f=\u0024{Package}=\u0024{Version}\\n"], text=True).splitlines(),
     "checks": {"validate+smoke": "passed", "record": "passed"},
 }, open(sys.argv[1], "w"), indent=2)
 open(sys.argv[1], "a").write("\n")

@@ -295,6 +295,27 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
       else
         [_statusLabel setStringValue: @"Press Record to start."];
     }
+  NSArray *warnings = [_trace qualityWarningsIncludingIncomplete: !_recorder.isRecording];
+  [_statusLabel setToolTip: [warnings componentsJoinedByString: @"\n"]];
+  if ([warnings count])
+    {
+      NSString *summary = @"recording diagnostics";
+      for (GSPProcess *p in _trace.processes)
+        {
+          if (p.droppedSamples)
+            summary = @"dropped samples";
+          if (!_recorder.isRecording && !p.finishedCleanly)
+            summary = @"incomplete recording";
+          if (p.leakScanUnavailable)
+            {
+              summary = @"leak scan unavailable";
+              break;
+            }
+        }
+      [_statusLabel setStringValue: [NSString stringWithFormat: @"%@Warning: %@%@",
+        _recorder.isRecording ? @"Recording · " : @"", summary,
+        _temporary ? @" · not saved" : @""]];
+    }
 }
 
 /* ------------------------------------------------------------------ */
@@ -455,14 +476,13 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
     dest = [dest stringByAppendingPathExtension: @"gstrace"];
   NSFileManager *fm = [NSFileManager defaultManager];
   NSError *error = nil;
-  if ([fm fileExistsAtPath: dest])
-    [fm removeItemAtPath: dest error: NULL];
-  if (![fm copyItemAtPath: _tracePath toPath: dest error: &error])
+  if (![_trace copyToPath: dest error: &error])
     {
       NSRunAlertPanel(@"Cannot Save Trace", @"%@", @"OK", nil, nil, [error localizedDescription]);
       return;
     }
-  if (_temporary)
+  if (_temporary && ![[_tracePath stringByResolvingSymlinksInPath]
+                       isEqual: [dest stringByResolvingSymlinksInPath]])
     [fm removeItemAtPath: _tracePath error: NULL];
   _tracePath = dest;
   _temporary = NO;

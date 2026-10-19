@@ -522,6 +522,11 @@ scan_range(scan_state *s, uintptr_t lo, uintptr_t hi, unsigned stride)
       struct iovec local = { buf, len };
       struct iovec remote = { (void *)lo, len };
       ssize_t got = process_vm_readv(self, &local, 1, &remote, 1, 0);
+      if (got < 0 && (errno == EPERM || errno == EACCES || errno == ENOSYS))
+        {
+          s->incomplete = true;
+          return;
+        }
       if (got < 8)
         {
           /* skip to the next page */
@@ -681,6 +686,19 @@ gsp_leaks_snapshot(void)
   uint64_t t0 = gsp_now();
   uint64_t live_bytes = 0, leak_bytes = 0, leak_count = 0;
   uint32_t ordinal = ++snapshot_ordinal;
+
+  /* A policy can deny even reads of our own memory. Do not interpret an
+     unreadable root set as an empty root set and report every block. */
+  uint64_t probe = 0, copy = 0;
+  struct iovec local = { &copy, sizeof(copy) };
+  struct iovec remote = { &probe, sizeof(probe) };
+  if (process_vm_readv(getpid(), &local, 1, &remote, 1, 0) != sizeof(probe))
+    {
+      const char message[] = "Leak scan unavailable: cannot read process memory.";
+      gsp_writer_emit(GSP_REC_DIAGNOSTIC, GSP_DIAGNOSTIC_LEAK_SCAN_UNAVAILABLE,
+                      t0, 0, message, sizeof(message), NULL, 0);
+      return;
+    }
 
   memset(&s, 0, sizeof(s));
   gsp_live_lock();
@@ -886,6 +904,9 @@ gsp_leaks_snapshot(void)
   start_world();
   gsp_live_unlock();
 
+  if (s.incomplete)
+    goto unavailable;
+
   {
     gsp_leak_summary_payload sum = { s.count, live_bytes, 0 };
     gsp_writer_emit(GSP_REC_LEAK_BEGIN, ordinal, t0, 0, &sum, sizeof(sum),
@@ -917,6 +938,12 @@ gsp_leaks_snapshot(void)
 done:
   start_world();
   gsp_live_unlock();
+unavailable:
+  {
+    const char message[] = "Leak scan unavailable: memory or scan resources could not be read completely.";
+    gsp_writer_emit(GSP_REC_DIAGNOSTIC, GSP_DIAGNOSTIC_LEAK_SCAN_UNAVAILABLE,
+                    t0, 0, message, sizeof(message), NULL, 0);
+  }
 cleanup:
   if (s.blocks)
     munmap(s.blocks, s.bytes);

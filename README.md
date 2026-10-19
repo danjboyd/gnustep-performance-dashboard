@@ -11,54 +11,52 @@ It has three parts:
 
 - **Performance Dashboard** (`PerformanceDashboard.app`) — the GNUstep
   AppKit front end: choose a template and a target, record, and analyse.
-  Works with any GNUstep theme (Adwaita on Linux, WinUITheme on Windows
-  are the defaults the release packages ship).
+  Uses standard GNUstep controls and themes; the Linux AppImage ships Adwaita.
 - **gstrace** — the command-line equivalent of `xctrace`: record, report,
   export and symbolicate traces, for scripts and CI.
 - **libgsperf** — `os_signpost` / `os_log` for GNUstep (`<os/signpost.h>`,
   `<os/log.h>`), so applications can mark intervals that show up as Points of
   Interest.
 
-Status: records on Linux (x86_64) and Windows (x86_64, MSYS2 clang64),
-where every instrument except the System Time Profiler works, for programs
-launched by the recorder or attached to (see
-[docs/windows.md](docs/windows.md)). Not yet released; see
-[docs/release.md](docs/release.md).
+Status: preparing **v0.1.0 for Debian 13 amd64**. No release has
+been published. Windows recording code remains experimental; Windows packages
+are deferred. See [the v0.1.0 gates](docs/v0.1.0-plan.md),
+[release process](docs/release.md), and [Windows notes](docs/windows.md).
 
 ## Installing
 
-Releases will carry two packages, built on GitHub's runners
-([docs/release.md](docs/release.md)):
+The first release will provide `PerformanceDashboard-0.1.0-x86_64.AppImage`.
+It bundles GNUstep and the Adwaita theme. The supported host is Debian 13
+amd64 with an X11 desktop (or XWayland); other distributions are unverified.
+For a minimal installation, install the desktop runtime and recording tools:
 
-| Platform | Package |
-|---|---|
-| Linux x86_64 | `PerformanceDashboard-<version>-x86_64.AppImage` |
-| Windows x86_64 | `PerformanceDashboard-<version>-win64.msi` |
+```sh
+sudo apt install libxft2 libxt6t64 libcairo2 libglib2.0-0t64 libdbus-1-3 libunwind8 binutils fonts-dejavu-core
+```
 
-**Linux.** Make the AppImage executable and run it:
+Make the AppImage executable and run it:
 
 ```sh
 chmod +x PerformanceDashboard-*-x86_64.AppImage
 ./PerformanceDashboard-*-x86_64.AppImage
 ```
 
-It brings its own GNUstep runtime and the Adwaita theme; nothing is
-installed. Recording programs you launch needs no privileges. To attach to
-running processes, use **Performance Dashboard ▸ Install Profiling Helper…**
-once (see [Privileges](#privileges)). The command-line recorder is inside the
+Recording optimized programs requires the host's libunwind runtime
+(`libunwind8` on Debian/Ubuntu); source-line lookup requires `addr2line`
+(from `binutils`). Without libunwind, recording falls back to frame pointers
+and displays a warning. These target-side facilities are not supplied merely
+by bundling GNUstep in the AppImage.
+
+Recording programs you launch needs no privileges. To attach to running
+processes, use **Performance Dashboard ▸ Install Profiling Helper…** once
+(see [Privileges](#privileges)). The command-line recorder is inside the
 AppImage: after `--appimage-extract`, run
 `squashfs-root/usr/runtime/bin/gstrace` with `LD_LIBRARY_PATH` set to
 `squashfs-root/usr/runtime/lib` and `GNUSTEP_CONFIG_FILE` to
 `squashfs-root/usr/runtime/etc/GNUstep/GNUstep.conf`.
 
-**Windows.** Run the MSI. It installs for the current user only, with no
-administrator rights, under `%LOCALAPPDATA%\Performance Dashboard`, and adds
-a Start menu shortcut. The installer is not code-signed yet, so Windows
-SmartScreen may say "Windows protected your PC": choose **More info**, then
-**Run anyway**. `gstrace.exe` is in the install's `runtime\bin`.
-
-Both packages are checked before release: each records a program with the
-Leaks template, from the app and from `gstrace`.
+See [Profiling your app](docs/profiling.md) for compiler compatibility,
+symbols, repeatable recordings and sharing traces.
 
 ## Instruments
 
@@ -80,7 +78,12 @@ File Activity, Network, Logging, System Time Profiler and Blank (`gstrace list t
 
 ## Building
 
-In a shell where `GNUstep.sh` has been sourced (clang and libobjc2):
+Building Dashboard, the framework and gstrace requires **Clang and libobjc2**
+(they use ARC). The C agent and signpost library also build with GCC.
+GCC-built Linux C targets are tested; GCC/legacy-runtime GNUstep targets
+are not yet a supported configuration.
+
+In a shell where `GNUstep.sh` has been sourced:
 
 ```sh
 make             # runtime, framework, gstrace, gstrace-helper, PerformanceDashboard.app

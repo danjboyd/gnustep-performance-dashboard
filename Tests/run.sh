@@ -31,6 +31,7 @@ cc -O0 -g "$ROOT/Tests/fixtures/cburn.c" -o "$OUT/cburn" -lpthread || exit 1
 cc -O1 -g -fno-omit-frame-pointer "$ROOT/Tests/fixtures/stress.c" -o "$OUT/stress" -lpthread || exit 1
 cc -O0 -g -Wno-unused-result "$ROOT/Tests/fixtures/iofix.c" -o "$OUT/iofix" || exit 1
 cc -shared -fPIC "$ROOT/Tests/fixtures/preloadmark.c" -o "$OUT/libpreloadmark.so" || exit 1
+cc -shared -fPIC "$ROOT/Tests/fixtures/deniedread.c" -o "$OUT/libdeniedread.so" || exit 1
 clang $OBJCFLAGS -O0 -Wno-unused-but-set-variable -I"$ROOT/Runtime/include" \
   "$ROOT/Tests/fixtures/objcwork.m" -o "$OUT/objcwork" $(gnustep-config --base-libs) \
   -L"$ROOT/Runtime/obj" -lgsperf -Wl,-rpath,"$ROOT/Runtime/obj" || exit 1
@@ -81,8 +82,15 @@ check "cburn: exactly the 10 leaked 48-byte blocks" "grep -q '^10 leaked block(s
 check "cburn: leak attributed to leak_some" "grep -q 'leak_some' '$OUT/cburn-leaks.txt'"
 "$GSTRACE" report "$OUT/cburn.gstrace" calltree --invert --depth 1 >"$OUT/cburn-tree.txt" 2>/dev/null
 check "cburn: inverted call tree leads with hot_inner" "sed -n 4p '$OUT/cburn-tree.txt' | grep -q hot_inner"
+record framepointer --template 'Time Profiler' --env GSP_UNWIND=fp --launch "$OUT/cburn"
+check "frame-pointer fallback is disclosed" "'$GSTRACE' info '$OUT/framepointer.gstrace' 2>/dev/null | grep -q 'Frame-pointer unwinding selected'"
 
 echo "== Stress: 8 threads allocating during sampling and leak checks"
+record deniedread --template Leaks --env LD_PRELOAD="$OUT/libdeniedread.so" --launch "$OUT/cburn"
+check "denied memory reads: trace explains unavailable scan" "'$GSTRACE' info '$OUT/deniedread.gstrace' 2>/dev/null | grep -q 'Leak scan unavailable'"
+check "denied memory reads: leaks report fails instead of claiming zero or all blocks leaked" "! '$GSTRACE' report '$OUT/deniedread.gstrace' leaks >'$OUT/deniedread-leaks.txt' 2>&1"
+check "denied memory reads: report explains failure" "grep -q 'Leak scan unavailable' '$OUT/deniedread-leaks.txt' && ! grep -q 'leaked block(s)' '$OUT/deniedread-leaks.txt'"
+check "denied memory reads: leak comparison refuses invalid results" "! '$GSTRACE' diff '$OUT/deniedread.gstrace' '$OUT/cburn.gstrace' --kind leaks >/dev/null 2>&1"
 record stress --instrument time-profiler --instrument allocations --instrument leaks \
   --leak-interval 1 --launch "$OUT/stress"
 check "stress: finished cleanly" "'$GSTRACE' info '$OUT/stress.gstrace' 2>/dev/null | grep -q 'finished cleanly: yes'"
@@ -170,10 +178,14 @@ check "child processes are not traced by default" "[ \$(ls '$OUT/objcwork.gstrac
 
 if [ "${SKIP_GUI:-0}" != 1 ] && command -v Xvfb >/dev/null 2>&1; then
   echo "== AppKit fixture: hangs (Xvfb)"
-  DISP=:$((70 + $$ % 20))
-  Xvfb $DISP -screen 0 1024x768x24 -nolisten tcp -ac >/dev/null 2>&1 &
+  DISPLAY_FILE=$(mktemp)
+  Xvfb -displayfd 3 -screen 0 1280x800x24 -nolisten tcp -ac 3>"$DISPLAY_FILE" >/dev/null 2>&1 &
   XPID=$!
-  timeout 3 sh -c "until [ -e /tmp/.X11-unix/X${DISP#:} ]; do :; done" 2>/dev/null
+  trap 'kill "$XPID" 2>/dev/null; rm -f "$DISPLAY_FILE"' EXIT HUP INT TERM
+  n=0
+  while [ ! -s "$DISPLAY_FILE" ] && [ $n -lt 10 ]; do sleep 1; n=$((n + 1)); done
+  [ -s "$DISPLAY_FILE" ] || { echo "private Xvfb failed to start"; exit 1; }
+  DISP=:$(cat "$DISPLAY_FILE")
   DISPLAY=$DISP XAUTHORITY= record hang --template "Time Profiler" --launch "$OUT/hangapp"
   "$GSTRACE" report "$OUT/hang.gstrace" hangs >"$OUT/hang.txt" 2>/dev/null
   check "hangapp: 3 hangs" "grep -q '^3 hang(s)' '$OUT/hang.txt'"
@@ -318,6 +330,9 @@ if [ "${SKIP_GUI:-0}" != 1 ] && command -v Xvfb >/dev/null 2>&1; then
       env "$APPENV" DISPLAY=$DISP XAUTHORITY= "$APP" $KEYS -GSFilePath "$SAMPLE" -GSTheme $theme >"$OUT/gui-$theme.log" 2>&1 &
       APID=$!
       W=$(window_id "objcwork — Custom")
+      if command -v import >/dev/null 2>&1; then
+        DISPLAY=$DISP import -window root "$OUT/gui-$theme.png"
+      fi
       [ -n "$W" ] && key "$W" ctrl+q
       wait_app $APID
       check "app ($theme): Quit exits with status 0 ($STATUS)" "[ $STATUS = 0 ]"
@@ -328,6 +343,16 @@ if [ "${SKIP_GUI:-0}" != 1 ] && command -v Xvfb >/dev/null 2>&1; then
       kill -TERM $APID
       wait_app $APID
       check "app ($theme): SIGTERM exits with status 0 ($STATUS)" "[ $STATUS = 0 ]"
+      env "$APPENV" DISPLAY=$DISP XAUTHORITY= "$APP" $KEYS -GSFilePath "$OUT/deniedread.gstrace" -GSTheme $theme >"$OUT/gui-warning-$theme.log" 2>&1 &
+      APID=$!
+      W=$(window_id "cburn — Leaks")
+      check "app ($theme): unavailable scan trace opens" "[ -n '$W' ]"
+      if command -v import >/dev/null 2>&1; then
+        DISPLAY=$DISP import -window root "$OUT/gui-warning-$theme.png"
+      fi
+      kill -TERM $APID
+      wait_app $APID
+      check "app ($theme): warning trace closes cleanly ($STATUS)" "[ $STATUS = 0 ]"
     done
   else
     echo "== Performance Dashboard app skipped (needs xdotool)"

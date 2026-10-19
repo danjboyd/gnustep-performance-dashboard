@@ -411,6 +411,8 @@ cmd_info(NSArray *args)
       out([NSString stringWithFormat: @"\nProcess %d%@: %@\n", p.pid,
            p == t.targetProcess ? @" (target)" : @"", p.executablePath]);
       out([NSString stringWithFormat: @"  finished cleanly: %@\n", p.finishedCleanly ? @"yes" : @"no"]);
+      for (NSString *message in p.diagnostics)
+        out([NSString stringWithFormat: @"  Warning: %@\n", message]);
       out([NSString stringWithFormat: @"  threads: %lu  images: %lu  stacks: %lu\n",
            (unsigned long)[p.threads count], (unsigned long)[p.images count],
            (unsigned long)[p.stacks count]]);
@@ -556,6 +558,11 @@ report_allocations(GSPTrace *t, GSPProcess *p, report_opts *o)
 static int
 report_leaks(GSPTrace *t, GSPProcess *p, report_opts *o)
 {
+  if (p.leakScanUnavailable)
+    {
+      err(@"Leak scan unavailable: the latest attempt failed; no reliable leak result.");
+      return 2;
+    }
   GSPLeakAnalysis *la = [[GSPLeakAnalysis alloc] initWithProcess: p];
   GSPLeakSnapshot *snap = la.latestSnapshot;
   if (snap == nil)
@@ -998,6 +1005,13 @@ cmd_diff(NSArray *args)
   GSPTrace *after = open_trace([paths objectAtIndex: 1]);
   if (before == nil || after == nil)
     return 1;
+  if (kind == GSPCompareLeaks
+      && (before.targetProcess.leakScanUnavailable || after.targetProcess.leakScanUnavailable
+          || ![before.targetProcess.leakSnapshots count] || ![after.targetProcess.leakSnapshots count]))
+    {
+      err(@"Cannot compare leaks: both traces need a successful latest leak scan.");
+      return 2;
+    }
   BOOL time = [GSPComparison kindIsTime: kind];
   NSString *(^fmt)(double) = ^NSString *(double v) {
     if (time)

@@ -46,7 +46,7 @@ app_pid=$!
 trace=""
 for _ in $(seq 1 30); do
   sleep 1
-  trace="$(find "$traces" -maxdepth 1 -name 'cburn*.gstrace' -type d -newer "$work/start" 2>/dev/null | head -1)"
+  trace="$(find "$traces" -maxdepth 1 -name 'cburn*.gstrace' -type d -newer "$work/start" 2>/dev/null | head -1 || true)"
   if [ -n "$trace" ] && grep -q ExitStatus "$trace/Info.plist" 2>/dev/null; then
     break
   fi

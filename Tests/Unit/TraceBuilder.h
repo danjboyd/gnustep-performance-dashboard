@@ -25,6 +25,8 @@
                name: (uint32_t)nameID category: (uint32_t)catID message: (const char *)msg;
 - (void) leakSnapshot: (uint32_t)ordinal at: (uint64_t)t leaks: (NSArray *)leaks; /* @[@[addr,size,stack,class]] */
 - (void) end: (uint64_t)t;
+- (void) diagnosticAt: (uint64_t)t message: (const char *)message;
+- (void) dropped: (uint64_t)count;
 - (void) appendGarbage: (NSUInteger)bytes;   /* a torn final record */
 
 /* Writes <dir>/events-<pid>.bin and an Info.plist; returns the bundle path. */

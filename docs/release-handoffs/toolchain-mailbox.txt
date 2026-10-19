@@ -1,0 +1,20 @@
+We’re preparing Performance Dashboard v0.1.0 as a Linux-only x86_64/glibc release. Please coordinate with its Codex agent through me; I’ll relay your response.
+
+Dashboard/framework/gstrace require Clang, ARC, and libobjc2. The injected C recording agent must remain independent of GNUstep/libobjc. GCC 14 and Clang 19 C targets passed profiling checks at -O0/-O2 without frame pointers, using host libunwind.
+
+Our release CI currently uses the v0.1.0 gnustep-bootstrap.sh release asset:
+SHA-256: 3bdfa7a29a6442ce1bb994b027bfcba78beec649ae820391f009ac9eeb40ba63
+Invocation: setup --user --yes
+
+Please investigate and return:
+
+1. Whether this bootstrap selects immutable payload versions and verifies their digests. A pinned bootstrap alone doesn’t establish pinned toolchain inputs.
+2. The exact manifest/provenance paths and commands needed to capture payload revisions, compiler versions, Objective-C ABI, and minimum glibc.
+3. The immutable toolchain revision we should freeze, with actual clean-machine compatibility evidence. We plan to test Debian 13 and Ubuntu 24.04, or narrow our support claim.
+4. Whether an isolated GCC Objective-C/legacy GNU runtime test environment already exists. We need to profile a legacy-runtime target—not build Dashboard itself with GCC or mix runtimes within one process.
+
+Please provide exact revisions, commands, actual test results, and unresolved limitations. Propose any necessary changes before implementing them.
+
+Don’t publish, retag, or modify releases or Performance Dashboard on our behalf.
+
+Context: this coordination prompt was prepared with Codex assistance.
