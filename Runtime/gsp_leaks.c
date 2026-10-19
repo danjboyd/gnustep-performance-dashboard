@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: LGPL-2.1-or-later */
 /* gsp_leaks.c - conservative leak detection (the Leaks instrument).
 
    Runs on the writer thread:

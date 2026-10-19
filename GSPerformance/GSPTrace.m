@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: LGPL-2.1-or-later */
 /* GSPTrace.m - parsing event streams into per-process tables.
 
    Parsing is incremental: each process remembers how far into its stream

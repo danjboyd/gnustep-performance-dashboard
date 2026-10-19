@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: LGPL-2.1-or-later */
 #import "GSPCallTree.h"
 #import "GSPStackTable.h"
 #import "GSPSymbolicator.h"

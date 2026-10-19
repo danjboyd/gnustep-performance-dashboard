@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: LGPL-2.1-or-later */
 /* GSPCallTree.h - call trees over weighted stacks, with Apple Instruments'
    "Call Tree" options (invert, separate by thread, hide system libraries,
    flatten recursion, top functions) and data mining (charge to caller,

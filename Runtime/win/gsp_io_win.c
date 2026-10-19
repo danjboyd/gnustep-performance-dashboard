@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: LGPL-2.1-or-later */
 /* gsp_io_win.c - File Activity and Network instruments on Windows.
 
    Hooks (through the import tables, see gsp_heap_win.c) the kernel32 file

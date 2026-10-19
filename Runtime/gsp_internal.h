@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: LGPL-2.1-or-later */
 /* gsp_internal.h - private declarations of the in-process recording agent.
 
    The agent (libgsperf.so) is loaded into the target with LD_PRELOAD by the

@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
 /* PDTimelineView.h - the track area: ruler, track headers, graphs,
    inspection-range selection, pan and zoom.  Track contents are drawn by a
    data source, so the view knows nothing about instruments.  */

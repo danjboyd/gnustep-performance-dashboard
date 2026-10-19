@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
 /* PDInspectorView.h - the "Extended Detail" pane: a title, free text and a
    stack trace (symbol, library, optional source line).  */
 

@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: LGPL-2.1-or-later */
 /* gsp_unwind.c - stack walking.
 
    DWARF unwinding uses libunwind, loaded with dlopen so the agent has no

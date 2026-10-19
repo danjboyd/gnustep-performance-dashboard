@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: LGPL-2.1-or-later */
 /* gsp_io.c - File Activity and Network instruments.
 
    Interposes the POSIX file and socket entry points (and their

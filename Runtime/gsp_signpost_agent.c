@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: LGPL-2.1-or-later */
 /* gsp_signpost_agent.c - the agent side of signposts and os_log.
 
    Applications link libgsperf.so (gsp_signpost_api.c), which looks these

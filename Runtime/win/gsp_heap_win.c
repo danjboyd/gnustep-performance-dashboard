@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: LGPL-2.1-or-later */
 /* gsp_heap_win.c - the Allocations instrument on Windows.
 
    There is no LD_PRELOAD on Windows, so the agent patches the import

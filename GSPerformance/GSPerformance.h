@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: LGPL-2.1-or-later */
 /* GSPerformance.h - Performance Dashboard framework (trace reading,
    symbolication, analyses, recording, export).  */
 

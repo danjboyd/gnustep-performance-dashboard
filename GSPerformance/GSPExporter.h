@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: LGPL-2.1-or-later */
 /* GSPExporter.h - exporting traces to other tools.
 
    json       summary and tables (stable schema, for scripts and tests)

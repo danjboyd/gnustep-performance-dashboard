@@ -183,6 +183,8 @@ notice() {
 }
 license_texts="$repo_root/packaging/linux/licenses"
 notice PerformanceDashboard.txt "Performance Dashboard, performance analysis for GNUstep applications" \
+  "GPL-3.0-or-later" "https://github.com/danjboyd/gnustep-performance-dashboard" "$repo_root/COPYING"
+notice GSPerformance.txt "GSPerformance, recording agent, signpost/logging libraries and public headers" \
   "LGPL-2.1-or-later" "https://github.com/danjboyd/gnustep-performance-dashboard" "$repo_root/COPYING.LIB"
 notice GNUstep-base.txt "GNUstep Base (libgnustep-base)" "LGPL-2.1-or-later" \
   "https://github.com/gnustep/libs-base" "$license_texts/libs-base-COPYING.LIB"

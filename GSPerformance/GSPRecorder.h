@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: LGPL-2.1-or-later */
 /* GSPRecorder.h - launching a target with the recording agent, or
    attaching to a running process through the privileged helper.  */
 

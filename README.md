@@ -234,7 +234,10 @@ Known upstream issues found while building this are listed in
 
 ## License
 
-GNU LGPL 2.1 or later, like GNUstep's libraries (see `COPYING.LIB`).
+The app and command-line tools are **GPL-3.0-or-later** ([COPYING](COPYING)).
+The framework, recording agent and signpost/logging libraries are
+**LGPL-2.1-or-later** ([COPYING.LIB](COPYING.LIB)). Bundled dependencies retain
+their original licenses. See [the component license map](LICENSE).
 
 Performance Dashboard is not affiliated with or endorsed by Apple Inc.
 Instruments and Xcode are trademarks of Apple Inc., used here only to

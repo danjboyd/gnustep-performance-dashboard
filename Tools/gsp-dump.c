@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
 /* gsp-dump - print the records of a Performance Dashboard event stream.
    A debugging aid for the trace format; `gstrace` is the real reader.  */
 

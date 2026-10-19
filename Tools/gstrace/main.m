@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
 /* gstrace - command-line recording and analysis (an xctrace equivalent).  */
 
 #import <Foundation/Foundation.h>

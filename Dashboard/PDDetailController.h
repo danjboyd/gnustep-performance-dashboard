@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
 /* PDDetailController.h - the detail pane under the timeline: per-instrument
    modes (call tree, statistics, lists), call tree options, filtering, and
    feeding the inspector.  */

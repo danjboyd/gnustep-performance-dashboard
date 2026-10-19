@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: LGPL-2.1-or-later */
 /* GSPComparison.h - comparing two traces (before/after a change).  */
 
 #import <Foundation/Foundation.h>

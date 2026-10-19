@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
 /* PDTheme.h - colours and fonts for custom drawing.
 
    Window chrome uses standard controls so every GNUstep theme applies.

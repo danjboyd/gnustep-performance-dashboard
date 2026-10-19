@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
 /* PDRecordPanel.h - "Choose a profiling template" and target setup.  */
 
 #import <AppKit/AppKit.h>

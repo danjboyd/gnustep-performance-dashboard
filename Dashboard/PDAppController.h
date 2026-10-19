@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
 /* PDAppController.h - application delegate: menus, opening and recording
    traces, and installing the profiling helper.  */
 

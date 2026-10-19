@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: LGPL-2.1-or-later */
 /* gsp_agent_win.h - shared by the parts of gsperf-agent.dll.  */
 
 #ifndef GSP_AGENT_WIN_H

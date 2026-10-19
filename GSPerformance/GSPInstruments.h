@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: LGPL-2.1-or-later */
 /* GSPInstruments.h - the instruments and templates Performance Dashboard
    offers, and how each maps onto agent configuration.  */
 

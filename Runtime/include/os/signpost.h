@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: LGPL-2.1-or-later */
 /* os/signpost.h - Apple's signpost API on top of Performance Dashboard.
 
    Source written for Apple platforms compiles unchanged; link with -lgsperf.

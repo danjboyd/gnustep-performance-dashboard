@@ -1,0 +1,21 @@
+Performance Dashboard licensing
+===============================
+
+Dashboard/ and Tools/: GNU General Public License, version 3 or (at your
+option) any later version (SPDX: GPL-3.0-or-later). See COPYING.
+
+GSPerformance/ and Runtime/, including all public headers and the injected
+recording agent: GNU Lesser General Public License, version 2.1 or (at your
+option) any later version (SPDX: LGPL-2.1-or-later). See COPYING.LIB.
+
+Project-authored tests, build scripts, packaging configuration and documentation
+are GPL-3.0-or-later unless an individual file specifies otherwise.
+
+Third-party code, patches, artwork and bundled dependencies retain their own
+licenses and notices. In particular, third_party/gnustep-packager-updater is
+MIT with its bundled Monocypher under BSD-2-Clause OR CC0-1.0. The AppImage
+contains separately licensed GNUstep libraries, tools, themes and distribution
+libraries; see its usr/metadata/licenses directory for those notices.
+
+The GPL application license does not change the license of applications being
+profiled. Observe the LGPL terms when distributing our libraries or agent.

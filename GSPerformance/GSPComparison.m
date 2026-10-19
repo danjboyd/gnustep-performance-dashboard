@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: LGPL-2.1-or-later */
 #import "GSPComparison.h"
 #import "GSPTrace.h"
 #import "GSPCallTree.h"

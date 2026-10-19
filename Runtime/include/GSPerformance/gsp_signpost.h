@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: LGPL-2.1-or-later */
 /* gsp_signpost.h - signposts and trace logging for Performance Dashboard.
 
    Link with -lgsperf.  When the process is not being recorded every call is

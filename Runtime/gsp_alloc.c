@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: LGPL-2.1-or-later */
 /* gsp_alloc.c - malloc-family interposition for the Allocations and Leaks
    instruments.
 

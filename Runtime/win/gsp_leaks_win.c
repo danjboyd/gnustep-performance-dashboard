@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: LGPL-2.1-or-later */
 /* gsp_leaks_win.c - the Leaks instrument on Windows.
 
    The heap hooks (gsp_heap_win.c) keep a table of live blocks.  A leak

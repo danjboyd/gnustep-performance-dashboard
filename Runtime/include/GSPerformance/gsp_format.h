@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: LGPL-2.1-or-later */
 /* gsp_format.h - on-disk layout of Performance Dashboard event streams.
 
    A trace is a directory bundle (Foo.gstrace/) holding an Info.plist written

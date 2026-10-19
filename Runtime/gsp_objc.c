@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: LGPL-2.1-or-later */
 /* gsp_objc.c - Objective-C awareness without linking libobjc.
 
    - Instance allocation: class_createInstance and the objc_alloc family are

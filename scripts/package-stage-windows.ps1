@@ -172,6 +172,8 @@ function Write-Notice([string]$File, [string]$Name, [string]$License, [string]$U
   Set-Content -Path (Join-Path $licenses $File) -Value $body -Encoding utf8
 }
 Write-Notice "PerformanceDashboard.txt" "Performance Dashboard, performance analysis for GNUstep applications" `
+  "GPL-3.0-or-later" "https://github.com/danjboyd/gnustep-performance-dashboard" (Join-Path $repoRoot "COPYING")
+Write-Notice "GSPerformance.txt" "GSPerformance, recording agent, signpost/logging libraries and public headers" `
   "LGPL-2.1-or-later" "https://github.com/danjboyd/gnustep-performance-dashboard" (Join-Path $repoRoot "COPYING.LIB")
 Write-Notice "GNUstep-base.txt" "GNUstep Base (libgnustep-base)" "LGPL-2.1-or-later" `
   "https://github.com/gnustep/libs-base" (Join-Path $licenseTexts "libs-base-COPYING.LIB")

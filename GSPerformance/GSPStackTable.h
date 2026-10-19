@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: LGPL-2.1-or-later */
 /* GSPStackTable.h - deduplicated call stacks of one process.
 
    Index 0 is the empty stack.  Frames are stored leaf first: frame 0 is the

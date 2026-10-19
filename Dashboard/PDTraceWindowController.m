@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
 #import "PDTraceWindowController.h"
 #import "PDTimelineView.h"
 #import "PDTrackRenderer.h"

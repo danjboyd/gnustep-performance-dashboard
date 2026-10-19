@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
 /* PDTrackRenderer.h - draws one timeline track per instrument and owns the
    analyses those tracks (and the detail views) share.  */
 

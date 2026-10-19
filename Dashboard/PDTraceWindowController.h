@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
 /* PDTraceWindowController.h - one trace document window: control bar,
    timeline, detail pane and inspector, plus live recording.  */
 

@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: LGPL-2.1-or-later */
 /* GSPAnalysis.h - Hangs, Allocations, Leaks, Points of Interest.  */
 
 #import <Foundation/Foundation.h>

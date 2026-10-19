@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
 /* gstrace-helper - privileged perf_event sampling for Performance Dashboard.
 
    Runs as root through pkexec (installed at /usr/local/libexec/gstrace-helper

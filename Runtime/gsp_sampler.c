@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: LGPL-2.1-or-later */
 /* gsp_sampler.c - Time Profiler and Hangs sampling, thread and image hooks.
 
    CPU samples come from a per-thread CLOCK_THREAD_CPUTIME_ID timer, so a

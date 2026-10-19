@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: LGPL-2.1-or-later */
 /* gsp_runtime.c - agent lifecycle, rings, thread registry and writer.  */
 
 #include "gsp_internal.h"

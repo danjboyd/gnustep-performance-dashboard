@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: LGPL-2.1-or-later */
 #import "GSPExporter.h"
 #import "GSPTrace.h"
 #import "GSPAnalysis.h"

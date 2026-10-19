@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: LGPL-2.1-or-later */
 /* GSPTrace.h - reading Performance Dashboard trace bundles.  */
 
 #import <Foundation/Foundation.h>

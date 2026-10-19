@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: LGPL-2.1-or-later */
 /* gsp_signpost_api.c - libgsperf.so, the signpost/os_log API that
    applications link.  It does nothing unless the recording agent
    (libgsperf-agent.so) has been preloaded into the process.  */

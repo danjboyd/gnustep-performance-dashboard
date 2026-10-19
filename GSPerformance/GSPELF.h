@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: LGPL-2.1-or-later */
 /* GSPELF.h - the ELF definitions the symbolicator needs.  Traces recorded
    on Linux can be opened on any platform, including ones without <elf.h>
    (MinGW), so the few structures used are defined here when needed.  */

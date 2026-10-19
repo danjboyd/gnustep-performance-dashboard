@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: LGPL-2.1-or-later */
 /* gsp_agent_win.c - the recording agent on Windows (gsperf-agent.dll).
 
    The recorder starts the target suspended and loads this DLL into it

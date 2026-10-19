@@ -12,7 +12,7 @@
     "manufacturer": "Daniel Boyd",
     "summary": "Performance analysis for GNUstep applications.",
     "description": "Performance Dashboard records a GNUstep program and shows where its time and memory go: Time Profiler, Hangs, Allocations, Leaks, Zombies, File Activity, Network and signposts, on a timeline with call trees.",
-    "license": "LGPL-2.1-or-later",
+    "license": "GPL-3.0-or-later",
     "homepage": "https://github.com/danjboyd/gnustep-performance-dashboard"
   },
   "pipeline": {
@@ -146,10 +146,17 @@
       {
         "name": "Performance Dashboard",
         "version": "0.1.0",
-        "license": "LGPL-2.1-or-later",
-        "source": "Performance Dashboard application, framework, recording agent and gstrace",
+        "license": "GPL-3.0-or-later",
+        "source": "Dashboard, gstrace and gstrace-helper",
         "homepage": "https://github.com/danjboyd/gnustep-performance-dashboard",
         "stageRelativePath": "metadata/licenses/PerformanceDashboard.txt"
+      },
+      {
+        "name": "GSPerformance and recording libraries",
+        "license": "LGPL-2.1-or-later",
+        "source": "GSPerformance, libgsperf-agent, libgsperf and public headers",
+        "homepage": "https://github.com/danjboyd/gnustep-performance-dashboard",
+        "stageRelativePath": "metadata/licenses/GSPerformance.txt"
       },
       {
         "name": "GNUstep Base",
