@@ -131,8 +131,17 @@ child(GSPCallTreeNode *n, NSString *name)
   XCTAssertNotNil([GSPTrace traceWithPath: source.path error: NULL]);
   NSString *alias = [source.path stringByAppendingString: @"-alias"];
   [_bundles addObject: alias];
-  XCTAssertTrue([fm createSymbolicLinkAtPath: alias withDestinationPath: source.path error: &error]);
-  XCTAssertTrue([source copyToPath: alias error: &error]);
+  BOOL linked = [fm createSymbolicLinkAtPath: alias withDestinationPath: source.path error: &error];
+#if defined(_WIN32)
+  /* Windows runners need Developer Mode or a privilege to create symlinks.
+     Keep all ordinary save-preservation checks active without that facility. */
+  if (!linked)
+    NSLog(@"Symlink alias subcheck unavailable on this Windows host: %@", error);
+#else
+  XCTAssertTrue(linked, @"%@", error);
+#endif
+  if (linked)
+    XCTAssertTrue([source copyToPath: alias error: &error]);
   XCTAssertFalse([source copyToPath: [source.path stringByAppendingPathComponent: @"nested.gstrace"] error: &error]);
   XCTAssertTrue([source copyToPath: dest.path error: &error], @"%@", error);
   XCTAssertEqual([GSPTrace traceWithPath: dest.path error: NULL].targetProcess.sampleCount, (NSUInteger)4);
@@ -547,11 +556,16 @@ child(GSPCallTreeNode *n, NSString *name)
     @"/tmp/.mount_X/usr/lib:/usr/local/lib", @"LD_LIBRARY_PATH",
     @"/tmp/.mount_X/GNUstep", @"GNUSTEP_SYSTEM_ROOT",
     @"/usr/bin:/tmp/.mount_X/usr/bin", @"PATH",
+    @":4", @"DISPLAY", @"https://example.invalid/feed", @"TEST_URL",
+    @":/tmp/.mount_X/lib:/usr/lib:", @"TEST_PATH",
     @"stale", @"GSP_OUTPUT", @"kept", @"HOME", nil];
   NSDictionary *out = [GSPRecorder targetEnvironmentFrom: in
     additions: [NSDictionary dictionaryWithObject: @"/t.gstrace" forKey: @"GSP_OUTPUT"]];
   XCTAssertEqualObjects([out objectForKey: @"LD_LIBRARY_PATH"], @"/usr/local/lib");
   XCTAssertEqualObjects([out objectForKey: @"PATH"], @"/usr/bin");
+  XCTAssertEqualObjects([out objectForKey: @"DISPLAY"], @":4");
+  XCTAssertEqualObjects([out objectForKey: @"TEST_URL"], @"https://example.invalid/feed");
+  XCTAssertEqualObjects([out objectForKey: @"TEST_PATH"], @":/usr/lib:");
   XCTAssertNil([out objectForKey: @"GNUSTEP_SYSTEM_ROOT"]);
   XCTAssertNil([out objectForKey: @"APPDIR"]);
   XCTAssertNil([out objectForKey: @"APPIMAGE"]);

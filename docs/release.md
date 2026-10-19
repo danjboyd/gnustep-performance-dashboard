@@ -1,7 +1,6 @@
 # Release process
 
-The first release, v0.1.0, targets Debian 13 amd64 only. No release has
-been published. [The release plan](v0.1.0-plan.md) defines the acceptance
+The first release, v0.1.0, targets Debian 13 amd64 only. [The release plan](v0.1.0-plan.md) defines the acceptance
 gates; [the validation ledger](v0.1.0-validation.md) records their evidence.
 Windows remains experimental and its existing CI/build scripts are retained.
 
@@ -13,8 +12,9 @@ build and validate; they do not create tags or publish releases or feeds.
 Commits use Daniel Boyd <danieljboyd@icloud.com>.
 
 Linux assets are `PerformanceDashboard-<version>-x86_64.AppImage`, its
-`.zsync`, `SHA256SUMS`, provenance JSON and update-feed JSON. Checksums cover
-both AppImage and zsync. Preserve the exact package hashes with acceptance
+`.zsync`, `SHA256SUMS`, provenance JSON, update-feed JSON, and the corresponding-source archive
+`PerformanceDashboard-<version>-sources.tar.gz`. Checksums cover the
+AppImage, zsync, provenance and source archive. Preserve the exact package hashes with acceptance
 results. The download documentation must name tested distributions and
 recording prerequisites, including host libunwind and binutils.
 
@@ -51,8 +51,8 @@ for an exact committed candidate.
 
 Ordinary CI builds/tests Linux and continues exercising experimental Windows.
 The Linux compiler check separately builds agents with GCC and Clang and
-profiles optimized C targets. It does not establish legacy GNU Objective-C
-runtime support.
+profiles optimized C targets. The separate clean-Debian package check covers CPU profiling of GCC
+Objective-C targets with the distro’s legacy runtime at -O0 and -O2.
 
 `.github/workflows/release.yml` accepts `v*` tags, `release/**` branches or
 manual dispatch with a candidate version. It builds the Linux AppImage in
@@ -83,8 +83,8 @@ The release artifact holds feeds under `site/updates/linux/`.
 
 Publish approved assets first, then the approved feed. Test an RC1-to-RC2
 update against a local feed, restart and record with RC2 before candidate
-publication. An earlier local AppImage update succeeded on 2026-10-17; repeat
-it for the actual release inputs. No package or feed signing is configured;
+publication. The v0.1.0 validation ledger records local replacement/relaunch and
+failed-download acceptance. No package or feed signing is configured;
 SHA-256 validation trusts the HTTPS feed. Document that limitation honestly.
 
 ## Packaging boundaries
@@ -101,3 +101,21 @@ Install Profiling Helper installs the root-owned helper and polkit policy
 through pkexec. Helper installation, permission denials, attach and removal
 must be verified on a disposable machine before release. Do not weaken the
 helper policy to make an acceptance test pass.
+
+## Corresponding sources
+
+`collect-release-sources.py` collects the application commit, pinned GNUstep
+components, theme, packaging tools, AppImage runtime and the exact source
+versions of staged Debian libraries. The archive includes a source inventory,
+checksums and build instructions. Publish it alongside every binary release.
+
+Additional package acceptance commands:
+
+```sh
+# In a disposable Debian 13 container: see mounts in the script header.
+bash scripts/check-debian-package.sh
+# On a host with QEMU, busybox, cpio, gcc and a readable Linux kernel:
+bash scripts/check-helper-vm.sh /path/to/candidate.AppImage /path/to/vmlinuz
+# As an ordinary user, with loopback networking available:
+python3 scripts/check-update-failures.py /path/to/candidate.AppImage
+```

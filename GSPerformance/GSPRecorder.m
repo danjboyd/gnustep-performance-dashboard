@@ -385,7 +385,9 @@ under(NSString *value, NSString *root)
             {
               NSMutableArray *kept = [NSMutableArray array];
               for (NSString *p in parts)
-                if ([p length] && !under(p, appdir))
+                /* Empty components also occur in DISPLAY=:0 and URLs.
+                   Remove only bundled paths, not unrelated separators. */
+                if (!under(p, appdir))
                   [kept addObject: p];
               if ([kept count])
                 [env setObject: [kept componentsJoinedByString: @":"] forKey: key];

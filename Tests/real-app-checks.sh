@@ -6,7 +6,7 @@ screenshot_app=$(realpath "$1")
 lindirstat_app=$(realpath "$2")
 [ -x "$screenshot_app" ] && [ -x "$lindirstat_app" ]
 root="$(cd "$(dirname "$0")/.." && pwd)"
-out=$root/Tests/out/real-apps
+out=${GSP_TEST_OUTPUT:-$root/Tests/out/real-apps}
 mkdir -p "$out/defaults" "$out/tree"
 python3 - "$out/tree" <<'PY'
 import os,sys
@@ -30,7 +30,7 @@ read -r -t 10 display <&3
 export DISPLAY=:$display
 export GNUSTEP_CONFIG_FILE="$out/GNUstep.conf"
 defaults write NSGlobalDomain GSTheme Adwaita >/dev/null 2>&1
-gst="$root/Tools/gstrace/obj/gstrace"
+gst=${GSTRACE:-$root/Tools/gstrace/obj/gstrace}
 for name in ScreenshotTool LinDirStat; do
   if [ "$name" = ScreenshotTool ]; then
     app="$screenshot_app"

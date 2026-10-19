@@ -186,7 +186,9 @@ if [ "${SKIP_GUI:-0}" != 1 ] && command -v Xvfb >/dev/null 2>&1; then
   while [ ! -s "$DISPLAY_FILE" ] && [ $n -lt 10 ]; do sleep 1; n=$((n + 1)); done
   [ -s "$DISPLAY_FILE" ] || { echo "private Xvfb failed to start"; exit 1; }
   DISP=:$(cat "$DISPLAY_FILE")
-  DISPLAY=$DISP XAUTHORITY= record hang --template "Time Profiler" --launch "$OUT/hangapp"
+  # Exercise packaged environment cleanup while connecting a real GUI target
+  # to a private display: the leading colon in DISPLAY must survive.
+  APPDIR=/tmp/pd-test-appimage-mount DISPLAY=$DISP XAUTHORITY= record hang --template "Time Profiler" --launch "$OUT/hangapp"
   "$GSTRACE" report "$OUT/hang.gstrace" hangs >"$OUT/hang.txt" 2>/dev/null
   check "hangapp: 3 hangs" "grep -q '^3 hang(s)' '$OUT/hang.txt'"
   check "hangapp: microhang 300 ms" "grep -E -q '^Microhang at .*, (29[0-9]|30[0-9]|31[0-9])\\.[0-9]+ ms' '$OUT/hang.txt'"

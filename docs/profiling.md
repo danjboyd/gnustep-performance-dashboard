@@ -3,8 +3,9 @@
 Build Performance Dashboard with Clang and libobjc2. Targets run against
 their own libraries; the injected C agent does not link GNUstep or libobjc.
 Linux x86_64/glibc is the v0.1.0 target platform. GCC and Clang C programs
-are tested; Clang/libobjc2 GNUstep programs are tested. GCC Objective-C with
-the legacy GNU runtime is not yet verified. Musl, static launch recording,
+are tested; Clang/libobjc2 GNUstep programs are tested. CPU profiling of GCC Objective-C with
+Debian 13’s legacy GNU runtime passes at -O0 and -O2. Objective-C allocation
+class labels and Zombies with that runtime remain unverified. Musl, static launch recording,
 32-bit binaries and Windows packages are outside this release's contract.
 
 ## Build a useful target

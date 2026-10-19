@@ -18,14 +18,13 @@ It has three parts:
   `<os/log.h>`), so applications can mark intervals that show up as Points of
   Interest.
 
-Status: preparing **v0.1.0 for Debian 13 amd64**. No release has
-been published. Windows recording code remains experimental; Windows packages
+**[v0.1.0 for Debian 13 amd64](https://github.com/danjboyd/gnustep-performance-dashboard/releases/tag/v0.1.0)** is the first Linux release. Windows recording code remains experimental; Windows packages
 are deferred. See [the v0.1.0 gates](docs/v0.1.0-plan.md),
 [release process](docs/release.md), and [Windows notes](docs/windows.md).
 
 ## Installing
 
-The first release will provide `PerformanceDashboard-0.1.0-x86_64.AppImage`.
+The release provides `PerformanceDashboard-0.1.0-x86_64.AppImage`.
 It bundles GNUstep and the Adwaita theme. The supported host is Debian 13
 amd64 with an X11 desktop (or XWayland); other distributions are unverified.
 For a minimal installation, install the desktop runtime and recording tools:
@@ -40,6 +39,9 @@ Make the AppImage executable and run it:
 chmod +x PerformanceDashboard-*-x86_64.AppImage
 ./PerformanceDashboard-*-x86_64.AppImage
 ```
+
+If FUSE is unavailable, run with `APPIMAGE_EXTRACT_AND_RUN=1` in the
+environment, or extract the AppImage with `--appimage-extract`.
 
 Recording optimized programs requires the host's libunwind runtime
 (`libunwind8` on Debian/Ubuntu); source-line lookup requires `addr2line`
@@ -79,8 +81,9 @@ File Activity, Network, Logging, System Time Profiler and Blank (`gstrace list t
 
 Building Dashboard, the framework and gstrace requires **Clang and libobjc2**
 (they use ARC). The C agent and signpost library also build with GCC.
-GCC-built Linux C targets are tested; GCC/legacy-runtime GNUstep targets
-are not yet a supported configuration.
+GCC-built Linux C targets are tested. CPU profiling of Debian’s GCC/legacy-runtime
+GNUstep programs is also tested at -O0 and -O2; Objective-C allocation class
+labels and Zombies with that runtime remain unverified.
 
 In a shell where `GNUstep.sh` has been sourced:
 
