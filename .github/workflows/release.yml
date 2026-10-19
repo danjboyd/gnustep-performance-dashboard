@@ -105,39 +105,20 @@ jobs:
     needs: [version, linux]
     runs-on: ubuntu-24.04
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           name: linux
-          path: dist/ci/release
+          path: dist/ci/linux
 
-      - name: Collect and SHA256SUMS
+      - name: Validate and assemble release artifacts
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
         run: |
-          (cd dist/ci/release && sha256sum -- *.AppImage *.AppImage.zsync *.provenance.json *sources.tar.gz > SHA256SUMS)
-          {
-            echo '```'
-            cat dist/ci/release/SHA256SUMS
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      # The update feeds for GitHub Pages, at the URLs the manifest packages
-      # (updates/<platform>/<channel>.json), from the packager's feed
-      # sidecars. Deploying them, like publishing the release, needs Dan's
-      # approval; the release assets must be published first, since the
-      # feeds point at them.
-      - name: Update feeds
-        run: |
-          python3 - <<'PY'
-          import glob, json, os
-          platforms = {"appimage": "linux"}
-          for path in glob.glob("dist/ci/release/*.update-feed.json"):
-              feed = json.load(open(path))
-              backend = feed["releases"][0]["assets"][0]["backend"]
-              out = "dist/ci/release/site/updates/%s/%s.json" % (platforms[backend], feed["channel"])
-              os.makedirs(os.path.dirname(out), exist_ok=True)
-              json.dump(feed, open(out, "w"), indent=2)
-              print(out, "->", feed["feedUrl"])
-          PY
-          ls -R dist/ci/release/site
+          python3 scripts/assemble-release.py --input dist/ci/linux \
+            --output dist/ci/release --version "$VERSION" --commit "$GITHUB_SHA" \
+            --require-backend appimage
+          cat dist/ci/release/SHA256SUMS >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
         with:

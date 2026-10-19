@@ -19,6 +19,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Release assembly and toolchain cache guards
+        run: |
+          python3 Tests/release-assembly-checks.py
+          python3 Tests/toolchain-fetch-checks.py
+
       - name: Install packages
         run: |
           sudo apt-get -q update

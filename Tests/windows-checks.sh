@@ -32,7 +32,7 @@ cat "$OUT/spin-sp.txt"
 check "4 Round signposts" "grep -E -q '^Round +PointsOfInterest +4 ' '$OUT/spin-sp.txt'"
 
 # Attaching to a running program
-"$OUT/spin.exe" 12 >"$OUT/spin-attached.log" 2>&1 &
+"$OUT/spin.exe" 12 --heartbeat >"$OUT/spin-attached.log" 2>&1 &
 SPIN=$!
 WINPID=$(cat /proc/$SPIN/winpid 2>/dev/null || echo $SPIN)
 timeout 2 tail -f /dev/null 2>/dev/null
@@ -47,7 +47,7 @@ cat "$OUT/attach-top.txt"
 check "attach: recorded and finished cleanly" "grep -q 'finished cleanly: yes' '$OUT/attach-info.txt'"
 check "attach: CPU time lands in spin_inner" "sed -n 4p '$OUT/attach-top.txt' | grep -q spin_inner"
 "$GSTRACE" report "$OUT/attach.gstrace" signposts >"$OUT/attach-sp.txt" 2>&1
-check "attach: signposts after attaching are recorded" "grep -E -q '^Round +PointsOfInterest +[1-4] ' '$OUT/attach-sp.txt'"
+check "attach: signposts after attaching are recorded" "grep -E -q '^AttachHeartbeat +PointsOfInterest +[1-9][0-9]* ' '$OUT/attach-sp.txt'"
 check "attach: the program keeps running and finishes" "kill -0 $SPIN 2>/dev/null && wait $SPIN && grep -q '^spin ' '$OUT/spin-attached.log'"
 
 # File Activity and Network

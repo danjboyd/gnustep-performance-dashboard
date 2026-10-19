@@ -1,0 +1,58 @@
+name: Assemble Linux and Windows candidate
+
+# This workflow only creates a review artifact. The two producers must have
+# built this exact checkout commit, and both must supply corresponding sources.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Candidate version matching both producer artifacts
+        required: true
+        default: 0.1.1-rc1
+      linux-run-id:
+        description: Successful Linux packaging run for this exact commit
+        required: true
+      windows-run-id:
+        description: Successful Windows packaging run for this exact commit
+        required: true
+      windows-artifact-name:
+        description: Windows artifact containing MSI, ZIP, provenance, feed and sources
+        required: true
+        default: windows-packages
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  assemble:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux
+          path: dist/ci/linux
+          run-id: ${{ inputs.linux-run-id }}
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.windows-artifact-name }}
+          path: dist/ci/windows
+          run-id: ${{ inputs.windows-run-id }}
+          github-token: ${{ github.token }}
+      - name: Verify both platforms and stage candidate
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          python3 scripts/assemble-release.py --input dist/ci/linux --input dist/ci/windows \
+            --output dist/ci/candidate --version "$VERSION" --commit "$GITHUB_SHA" \
+            --require-backend appimage --require-backend msi
+          cat dist/ci/candidate/assembly.json >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: combined-candidate
+          path: dist/ci/candidate
+          if-no-files-found: error
+          retention-days: 7

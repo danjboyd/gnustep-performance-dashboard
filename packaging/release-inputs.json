@@ -35,5 +35,18 @@
       "gnustep-cli-linux-amd64-clang-0.1.0.tar.gz": "39a79b9b679dbc3a8e2426e6fb4b05397bc417bc64bd606ff7219be6857ff5f1",
       "gnustep-toolchain-linux-amd64-clang-0.1.0.tar.gz": "41fd4b8323f877d70b5cb1fa08403f0c6edbea2afe799de2c0d0024781a73acb"
     }
+  },
+  "gnustep-toolchain-windows": {
+    "release": "v0.1.1",
+    "platform": "windows-amd64-msys2-clang64",
+    "qualification": "Published toolchain; Dashboard Windows client acceptance is a separate gate",
+    "baseUrl": "https://github.com/danjboyd/gnustep-cli-new/releases/download/v0.1.1",
+    "files": {
+      "gnustep-bootstrap.ps1": "a41adbf84d38a6ae90f4bdbbe0b9c3e35136cb3ee695bf26b783c04972045034",
+      "release-manifest.json": "d1713ec0f5af5c973c07107f9120638599c354919f3791d78edb8a88a24f4ed1",
+      "release-manifest.json.sig": "40016c008150d39bba508275a4b7affb116f744092cebdb07df6fe36203a7754",
+      "gnustep-toolchain-windows-amd64-msys2-clang64-0.1.1.zip": "07d57993b2d5364578aff0392fede18d5a427f9f5dd22a03df1ec56c28f98dba",
+      "gnustep-cli-windows-amd64-msys2-clang64-0.1.1.zip": "14949f33e98aa1f793d1b8f7c596c55e9ec459e2a11928a1f4d947c99f759a2a"
+    }
   }
 }
