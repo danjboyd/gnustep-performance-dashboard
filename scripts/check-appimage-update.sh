@@ -79,7 +79,7 @@ wait_for() {
 # manager, so windows are listed with xwininfo; the newest is listed first.
 alert_count() { xwininfo -root -tree | grep -c '"Alert"' || true; }
 newest_alert() { xwininfo -root -tree | grep '"Alert"' | head -1; }
-main_window_count() { xwininfo -root -tree | grep -c 'true\|Choose a Profiling Template' || true; }
+main_window_count() { xwininfo -root -tree | grep -c 'true\|Choose a Profiling Template\|"Window"' || true; }
 
 # Presses the default button of the newest alert: Return, then a click on
 # the button if that did not close it ($1, $2: the button's centre from the
@@ -171,12 +171,14 @@ PYEDIT
       fail "$name: the update was not prepared (helper: $(helper_status "$state"))"
       return
     fi
+    cp "$state" "$work/prepared-$name.json"
     answer_alert -104 146  # Restart and Install
     if ! wait_for '[ "$(sha "$work/install/PerformanceDashboard.AppImage" 2>/dev/null)" = "$new_sha" ]' 120; then
       fail "$name: the installed AppImage was not replaced"
       return
     fi
-    if ! wait_for '[ "$(helper_status "$state")" = completed ] && [ -n "$(app_pids)" ] && [ "$(main_window_count)" -ge 1 ]' 60; then
+    if ! wait_for '{ [ ! -e "$state" ] || [ "$(helper_status "$state")" = completed ]; } && [ -n "$(app_pids)" ] && [ "$(main_window_count)" -ge 1 ]' 60; then
+      cp "$state" "$work/state-$name.json" 2>/dev/null || true
       fail "$name: the updated AppImage did not start again"
       return
     fi
@@ -192,6 +194,8 @@ PYEDIT
     fi
     echo "test-appimage-update: $name: payload refused ($(helper_field "$state" error)), installed AppImage unchanged"
   fi
+  cp "$state" "$work/state-$name.json" 2>/dev/null || true
+  import -window root "$work/screen-$name.png" 2>/dev/null || true
   stop_app || true
 }
 

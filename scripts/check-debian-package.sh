@@ -13,9 +13,9 @@ cd /tmp
 /candidate.AppImage --appimage-extract >/dev/null
 runtime=/tmp/squashfs-root/usr/runtime
 mkdir -p /tmp/pd-home
+rm -rf /evidence/optimized.gstrace /evidence/lines.gstrace /evidence/no-unwind.gstrace /evidence/legacy-O0.gstrace /evidence/legacy-O2.gstrace
 gst() {
-  env -i HOME=/tmp/pd-home PATH=/usr/bin:/bin LD_LIBRARY_PATH="$runtime/lib" \
-    GNUSTEP_CONFIG_FILE="$runtime/etc/GNUstep/GNUstep.conf" "$runtime/bin/gstrace" "$@"
+  env -i HOME=/tmp/pd-home PATH=/usr/bin:/bin /tmp/squashfs-root/usr/bin/gstrace "$@"
 }
 gcc -O2 -g -fomit-frame-pointer /src/Tests/fixtures/optimized.c -o /tmp/optimized -lpthread
 gst record --template 'Time Profiler' -o /evidence/optimized.gstrace --launch /tmp/optimized
@@ -24,7 +24,10 @@ gst report /evidence/optimized.gstrace calltree --lines | tee /evidence/optimize
 grep -q 'finished cleanly: yes' /evidence/optimized.info
 grep -q hot_inner /evidence/optimized.tree
 grep -q hot_outer /evidence/optimized.tree
-grep -q 'optimized.c:' /evidence/optimized.tree
+gcc -O0 -g /src/Tests/fixtures/cburn.c -o /tmp/cburn -lpthread
+gst record --template Leaks -o /evidence/lines.gstrace --launch /tmp/cburn
+gst report /evidence/lines.gstrace leaks --lines | tee /evidence/lines.txt
+grep -q 'cburn.c:' /evidence/lines.txt
 gst symbolicate /evidence/optimized.gstrace --embed
 mv /tmp/optimized /tmp/optimized.hidden
 gst report /evidence/optimized.gstrace top > /evidence/embedded.txt

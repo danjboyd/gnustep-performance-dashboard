@@ -57,3 +57,11 @@ for pattern in '*.AppImage' '*.AppImage.zsync' '*.update-feed.json' '*.provenanc
   cp "$@" "$out/"
 done
 ls -l "$out"
+
+step "Corresponding source for the binary distribution"
+# This entry point is run in a disposable Debian build container.
+sed 's/^Types: deb$/Types: deb-src/' /etc/apt/sources.list.d/debian.sources > /etc/apt/sources.list.d/pd-source.sources
+apt-get update
+source_version=$(python3 -c 'import json; print(json.load(open("packaging/package.manifest.json"))["package"]["version"])')
+[ "${#version_args[@]}" -eq 0 ] || source_version="${version_args[1]}"
+python3 scripts/collect-release-sources.py "$source_version"

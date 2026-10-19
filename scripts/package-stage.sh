@@ -213,3 +213,7 @@ cat > "$stage_root/metadata/stage-summary.json" <<EOF
 EOF
 
 printf 'package-stage: staged %s (%s)\n' "$stage_root" "$(du -sh "$stage_root" | cut -f1)"
+
+# A relocatable CLI entry point also scrubs the packaged runtime from targets.
+mkdir -p "$stage_root/bin"
+install -m 0755 "$repo_root/packaging/linux/gstrace" "$stage_root/bin/gstrace"

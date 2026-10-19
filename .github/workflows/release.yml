@@ -112,7 +112,7 @@ jobs:
 
       - name: Collect and SHA256SUMS
         run: |
-          (cd dist/ci/release && sha256sum -- *.AppImage *.AppImage.zsync > SHA256SUMS)
+          (cd dist/ci/release && sha256sum -- *.AppImage *.AppImage.zsync *.provenance.json *sources.tar.gz > SHA256SUMS)
           {
             echo '```'
             cat dist/ci/release/SHA256SUMS

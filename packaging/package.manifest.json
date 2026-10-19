@@ -81,7 +81,8 @@
         "runtime/lib/libGSPerformance.so.0",
         "runtime/lib/libgnustep-gui.so.0.32",
         "runtime/System/Library/Bundles/libgnustep-back-032.bundle/libgnustep-back-032",
-        "runtime/System/Library/Themes/Adwaita.theme/Adwaita"
+        "runtime/System/Library/Themes/Adwaita.theme/Adwaita",
+        "bin/gstrace"
       ],
       "timeoutSeconds": 30
     },
@@ -116,7 +117,8 @@
       "requiredPaths": [
         "usr/metadata/icons/PerformanceDashboard.png",
         "usr/runtime/etc/GNUstep/GlobalDefaults.plist",
-        "usr/app/PerformanceDashboard.app/Resources/libgsperf-agent.so"
+        "usr/app/PerformanceDashboard.app/Resources/libgsperf-agent.so",
+        "usr/bin/gstrace"
       ]
     }
   },

@@ -1,0 +1,10 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Relocatable entry point for the CLI extracted from the AppImage. APPDIR
+# lets GSPRecorder remove this runtime's paths from the target environment.
+set -eu
+appdir=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
+export APPDIR="$appdir"
+export GNUSTEP_CONFIG_FILE="$appdir/usr/runtime/etc/GNUstep/GNUstep.conf"
+export LD_LIBRARY_PATH="$appdir/usr/runtime/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+exec "$appdir/usr/runtime/bin/gstrace" "$@"
