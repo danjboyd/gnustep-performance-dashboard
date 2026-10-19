@@ -23,6 +23,7 @@ jobs:
         run: |
           python3 Tests/release-assembly-checks.py
           python3 Tests/toolchain-fetch-checks.py
+          python3 Tests/windows-source-inventory-checks.py
 
       - name: Install packages
         run: |

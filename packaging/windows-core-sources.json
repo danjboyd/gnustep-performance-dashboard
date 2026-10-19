@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "toolchainSourceRevision": "d66adffe5311bc1e60e01f088e2502ceede70277",
+  "scope": "Core GNUstep source packages only; not a complete runtime source closure",
+  "sources": [
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-gnustep-back",
+      "version": "0.32.0-6",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-gnustep-back"
+      ],
+      "licenses": [
+        "spdx:LGPL-2.1-or-later"
+      ],
+      "verification": "Archive inspected: PKGBUILD, .SRCINFO, upstream source tarball and recipe patches present; no recipes executed",
+      "sha256": "b3b1d05f2b9de9b98b634a1d3fd6c5803f06dd36465344797048680451de9ca1",
+      "sizeBytes": 1038063,
+      "url": "https://repo.msys2.org/mingw/sources/mingw-w64-gnustep-back-0.32.0-6.src.tar.zst"
+    },
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-gnustep-base",
+      "version": "1.31.1-10",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-gnustep-base"
+      ],
+      "licenses": [
+        "spdx:LGPL-2.1-or-later"
+      ],
+      "verification": "Archive inspected: PKGBUILD, .SRCINFO, upstream source tarball and recipe patches present; no recipes executed",
+      "sha256": "34836f1401a0da3c88968a43750442fa3c5785fc956ac22864e5bfa71f88be85",
+      "sizeBytes": 3777948,
+      "url": "https://repo.msys2.org/mingw/sources/mingw-w64-gnustep-base-1.31.1-10.src.tar.zst"
+    },
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-gnustep-gui",
+      "version": "0.32.0-7",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-gnustep-gui"
+      ],
+      "licenses": [
+        "spdx:LGPL-2.1-or-later"
+      ],
+      "verification": "Archive inspected: PKGBUILD, .SRCINFO, upstream source tarball and recipe patches present; no recipes executed",
+      "sha256": "8c77c517da97cb4b0cea488e8f5eb685c2d0771be2b2e2e690cb889ce6bdafc3",
+      "sizeBytes": 3116491,
+      "url": "https://repo.msys2.org/mingw/sources/mingw-w64-gnustep-gui-0.32.0-7.src.tar.zst"
+    },
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-gnustep-make",
+      "version": "2.9.3-2",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-gnustep-make"
+      ],
+      "licenses": [
+        "spdx:GPL-3.0-or-later"
+      ],
+      "verification": "Archive inspected: PKGBUILD, .SRCINFO, upstream source tarball and recipe patches present; no recipes executed",
+      "sha256": "d253bafdf105a7d89abb749c9ba22d521eb75dcc0b8810c2080f30f8031acc58",
+      "sizeBytes": 614866,
+      "url": "https://repo.msys2.org/mingw/sources/mingw-w64-gnustep-make-2.9.3-2.src.tar.zst"
+    },
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-libdispatch",
+      "version": "6.1.1-4",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-libblocksruntime-swift",
+        "mingw-w64-clang-x86_64-libdispatch"
+      ],
+      "licenses": [
+        "spdx:Apache-2.0"
+      ],
+      "verification": "Archive inspected: PKGBUILD, .SRCINFO, upstream source tarball and recipe patches present; no recipes executed",
+      "sha256": "0fb21c9a7a4b9b2070a3b70b5c50fae71ac32e95fb357b88606d1bfa8eaec938",
+      "sizeBytes": 597634,
+      "url": "https://repo.msys2.org/mingw/sources/mingw-w64-libdispatch-6.1.1-4.src.tar.zst"
+    },
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-libobjc2",
+      "version": "2.2.1-7",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-libobjc2"
+      ],
+      "licenses": [
+        "spdx:MIT"
+      ],
+      "verification": "Archive inspected: PKGBUILD, .SRCINFO, upstream source tarball and recipe patches present; no recipes executed",
+      "sha256": "4c309b636fc55de4cb90904d2cd9b3372cc83f9cabb71a14ef1d6039f2437e3f",
+      "sizeBytes": 208828,
+      "url": "https://repo.msys2.org/mingw/sources/mingw-w64-libobjc2-2.2.1-7.src.tar.zst"
+    }
+  ]
+}
