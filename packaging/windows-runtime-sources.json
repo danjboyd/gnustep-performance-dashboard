@@ -1,0 +1,458 @@
+{
+  "schemaVersion": 1,
+  "toolchainSourceRevision": "d66adffe5311bc1e60e01f088e2502ceede70277",
+  "scope": "41 runtime package owners from Windows CLANG64 staging, before theme/updater provisioning",
+  "sources": [
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-brotli",
+      "version": "1.2.0-1",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-brotli"
+      ],
+      "sha256": "2f0f93875aac21990d20f1eaf0ad8b970eb6f186c663c77ae47aaaf9e5711fcf",
+      "sizeBytes": 644113,
+      "candidateUrl": "https://repo.msys2.org/mingw/sources/mingw-w64-brotli-1.2.0-1.src.tar.zst"
+    },
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-bzip2",
+      "version": "1.0.8-4",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-bzip2"
+      ],
+      "sha256": "fd9360917314d1cbccb3cb15ed8450d1e56b8a9f733b606504aba52c52159e54",
+      "sizeBytes": 818825,
+      "candidateUrl": "https://repo.msys2.org/mingw/sources/mingw-w64-bzip2-1.0.8-4.src.tar.zst"
+    },
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-cairo",
+      "version": "1.18.6-2",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-cairo"
+      ],
+      "sha256": "ff7124c2155b1169fe102a1dcba1cd7a21f69dace3adf88f1dd8f85ef7ad1e19",
+      "sizeBytes": 32721088,
+      "candidateUrl": "https://repo.msys2.org/mingw/sources/mingw-w64-cairo-1.18.6-2.src.tar.zst"
+    },
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-expat",
+      "version": "2.9.0-1",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-expat"
+      ],
+      "sha256": "014a4b1949f65f053a9774712994db89fea290516f1c1849bbbbf7316ee1606b",
+      "sizeBytes": 536681,
+      "candidateUrl": "https://repo.msys2.org/mingw/sources/mingw-w64-expat-2.9.0-1.src.tar.zst"
+    },
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-fontconfig",
+      "version": "2.18.3-1",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-fontconfig"
+      ],
+      "sha256": "7df65dbf84397f4f71c6aa0bd39fac93f839d6b87f04a935773b69828740230d",
+      "sizeBytes": 659688,
+      "candidateUrl": "https://repo.msys2.org/mingw/sources/mingw-w64-fontconfig-2.18.3-1.src.tar.zst"
+    },
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-freetype",
+      "version": "2.15.0-1",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-freetype"
+      ],
+      "sha256": "2f09c60b72bd249642d055aa5a34edf2577392e592415f3f4730dd37990b47ad",
+      "sizeBytes": 2720468,
+      "candidateUrl": "https://repo.msys2.org/mingw/sources/mingw-w64-freetype-2.15.0-1.src.tar.zst"
+    },
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-gettext",
+      "version": "1.0-1",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-gettext-runtime"
+      ],
+      "sha256": "cca0d0c8f60353faccc5ad40405240014e4a7ccc8b1c6ca9f4626aef3097d26e",
+      "sizeBytes": 10267655,
+      "candidateUrl": "https://repo.msys2.org/mingw/sources/mingw-w64-gettext-1.0-1.src.tar.zst"
+    },
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-giflib",
+      "version": "6.1.3-1",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-giflib"
+      ],
+      "sha256": "7c41b8653d50671d511eb7ee455e219b1997de7b126ce4874eb3f47ae414aea6",
+      "sizeBytes": 470866,
+      "candidateUrl": "https://repo.msys2.org/mingw/sources/mingw-w64-giflib-6.1.3-1.src.tar.zst"
+    },
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-glib2",
+      "version": "2.90.1-1",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-glib2"
+      ],
+      "sha256": "ac3bc00e4079e6b51dd0a1fb9ccc420fff033b4e9095e4487dbf6cf01312cee6",
+      "sizeBytes": 5875958,
+      "candidateUrl": "https://repo.msys2.org/mingw/sources/mingw-w64-glib2-2.90.1-1.src.tar.zst"
+    },
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-gmp",
+      "version": "6.3.0-2",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-gmp"
+      ],
+      "sha256": "f288f944fd9609db220bcf6a8dd0703a5674eeb906ef35eb8485bb8192135994",
+      "sizeBytes": 2097066,
+      "candidateUrl": "https://repo.msys2.org/mingw/sources/mingw-w64-gmp-6.3.0-2.src.tar.zst"
+    },
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-gnustep-back",
+      "version": "0.32.0-6",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-gnustep-back"
+      ],
+      "sha256": "b3b1d05f2b9de9b98b634a1d3fd6c5803f06dd36465344797048680451de9ca1",
+      "sizeBytes": 1038063,
+      "candidateUrl": "https://repo.msys2.org/mingw/sources/mingw-w64-gnustep-back-0.32.0-6.src.tar.zst"
+    },
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-gnustep-base",
+      "version": "1.31.1-10",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-gnustep-base"
+      ],
+      "sha256": "34836f1401a0da3c88968a43750442fa3c5785fc956ac22864e5bfa71f88be85",
+      "sizeBytes": 3777948,
+      "candidateUrl": "https://repo.msys2.org/mingw/sources/mingw-w64-gnustep-base-1.31.1-10.src.tar.zst"
+    },
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-gnustep-gui",
+      "version": "0.32.0-7",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-gnustep-gui"
+      ],
+      "sha256": "8c77c517da97cb4b0cea488e8f5eb685c2d0771be2b2e2e690cb889ce6bdafc3",
+      "sizeBytes": 3116491,
+      "candidateUrl": "https://repo.msys2.org/mingw/sources/mingw-w64-gnustep-gui-0.32.0-7.src.tar.zst"
+    },
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-gnutls",
+      "version": "3.8.13-3",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-gnutls"
+      ],
+      "sha256": "7889cd73810d909642c0f122b40cfe0eaec5b0d2985804f145cd90c6a51c0435",
+      "sizeBytes": 7280076,
+      "candidateUrl": "https://repo.msys2.org/mingw/sources/mingw-w64-gnutls-3.8.13-3.src.tar.zst"
+    },
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-graphite2",
+      "version": "1.3.15-1",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-graphite2"
+      ],
+      "sha256": "eb76ce274c68ea6bad0883144c21e44a803ec94fed9dc0f6584feb0a8415a1d6",
+      "sizeBytes": 13317053,
+      "candidateUrl": "https://repo.msys2.org/mingw/sources/mingw-w64-graphite2-1.3.15-1.src.tar.zst"
+    },
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-harfbuzz",
+      "version": "14.6.0-1",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-harfbuzz"
+      ],
+      "sha256": "6c02c446b27412717a760eca77ac6ed997b294fdc390a5e5f46760ebda8a7c64",
+      "sizeBytes": 20299472,
+      "candidateUrl": "https://repo.msys2.org/mingw/sources/mingw-w64-harfbuzz-14.6.0-1.src.tar.zst"
+    },
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-icu",
+      "version": "78.3-4",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-icu"
+      ],
+      "sha256": "9e24bccf1f6e00658114e0a61aa14ed6742e29983dba3da8058e6d2c42366f9f",
+      "sizeBytes": 26077652,
+      "candidateUrl": "https://repo.msys2.org/mingw/sources/mingw-w64-icu-78.3-4.src.tar.zst"
+    },
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-jbigkit",
+      "version": "2.1-6",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-jbigkit"
+      ],
+      "sha256": "64757867df26308c14d22b184aaecb43742c25ee8d24f18da51e3d1e09be8ac2",
+      "sizeBytes": 443470,
+      "candidateUrl": "https://repo.msys2.org/mingw/sources/mingw-w64-jbigkit-2.1-6.src.tar.zst"
+    },
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-lerc",
+      "version": "4.1.1-1",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-lerc"
+      ],
+      "sha256": "697824f8dba0b297949b294d7f850a21dfa817802cf91f3a73b6192a7c234f46",
+      "sizeBytes": 4056783,
+      "candidateUrl": "https://repo.msys2.org/mingw/sources/mingw-w64-lerc-4.1.1-1.src.tar.zst"
+    },
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-libc++",
+      "version": "23.1.3-1",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-libc++"
+      ],
+      "sha256": "7003734d02e6b1037ba7d355f8e3b665b73745617deda24609510718b31924ff",
+      "sizeBytes": 179225706,
+      "candidateUrl": "https://repo.msys2.org/mingw/sources/mingw-w64-libc++-23.1.3-1.src.tar.zst"
+    },
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-libdeflate",
+      "version": "1.26-1",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-libdeflate"
+      ],
+      "sha256": "8f08ba1c541d7cdffde7113e0796fa3ed5ae494702c57d86b736f82167805ea6",
+      "sizeBytes": 200156,
+      "candidateUrl": "https://repo.msys2.org/mingw/sources/mingw-w64-libdeflate-1.26-1.src.tar.zst"
+    },
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-libffi",
+      "version": "3.8.0-1",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-libffi"
+      ],
+      "sha256": "641ea78ce0333839eab5262656f03fdcfd8496d7388bd7b27e4f0638aeed9adf",
+      "sizeBytes": 1582238,
+      "candidateUrl": "https://repo.msys2.org/mingw/sources/mingw-w64-libffi-3.8.0-1.src.tar.zst"
+    },
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-libiconv",
+      "version": "1.19-1",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-libiconv"
+      ],
+      "sha256": "74428280c17094da5b702c29b2e1a0abae59556ea5dfdd65705cc8ccc1e000fb",
+      "sizeBytes": 5131029,
+      "candidateUrl": "https://repo.msys2.org/mingw/sources/mingw-w64-libiconv-1.19-1.src.tar.zst"
+    },
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-libidn2",
+      "version": "2.3.8-4",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-libidn2"
+      ],
+      "sha256": "cd83e8514fbeb6a4499299b88691b9b9ecc3114cca1e2be4f6c54aab6ae9ddd0",
+      "sizeBytes": 2147337,
+      "candidateUrl": "https://repo.msys2.org/mingw/sources/mingw-w64-libidn2-2.3.8-4.src.tar.zst"
+    },
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-libjpeg-turbo",
+      "version": "3.2.0-1",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-libjpeg-turbo"
+      ],
+      "sha256": "98bfbef730e79ca74c88842eb27730db11429dbae4d95e0f5d7859e316026a74",
+      "sizeBytes": 2536411,
+      "candidateUrl": "https://repo.msys2.org/mingw/sources/mingw-w64-libjpeg-turbo-3.2.0-1.src.tar.zst"
+    },
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-libobjc2",
+      "version": "2.2.1-7",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-libobjc2"
+      ],
+      "sha256": "4c309b636fc55de4cb90904d2cd9b3372cc83f9cabb71a14ef1d6039f2437e3f",
+      "sizeBytes": 208828,
+      "candidateUrl": "https://repo.msys2.org/mingw/sources/mingw-w64-libobjc2-2.2.1-7.src.tar.zst"
+    },
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-libpng",
+      "version": "1.6.59-1",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-libpng"
+      ],
+      "sha256": "2b836f8565a3889ed9bb86f9724074ae274f109e2bcd882dd1f080ea4da8a41a",
+      "sizeBytes": 1611403,
+      "candidateUrl": "https://repo.msys2.org/mingw/sources/mingw-w64-libpng-1.6.59-1.src.tar.zst"
+    },
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-libtasn1",
+      "version": "4.21.0-1",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-libtasn1"
+      ],
+      "sha256": "c626129c5131eef0a45c736274f0844747605a105161cc0f7d39f6e1c70ed0ff",
+      "sizeBytes": 1732161,
+      "candidateUrl": "https://repo.msys2.org/mingw/sources/mingw-w64-libtasn1-4.21.0-1.src.tar.zst"
+    },
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-libtiff",
+      "version": "4.7.2-2",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-libtiff"
+      ],
+      "sha256": "a4d55d313764640aaa2ba7b4b377af855877d31fe6fa040d63dc3647cc45622d",
+      "sizeBytes": 4077318,
+      "candidateUrl": "https://repo.msys2.org/mingw/sources/mingw-w64-libtiff-4.7.2-2.src.tar.zst"
+    },
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-libunistring",
+      "version": "1.4.2-1",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-libunistring"
+      ],
+      "sha256": "a5bafb360d5c13c5c52ef071d5a8288ce2345346b902f20ed6e9322766ec60eb",
+      "sizeBytes": 4770800,
+      "candidateUrl": "https://repo.msys2.org/mingw/sources/mingw-w64-libunistring-1.4.2-1.src.tar.zst"
+    },
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-libwebp",
+      "version": "1.6.0-1",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-libwebp"
+      ],
+      "sha256": "c8c63f98e018a7595d22e8a3e65b7caf83345fed666866a6e67d153b16f48141",
+      "sizeBytes": 2589761,
+      "candidateUrl": "https://repo.msys2.org/mingw/sources/mingw-w64-libwebp-1.6.0-1.src.tar.zst"
+    },
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-libxml2",
+      "version": "2.15.4-2",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-libxml2"
+      ],
+      "sha256": "685476a67ddf542e8d8cb9dd60290711dcfbb5175bff069c129a683b8907588d",
+      "sizeBytes": 3805907,
+      "candidateUrl": "https://repo.msys2.org/mingw/sources/mingw-w64-libxml2-2.15.4-2.src.tar.zst"
+    },
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-libxslt",
+      "version": "1.1.45-1",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-libxslt"
+      ],
+      "sha256": "67bef813cbdfced421e084867eb32e037e48d911a44ca619d45393830f85c454",
+      "sizeBytes": 2675383,
+      "candidateUrl": "https://repo.msys2.org/mingw/sources/mingw-w64-libxslt-1.1.45-1.src.tar.zst"
+    },
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-nettle",
+      "version": "4.0-1",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-nettle"
+      ],
+      "sha256": "453187e86139bce3c5b94542cc709ead7f523f0fc33ce4cc2b8fe9d5a9719cdd",
+      "sizeBytes": 2630115,
+      "candidateUrl": "https://repo.msys2.org/mingw/sources/mingw-w64-nettle-4.0-1.src.tar.zst"
+    },
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-p11-kit",
+      "version": "0.26.5-1",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-p11-kit"
+      ],
+      "sha256": "1665c40c6237bbb9be868ecfc00ab65f9038047e4c608126de575ae4ecb5ca12",
+      "sizeBytes": 1094024,
+      "candidateUrl": "https://repo.msys2.org/mingw/sources/mingw-w64-p11-kit-0.26.5-1.src.tar.zst"
+    },
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-pcre2",
+      "version": "10.49-1",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-pcre2"
+      ],
+      "sha256": "b02f0d5070b7d7f6db5c8ba9b009f28c1a07b9b52aaf7964dc0c8b098e4088d1",
+      "sizeBytes": 2183818,
+      "candidateUrl": "https://repo.msys2.org/mingw/sources/mingw-w64-pcre2-10.49-1.src.tar.zst"
+    },
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-pixman",
+      "version": "0.46.4-3",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-pixman"
+      ],
+      "sha256": "2661cb135a6448f6d594e4642a643b2dec6fa0d773ac046aa786987a719160ed",
+      "sizeBytes": 662111,
+      "candidateUrl": "https://repo.msys2.org/mingw/sources/mingw-w64-pixman-0.46.4-3.src.tar.zst"
+    },
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-xz",
+      "version": "5.8.4-1",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-xz"
+      ],
+      "sha256": "b8acbc56b2bfe08df7bffff423f3bf07ee85dbec4e07416017ab04c8afb9d13e",
+      "sizeBytes": 1569458,
+      "candidateUrl": "https://repo.msys2.org/mingw/sources/mingw-w64-xz-5.8.4-1.src.tar.zst"
+    },
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-zlib",
+      "version": "1.3.2-2",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-zlib"
+      ],
+      "sha256": "eef69dea52357e01b272d6fd6dc4d7c0773f71260cb7bcde6047c8c383518db3",
+      "sizeBytes": 1326375,
+      "candidateUrl": "https://repo.msys2.org/mingw/sources/mingw-w64-zlib-1.3.2-2.src.tar.zst"
+    },
+    {
+      "repository": "clang64",
+      "base": "mingw-w64-zstd",
+      "version": "1.5.7-2",
+      "binaryPackages": [
+        "mingw-w64-clang-x86_64-zstd"
+      ],
+      "sha256": "306797282df799e95d550e6d0bb4b0a7b848027b8e13893a24236e060837c217",
+      "sizeBytes": 2402010,
+      "candidateUrl": "https://repo.msys2.org/mingw/sources/mingw-w64-zstd-1.5.7-2.src.tar.zst"
+    },
+    {
+      "repository": "msys",
+      "base": "tzcode",
+      "version": "2026e-1",
+      "binaryPackages": [
+        "tzcode"
+      ],
+      "sha256": "c1394d43b0eb72ea6a3c93fe8c98f04cb127b47619e085ff2cf7371364b8e62b",
+      "sizeBytes": 694367,
+      "candidateUrl": "https://repo.msys2.org/msys/sources/tzcode-2026e-1.src.tar.zst"
+    }
+  ]
+}

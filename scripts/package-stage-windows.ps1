@@ -13,7 +13,8 @@
 #
 #   scripts/package-stage-windows.ps1 -StageRoot dist/stage
 param(
-  [string]$StageRoot = "dist/stage"
+  [string]$StageRoot = "dist/stage",
+  [switch]$AllowMissingLicenseTexts
 )
 
 Set-StrictMode -Version Latest
@@ -21,6 +22,9 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
 $stage = [System.IO.Path]::GetFullPath((Join-Path $repoRoot $StageRoot))
+if (-not $stage.StartsWith($repoRoot.TrimEnd('\') + '\', [System.StringComparison]::OrdinalIgnoreCase)) {
+  throw "StageRoot must be a child directory of the repository: $stage"
+}
 $appSource = Join-Path $repoRoot "Dashboard\PerformanceDashboard.app"
 $runtime = Join-Path $stage "runtime"
 $runtimeBin = Join-Path $runtime "bin"
@@ -78,7 +82,12 @@ Copy-Item (Join-Path $appSource "Resources\gsperf-agent.dll") (Join-Path $runtim
 Copy-Tree (Join-Path $clang64 "etc\fonts") (Join-Path $runtime "etc\fonts") | Out-Null
 Copy-Tree (Join-Path $clang64 "lib\GNUstep\Bundles") (Join-Path $runtime "System\Library\Bundles") | Out-Null
 Get-ChildItem -Path (Join-Path $runtime "System\Library\Bundles") -Directory -Filter "*.prefPane" -ErrorAction SilentlyContinue |
-  Remove-Item -Recurse -Force
+  ForEach-Object {
+    if (-not $_.FullName.StartsWith($stage.TrimEnd('\') + '\', [System.StringComparison]::OrdinalIgnoreCase)) {
+      throw "Preference pane is outside the stage: $($_.FullName)"
+    }
+    Remove-Item -LiteralPath $_.FullName -Recurse -Force
+  }
 foreach ($name in @("Images", "KeyBindings", "Fonts", "ColorPickers", "PostScript", "DTDs", "Services", "Sounds")) {
   Copy-Tree (Join-Path $clang64 "lib\GNUstep\$name") (Join-Path $runtime "System\Library\$name") | Out-Null
 }
@@ -191,12 +200,17 @@ Write-Notice "gnustep-packager-updater.txt" "gnustep-packager updater (GPUpdater
   "https://github.com/danjboyd/gnustep-packager" (Join-Path $licenseTexts "gnustep-packager-LICENSE")
 Write-Notice "Monocypher.txt" "Monocypher (in gp-update-helper)" "BSD-2-Clause OR CC0-1.0" `
   "https://monocypher.org" (Join-Path $repoRoot "third_party\gnustep-packager-updater\objc\gp-update-helper\Source\monocypher\LICENCE.md")
-Write-Notice "WinUITheme.txt" "WinUITheme, the default Windows theme (plugins-themes-winuitheme)" "LGPL-2.1-or-later" `
-  "https://github.com/danjboyd/plugins-themes-winuitheme" (Join-Path $licenseTexts "libs-gui-COPYING.LIB")
-$clangDlls = @(Get-ChildItem -Path $runtimeBin -Filter "*.dll" -File | Where-Object { $_.Name -notmatch '^(libgnustep-|libobjc|dispatch|libdispatch|GSPerformance|libGSPerformance)' } | ForEach-Object Name | Sort-Object)
-Set-Content -Path (Join-Path $licenses "msys2-libraries.txt") -Encoding utf8 -Value (
-  @("Libraries from MSYS2 CLANG64 (https://packages.msys2.org) bundled in runtime/bin, each under its own",
-    "license as packaged by MSYS2 (see the package pages for the license texts):", "") + $clangDlls)
+$themeSource = Join-Path $repoRoot "out\WinUITheme"
+$manifest = Get-Content -Raw (Join-Path $repoRoot "packaging\package.manifest.json") | ConvertFrom-Json
+$themePin = @($manifest.platformOverrides.windows.themeInputs | Where-Object name -eq "WinUITheme")[0].ref
+$themeRevision = & git -C $themeSource rev-parse HEAD
+if ($LASTEXITCODE -ne 0 -or $themeRevision -ne $themePin) { throw "WinUITheme source must be checked out at $themePin in $themeSource" }
+Write-Notice "WinUITheme.txt" "WinUITheme, the default Windows theme ($themeRevision)" "LGPL-2.1-or-later" `
+  "https://github.com/danjboyd/plugins-themes-winuitheme" (Join-Path $themeSource "COPYING.LIB")
+$inventoryArguments = @('--stage', $stage, '--toolchain', (Split-Path -Parent $clang64), '--project', $repoRoot)
+if ($AllowMissingLicenseTexts) { $inventoryArguments += '--allow-missing-license-texts' }
+& (Join-Path $clang64 "bin\python.exe") (Join-Path $PSScriptRoot "windows-runtime-inventory.py") @inventoryArguments
+if ($LASTEXITCODE -ne 0) { throw "Windows runtime ownership/license inventory failed." }
 
 $size = (Get-ChildItem -Path $stage -Recurse -File | Measure-Object -Property Length -Sum).Sum
 Write-Host ("Staged {0} ({1:N1} MB)" -f $stage, ($size / 1MB))

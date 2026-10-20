@@ -1,0 +1,50 @@
+name: Windows package review artifacts
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Unpublished prerelease version (for example 0.1.1-qualification.1)
+        required: true
+        default: 0.1.1-qualification.1
+permissions:
+  contents: read
+concurrency:
+  group: windows-package-${{ github.ref }}-${{ inputs.version }}
+  cancel-in-progress: false
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - name: Check ownership and source integrity guards
+        shell: pwsh
+        run: |
+          python Tests/windows-runtime-inventory-checks.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python Tests/windows-source-preparation-checks.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Produce unsigned MSI, ZIP, feed, provenance and corresponding sources
+        shell: pwsh
+        env:
+          PD_PACKAGE_VERSION: ${{ inputs.version }}
+        run: |
+          # Git for Windows provides OpenSSL for manifest authentication.
+          $env:PATH = 'C:\Program Files\Git\usr\bin;' + $env:PATH
+          ./scripts/package-windows.ps1 -Version $env:PD_PACKAGE_VERSION -Release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-packages
+          path: dist/ci/windows
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-package-logs
+          path: |
+            dist/logs
+            dist/validation
+          if-no-files-found: warn

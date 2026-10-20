@@ -37,8 +37,10 @@ if ((Test-Path $scheduler) -and (Select-String -Path $scheduler -SimpleMatch "BL
 }
 
 $env:MSYSTEM = "CLANG64"
-# HAVE_MODE_T: MSYS2's libdispatch headers redefine mode_t without it.
-$command = "set -eo pipefail; cd `"`$(cygpath -u '$repoRoot')`"; set +u; " +
-  "source `"`$(cygpath -u '$gnustepSh')`"; set -u; export ADDITIONAL_CPPFLAGS=-DHAVE_MODE_T; make"
-& $bashExe -lc $command
+$env:GNUSTEP_MAKEFILES = Split-Path -Parent $gnustepSh
+$env:GNUSTEP_CONFIG_FILE = Join-Path $clang64Root "etc\GNUstep\GNUstep.conf"
+$env:PD_BUILD_GNUSTEP_SH = $gnustepSh
+# Pass a script file: Windows PowerShell 5 loses the nested quotes in a
+# bash -c command containing cygpath, before bash can parse it.
+& $bashExe -l (Join-Path $PSScriptRoot "build-windows.sh")
 if ($LASTEXITCODE -ne 0) { throw "The build failed with exit code $LASTEXITCODE." }
