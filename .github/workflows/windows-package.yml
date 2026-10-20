@@ -3,13 +3,13 @@ on:
   # Exercise the new producer before it exists on the default branch, where
   # workflow_dispatch registration is required by GitHub.
   push:
-    branches: [work/windows-v0.1.1-qualification]
+    branches: [work/windows-v0.1.2-validation]
   workflow_dispatch:
     inputs:
       version:
-        description: Unpublished prerelease version (for example 0.1.1-qualification.1)
+        description: Unpublished prerelease version (for example 0.1.2-qualification.1)
         required: true
-        default: 0.1.1-qualification.1
+        default: 0.1.2-qualification.1
 permissions:
   contents: read
 concurrency:
@@ -34,7 +34,7 @@ jobs:
       - name: Produce unsigned MSI, ZIP, feed, provenance and corresponding sources
         shell: pwsh
         env:
-          PD_PACKAGE_VERSION: ${{ inputs.version || '0.1.1-hosted.1' }}
+          PD_PACKAGE_VERSION: ${{ inputs.version || '0.1.2-hosted.1' }}
         run: |
           # Git for Windows provides OpenSSL for manifest authentication.
           $env:PATH = 'C:\Program Files\Git\usr\bin;' + $env:PATH
