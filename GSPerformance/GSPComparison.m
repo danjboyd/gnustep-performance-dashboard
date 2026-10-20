@@ -51,8 +51,10 @@ collect_paths(GSPCallTreeNode *node, NSString *prefix, double interval, NSMutabl
 {
   for (GSPCallTreeNode *child in node.children)
     {
-      NSString *name = [NSString stringWithFormat: @"%@%@%@ [%@]", prefix,
-        prefix.length ? @" → " : @"", child.name, child.imageName ?: @""];
+      NSString *symbol = child.imageName.length
+        ? [NSString stringWithFormat: @"%@ [%@]", child.name, child.imageName] : child.name;
+      NSString *name = [NSString stringWithFormat: @"%@%@%@", prefix,
+        prefix.length ? @" → " : @"", symbol];
       values[name] = @(child.totalWeight * interval);
       collect_paths(child, name, interval, values);
     }
@@ -78,7 +80,8 @@ collect_paths(GSPCallTreeNode *node, NSString *prefix, double interval, NSMutabl
           for (GSPCallTreeNode *n in tree.root.children)
             if (n.selfWeight)
               {
-                NSString *key = [NSString stringWithFormat: @"%@ [%@]", n.name, n.imageName ?: @""];
+                NSString *key = n.imageName.length
+                  ? [NSString stringWithFormat: @"%@ [%@]", n.name, n.imageName] : n.name;
                 v[key] = @([v[key] doubleValue] + n.selfWeight * interval);
               }
         break;

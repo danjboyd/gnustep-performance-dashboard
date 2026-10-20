@@ -141,7 +141,10 @@ button(NSView *view, NSString *title, NSRect rect, id target, SEL action)
   if (![scanner scanDouble: &value] || !scanner.isAtEnd || !isfinite(value)
       || value < 0 || value > trace.duration + 1e-9)
     { [_status setStringValue: @"Enter a finite time within the recording, in seconds."]; return NO; }
-  *time = [trace absoluteTime: MIN(value, trace.duration)];
+  /* Round the relative offset before adding the integer clock origin;
+     adding the origin as a double can lose nanoseconds at range boundaries. */
+  *time = value >= trace.duration ? trace.endTime
+    : trace.startTime + (GSPTime)roundl((long double)value * 1e9L);
   return YES;
 }
 

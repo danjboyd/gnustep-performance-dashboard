@@ -103,6 +103,8 @@ record objcwork --instrument time-profiler --instrument allocations --instrument
 "$GSTRACE" report "$OUT/objcwork.gstrace" leaks >"$OUT/objcwork-leaks.txt" 2>/dev/null
 check "objcwork: all 5 Leaky objects (incl. a retain cycle) found" "grep -E -q '^Leaky +5 ' '$OUT/objcwork-leaks.txt'"
 check "objcwork: leak stack names make_leaks" "grep -q make_leaks '$OUT/objcwork-leaks.txt'"
+"$GSTRACE" report "$OUT/objcwork.gstrace" leaks --lines >"$OUT/objcwork-source.txt" 2>/dev/null
+check "source navigation: full recorded source path and line retained" "grep -F -q '$ROOT/Tests/fixtures/objcwork.m:' '$OUT/objcwork-source.txt'"
 "$GSTRACE" report "$OUT/objcwork.gstrace" signposts >"$OUT/objcwork-sp.txt" 2>/dev/null
 check "objcwork: 5 Round intervals" "grep -E -q '^Round +PointsOfInterest +5 ' '$OUT/objcwork-sp.txt'"
 check "objcwork: Checkpoint event" "grep -q '^Checkpoint' '$OUT/objcwork-sp.txt'"

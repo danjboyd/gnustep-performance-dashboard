@@ -22,6 +22,11 @@ It has three parts:
 are deferred. See [the v0.1.0 gates](docs/v0.1.0-plan.md),
 [release process](docs/release.md), and [Windows notes](docs/windows.md).
 
+The development branch adds allocation generations, in-app recording
+comparisons, richer hang evidence and source navigation. See the
+[v0.1.2 feature and acceptance plan](docs/v0.1.2-plan.md); these features are
+not part of the published v0.1.0 package.
+
 ## Installing
 
 The release provides `PerformanceDashboard-0.1.0-x86_64.AppImage`.
