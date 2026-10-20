@@ -29,7 +29,11 @@ function Get-PinnedSource([string]$Directory, [string]$Url, [string]$Revision) {
   if (-not (Test-Path -LiteralPath $Directory)) {
     # Preserve recipe/patch bytes. Hosted Windows Git defaults can rewrite
     # upstream CRLF patches and make an otherwise pinned checkout dirty.
-    Invoke-Checked git @('clone', '--config', 'core.autocrlf=false', '--filter=blob:none', '--', $Url, $Directory)
+    Invoke-Checked git @('clone', '--no-checkout', '--config', 'core.autocrlf=false', '--filter=blob:none', '--', $Url, $Directory)
+    # This pin contains a mixed-ending patch despite '*.patch text eol=lf'.
+    # Disable text transforms in clone-local metadata before checkout. Git's
+    # clean-tree check then compares exact bytes, including that patch.
+    Set-Content -LiteralPath (Join-Path $Directory '.git/info/attributes') -Value '* -text' -Encoding ascii
     Invoke-Checked git @('-C', $Directory, 'checkout', '--detach', $Revision)
   }
   $actual = & git -C $Directory rev-parse HEAD
