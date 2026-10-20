@@ -35,7 +35,12 @@ static void capture(NSWindowController *controller, NSString *output, NSString *
   [controller.window makeKeyAndOrderFront: nil];
   NSDate *until = [NSDate dateWithTimeIntervalSinceNow: .4];
   while ([until timeIntervalSinceNow] > 0)
-    [[NSRunLoop currentRunLoop] runMode: NSDefaultRunLoopMode beforeDate: until];
+    {
+      NSEvent *event = [NSApp nextEventMatchingMask: NSAnyEventMask untilDate: until
+        inMode: NSDefaultRunLoopMode dequeue: YES];
+      if (event) [NSApp sendEvent: event];
+    }
+  [NSApp updateWindows];
 #if !defined(_WIN32)
   NSTask *task = [NSTask new];
   task.launchPath = @"/usr/bin/import";
