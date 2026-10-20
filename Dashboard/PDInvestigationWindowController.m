@@ -278,7 +278,7 @@ button(NSView *view, NSString *title, NSRect rect, id target, SEL action)
 - (void) chooseBaseline: (id)sender
 {
   NSOpenPanel *panel = [NSOpenPanel openPanel];
-  [panel setTitle: @"Choose baseline trace"]; [panel setCanChooseDirectories: YES]; [panel setCanChooseFiles: YES];
+  [panel setTitle: @"Choose baseline trace"]; [panel setCanChooseDirectories: YES]; [panel setCanChooseFiles: NO];
   if ([panel runModal] != NSOKButton) return;
   NSError *error = nil;
   GSPTrace *baseline = [GSPTrace traceWithPath: panel.URL.path error: &error];

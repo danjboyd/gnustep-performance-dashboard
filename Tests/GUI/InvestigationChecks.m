@@ -119,7 +119,22 @@ int main(int argc, char **argv)
       check(outline.numberOfRows == 1, @"hang evidence list");
       [outline selectRowIndexes: [NSIndexSet indexSetWithIndex: 0] byExtendingSelection: NO];
       capture(hangController, output, @"hang-evidence.png");
-      [[detail valueForKey: @"mode"] selectItemWithTitle: @"Call Tree"]; [detail modeChanged: nil];
+      /* Dispatch the actual outline gesture. Merely changing the popup mode
+         does not exercise rowDoubleClicked: or its inspection-range update. */
+      NSRect rowRect = [outline rectOfRow: 0];
+      NSPoint click = [outline convertPoint: NSMakePoint(NSMidX(rowRect), NSMidY(rowRect)) toView: nil];
+      NSEvent *up = [NSEvent mouseEventWithType: NSLeftMouseUp location: click modifierFlags: 0
+        timestamp: 2 windowNumber: hangWindow.windowNumber context: nil eventNumber: 2 clickCount: 2 pressure: 0];
+      NSEvent *down = [NSEvent mouseEventWithType: NSLeftMouseDown location: click modifierFlags: 0
+        timestamp: 1 windowNumber: hangWindow.windowNumber context: nil eventNumber: 1 clickCount: 2 pressure: 1];
+      [NSApp postEvent: up atStart: YES];
+      [NSApp sendEvent: down];
+      check([[[detail valueForKey: @"mode"] titleOfSelectedItem] isEqual: @"Call Tree"],
+        @"hang-row double-click enters wall call tree");
+      GSPHang *hang = detail.renderer.hangAnalysis.hangs.firstObject;
+      check([[detail valueForKey: @"start"] unsignedLongLongValue] == hang.startTime
+        && [[detail valueForKey: @"end"] unsignedLongLongValue] == hang.endTime,
+        @"hang drill-down narrows the inspection range to the selected hang");
       check(outline.numberOfRows > 0, @"whole-hang wall stack tree");
       capture(hangController, output, @"hang-stacks.png"); [hangController close];
       NSString *source = [NSString stringWithFormat: @"%s:1", __FILE__];
