@@ -22,6 +22,8 @@
 - (void) finishRecording;
 - (void) saveTraceAs: (id)sender;
 - (void) exportTrace: (id)sender;
+- (void) showGenerations: (id)sender;
+- (void) compareRecording: (id)sender;
 - (void) checkForLeaksNow: (id)sender;
 
 @end

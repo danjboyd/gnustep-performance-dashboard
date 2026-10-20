@@ -93,6 +93,12 @@ add_item(NSMenu *menu, NSString *title, SEL action, NSString *key, id target)
   item = add_item(main, @"View", NULL, nil, nil);
   [main setSubmenu: view forItem: item];
 
+  NSMenu *analysis = [[NSMenu alloc] initWithTitle: @"Analysis"];
+  add_item(analysis, @"Allocation Generations…", @selector(showGenerations:), @"g", nil);
+  add_item(analysis, @"Compare Recording…", @selector(compareRecording:), @"d", nil);
+  item = add_item(main, @"Analysis", NULL, nil, nil);
+  [main setSubmenu: analysis forItem: item];
+
   NSMenu *windows = [[NSMenu alloc] initWithTitle: @"Windows"];
   add_item(windows, @"Minimize", @selector(performMiniaturize:), @"m", nil);
   item = add_item(main, @"Windows", NULL, nil, nil);

@@ -292,7 +292,7 @@ check_box(NSString *title, NSRect frame, id target, SEL action)
   if ([ident isEqual: GSPInstrumentTimeProfiler] || [ident isEqual: GSPInstrumentSystemProfiler])
     return [NSArray arrayWithObjects: @"Call Tree", @"Threads", nil];
   if ([ident isEqual: GSPInstrumentHangs])
-    return [NSArray arrayWithObjects: @"Hangs", nil];
+    return [NSArray arrayWithObjects: @"Hangs", @"Call Tree", nil];
   if ([ident isEqual: GSPInstrumentPointsOfInterest])
     return [NSArray arrayWithObjects: @"Summary", @"Intervals", nil];
   if ([ident isEqual: GSPInstrumentLogging])
@@ -484,6 +484,14 @@ col(NSString *ident, NSString *title, CGFloat width)
                                                   from: _start to: _end
                                                options: [self treeOptions]];
     }
+  else if ([_instrument isEqual: GSPInstrumentHangs])
+    {
+      _weightIsBytes = NO;
+      GSPHang *range = [GSPHang new];
+      range.startTime = _start ?: p.startTime;
+      range.endTime = _end ?: p.endTime;
+      _tree = [_renderer.hangAnalysis wallTreeForHang: range options: [self treeOptions]];
+    }
   else if ([_instrument isEqual: GSPInstrumentAllocations])
     {
       _weightIsBytes = YES;
@@ -509,6 +517,8 @@ col(NSString *ident, NSString *title, CGFloat width)
     setStringValue: _weightIsBytes ? @"Self Bytes" : @"Self Weight"];
   _weightScale = _weightIsBytes ? 1
     : (ioTree ? 1e-9 : (p.sampleIntervalMicroseconds ?: 1000) / 1e6);
+  if ([_instrument isEqual: GSPInstrumentHangs])
+    _weightScale = (p.wallIntervalMicroseconds ?: 10000) / 1e6;
   if ([_charged count] || [_pruned count] || _focus)
     {
       _tree.chargedToCaller = _charged;
@@ -524,6 +534,8 @@ col(NSString *ident, NSString *title, CGFloat width)
     : [NSString stringWithFormat: ioTree ? @"%@ spent in %llu calls" : @"%@ of CPU time in %llu samples",
        GSPFormatDuration(_tree.totalWeight * _weightScale),
        (unsigned long long)_tree.root.sampleCount]];
+  if ([_instrument isEqual: GSPInstrumentHangs])
+    [_status setStringValue: @"Wall-sampled stacks in the inspection range; weights estimate observed time, not CPU time or scheduler state."];
 }
 
 - (BOOL) filterNode: (GSPCallTreeNode *)node
@@ -627,8 +639,9 @@ col(NSString *ident, NSString *title, CGFloat width)
 {
   GSPHangAnalysis *h = _renderer.hangAnalysis;
   [self setColumns: [NSArray arrayWithObjects: col(@"start", @"Start", 110),
-    col(@"duration", @"Duration", 110), col(@"severity", @"Type", 130),
-    col(@"stack", @"Main Thread Was In", 480), nil] outline: nil];
+    col(@"duration", @"Duration", 95), col(@"severity", @"Type", 100),
+    col(@"cpu", @"CPU Estimate", 110), col(@"io", @"I/O Calls", 75),
+    col(@"stack", @"Main Thread Was In", 300), nil] outline: nil];
   for (GSPHang *hang in h.hangs)
     {
       if (_end && (hang.endTime < _start || hang.startTime > _end))
@@ -648,6 +661,21 @@ col(NSString *ident, NSString *title, CGFloat width)
       r.payload = hang;
       r.detail = [NSString stringWithFormat: @"%@ lasting %@ (%lu main-thread samples).\nThe stack below is the one the main thread was in most often.",
         hang.severityName, GSPFormatDuration(hang.duration), (unsigned long)hang.sampleCount];
+      NSDictionary *evidence = [h evidenceForHang: hang];
+      NSIndexSet *indices = evidence[@"ioIndices"];
+      [r set: @"cpu" text: GSPFormatDuration([evidence[@"cpuSeconds"] doubleValue]) sort: evidence[@"cpuSeconds"]];
+      [r set: @"io" text: @(indices.count).stringValue sort: @(indices.count)];
+      NSMutableString *detail = [NSMutableString stringWithFormat:
+        @"Estimated main-thread CPU: %@.\n%lu overlapping main-thread I/O calls.\nDouble-click for all wall-sampled stacks.\n\n%@\n\nMissing CPU samples do not prove blocking. I/O overlap is correlation, not causation.\n",
+        GSPFormatDuration([evidence[@"cpuSeconds"] doubleValue]), (unsigned long)indices.count, r.detail];
+      [indices enumerateIndexesUsingBlock: ^(NSUInteger index, BOOL *stop) {
+        const GSPIOEvent *event = &p.ioEvents[index];
+        [detail appendFormat: @"%@ %@ — %@\n", [GSPIOAnalysis operationName: event->op],
+          [_renderer.ioAnalysis nameOfEvent: index], GSPFormatDuration(event->duration / 1e9)];
+      }];
+      if (!indices.count) [detail appendString: @"No overlapping I/O was recorded.\n"];
+      if (p.droppedSamples) [detail appendString: @"Warning: samples were dropped.\n"];
+      r.detail = detail;
       [_rows addObject: r];
     }
   NSString *msg = !h.hasWallSamples ? @"No main-thread samples were recorded."
@@ -1202,6 +1230,16 @@ col(NSString *ident, NSString *title, CGFloat width)
       _allocCategory = [(GSPAllocationCategory *)[(PDRow *)item payload] index];
       [_mode selectItemWithTitle: @"Allocations List"];
       _currentMode = @"Allocations List";
+      [self reload];
+    }
+  else if ([item isKindOfClass: [PDRow class]]
+           && [[(PDRow *)item payload] isKindOfClass: [GSPHang class]])
+    {
+      GSPHang *hang = [(PDRow *)item payload];
+      _start = hang.startTime;
+      _end = hang.endTime;
+      [_mode selectItemWithTitle: @"Call Tree"];
+      _currentMode = @"Call Tree";
       [self reload];
     }
   else if ([item isKindOfClass: [GSPCallTreeNode class]])

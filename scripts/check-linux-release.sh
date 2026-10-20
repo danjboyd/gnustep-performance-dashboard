@@ -30,6 +30,7 @@ sh Tests/run.sh 2>&1 | tee "$out/regression.log"
 if grep -Ei 'skipped|shortcuts do not reach' "$out/regression.log"; then
   echo "Release gate failed: a regression check was skipped." >&2; exit 1
 fi
+sh Tests/investigation-gui-checks.sh 2>&1 | tee "$out/investigations.log"
 bash Tests/compiler-checks.sh 2>&1 | tee "$out/compilers.log"
 bash Tests/soak-check.sh 60 2>&1 | tee "$out/soak.log"
 echo "Automated Linux release checks passed. Review theme screenshots in Tests/out."

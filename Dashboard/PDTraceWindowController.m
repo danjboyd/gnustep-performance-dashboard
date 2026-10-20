@@ -7,6 +7,7 @@
 #import "PDTheme.h"
 #import "PDAppController.h"
 #import "PDRecordPanel.h"
+#import "PDInvestigationWindowController.h"
 
 @interface PDTraceWindowController () <PDTimelineDelegate, PDDetailControllerDelegate,
                                        GSPRecorderDelegate, NSWindowDelegate>
@@ -14,6 +15,7 @@
 
 @implementation PDTraceWindowController
 {
+  PDInvestigationWindowController *_generationsWindow, *_comparisonWindow;
   NSString *_tracePath;
   GSPTrace *_trace;
   GSPRecorder *_recorder;
@@ -532,6 +534,28 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
 /* ------------------------------------------------------------------ */
 /* timeline / detail coordination                                      */
 
+- (void) showGenerations: (id)sender
+{
+  if (!_trace || ![_trace.instrumentIdentifiers containsObject: GSPInstrumentAllocations]) return;
+  [_generationsWindow close];
+  _generationsWindow = [[PDInvestigationWindowController alloc] initWithTrace: _trace
+    process: _renderer.process generations: YES
+    start: _timeline.hasSelection ? [_trace absoluteTime: _timeline.selectionStart] : 0
+    end: _timeline.hasSelection ? [_trace absoluteTime: _timeline.selectionEnd] : 0];
+  [_generationsWindow showWindow: self];
+}
+
+- (void) compareRecording: (id)sender
+{
+  if (!_trace || self.isRecording) return;
+  [_comparisonWindow close];
+  _comparisonWindow = [[PDInvestigationWindowController alloc] initWithTrace: _trace
+    process: _trace.targetProcess generations: NO
+    start: _timeline.hasSelection ? [_trace absoluteTime: _timeline.selectionStart] : 0
+    end: _timeline.hasSelection ? [_trace absoluteTime: _timeline.selectionEnd] : 0];
+  [_comparisonWindow showWindow: self];
+}
+
 - (void) timelineSelectionDidChange: (PDTimelineView *)view
 {
   if (view.hasSelection)
@@ -588,6 +612,9 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
 
 - (BOOL) validateMenuItem: (NSMenuItem *)item
 {
+  if (item.action == @selector(showGenerations:))
+    return _trace && [_trace.instrumentIdentifiers containsObject: GSPInstrumentAllocations];
+  if (item.action == @selector(compareRecording:)) return _trace && !self.isRecording;
   SEL a = [item action];
   if (a == @selector(startRecording:))
     return !_recorder.isRecording;
@@ -628,6 +655,8 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
 
 - (void) windowWillClose: (NSNotification *)note
 {
+  [_generationsWindow close];
+  [_comparisonWindow close];
   [_timer invalidate];
   _timer = nil;
   [[NSNotificationCenter defaultCenter] postNotificationName: @"PDTraceWindowClosed"

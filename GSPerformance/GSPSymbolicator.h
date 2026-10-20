@@ -54,7 +54,13 @@
    address labels, for embedding a portable snapshot in the trace bundle. */
 - (NSDictionary *) symbolTableForAllStacks;
 
+/* Parse the final :line component, preserving Windows drive colons.
+   Returns nil for unavailable/malformed locations. Directory mappings are
+   applied by longest whole-directory prefix, with slash normalization. */
++ (NSDictionary *) sourceFileAndLine: (NSString *)location mappings: (NSDictionary *)mappings;
+
 + (BOOL) isSystemLibraryPath: (NSString *)path;
++ (NSString *) executableSearchPathInEnvironment: (NSDictionary *)environment;
 + (NSString *) addr2linePath;   /* nil when no addr2line is installed */
 + (NSString *) prettyObjCName: (NSString *)elfName;
 + (NSString *) demangle: (NSString *)name;

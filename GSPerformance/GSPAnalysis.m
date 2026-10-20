@@ -181,6 +181,54 @@ base_symbol(NSString *name)
   return self;
 }
 
+- (NSDictionary *) evidenceForHang: (GSPHang *)hang
+{
+  NSMutableDictionary *stacks = [NSMutableDictionary dictionary];
+  NSMutableIndexSet *io = [NSMutableIndexSet indexSet];
+  uint64_t cpuWeight = 0, wallCount = 0;
+  uint32_t tid = _process.mainThread.tid;
+  for (NSUInteger i = 0; i < _process.sampleCount; i++)
+    {
+      const GSPSample *s = &_process.samples[i];
+      if (s->tid != tid || s->time < hang.startTime || s->time > hang.endTime)
+        continue;
+      if (s->kind == GSP_SAMPLE_WALL)
+        {
+          NSNumber *key = @(s->stack);
+          stacks[key] = @([stacks[key] unsignedLongLongValue] + 1);
+          wallCount++;
+        }
+      else if (s->kind == GSP_SAMPLE_CPU || s->kind == GSP_SAMPLE_PERF)
+        cpuWeight += s->weight;
+    }
+  for (NSUInteger i = 0; i < _process.ioEventCount; i++)
+    {
+      const GSPIOEvent *e = &_process.ioEvents[i];
+      if (e->tid == tid && e->time <= hang.endTime
+          && (e->time >= hang.startTime || e->duration >= hang.startTime - e->time))
+        [io addIndex: i];
+    }
+  return @{ @"stacks": stacks, @"wallSamples": @(wallCount), @"ioIndices": io,
+    @"cpuSeconds": @(cpuWeight * (_process.sampleIntervalMicroseconds ?: 1000) / 1e6) };
+}
+
+- (GSPCallTree *) wallTreeForHang: (GSPHang *)hang options: (NSUInteger)options
+{
+  NSDictionary *evidence = [self evidenceForHang: hang];
+  NSDictionary *stacks = evidence[@"stacks"];
+  GSPWeightedStack *input = calloc(stacks.count + 1, sizeof(*input));
+  NSUInteger count = 0;
+  for (NSNumber *key in stacks)
+    input[count++] = (GSPWeightedStack){ key.unsignedIntValue,
+      _process.mainThread.tid, [stacks[key] unsignedLongLongValue] };
+  GSPCallTree *tree = [[GSPCallTree alloc] initWithProcess: _process];
+  tree.options = options;
+  tree.weightUnit = @"wall samples";
+  [tree buildFromStacks: input count: count];
+  free(input);
+  return tree;
+}
+
 - (NSArray *) hangs { return _hangs; }
 - (BOOL) runLoopDetected { return _runLoop; }
 - (BOOL) hasWallSamples { return _hasWall; }
@@ -427,10 +475,18 @@ alive_at(const GSPAllocationRecord *r, GSPTime t)
 
 - (NSArray *) categoriesFrom: (GSPTime)start to: (GSPTime)end
 {
+  return [self categoriesFrom: start to: end survivingAt: end];
+}
+
+- (NSArray *) categoriesFrom: (GSPTime)start to: (GSPTime)end
+                survivingAt: (GSPTime)checkpoint
+{
   NSUInteger nc = [_categoryNames count];
   GSPAllocationCategory *all = [GSPAllocationCategory new];
   NSMutableArray *cats = [NSMutableArray arrayWithCapacity: nc];
   GSPTime e = end ? end : UINT64_MAX;
+  GSPTime observed = checkpoint ? checkpoint : UINT64_MAX;
+  NSParameterAssert(start <= e && observed >= e);
 
   all.name = @"All Heap Allocations";
   all.index = UINT32_MAX;
@@ -453,7 +509,7 @@ alive_at(const GSPAllocationRecord *r, GSPTime t)
       cat.totalBytes += r->size;
       all.totalCount++;
       all.totalBytes += r->size;
-      if (alive_at(r, e))
+      if (alive_at(r, observed))
         {
           cat.persistentCount++;
           cat.persistentBytes += r->size;
@@ -486,8 +542,18 @@ alive_at(const GSPAllocationRecord *r, GSPTime t)
 - (NSIndexSet *) recordsInCategory: (uint32_t)category from: (GSPTime)start
                                 to: (GSPTime)end persistentOnly: (BOOL)persistent
 {
+  return [self recordsInCategory: category from: start to: end survivingAt: end
+                 persistentOnly: persistent];
+}
+
+- (NSIndexSet *) recordsInCategory: (uint32_t)category from: (GSPTime)start
+                                to: (GSPTime)end survivingAt: (GSPTime)checkpoint
+                    persistentOnly: (BOOL)persistent
+{
   NSMutableIndexSet *set = [NSMutableIndexSet indexSet];
   GSPTime e = end ? end : UINT64_MAX;
+  GSPTime observed = checkpoint ? checkpoint : UINT64_MAX;
+  NSParameterAssert(start <= e && observed >= e);
   for (NSUInteger i = 0; i < _count; i++)
     {
       const GSPAllocationRecord *r = &_records[i];
@@ -495,7 +561,7 @@ alive_at(const GSPAllocationRecord *r, GSPTime t)
         continue;
       if (category != UINT32_MAX && r->category != category)
         continue;
-      if (persistent && !alive_at(r, e))
+      if (persistent && !alive_at(r, observed))
         continue;
       [set addIndex: i];
     }
@@ -505,16 +571,26 @@ alive_at(const GSPAllocationRecord *r, GSPTime t)
 - (GSPCallTree *) callTreeFrom: (GSPTime)start to: (GSPTime)end
                 persistentOnly: (BOOL)persistent options: (NSUInteger)options
 {
+  return [self callTreeFrom: start to: end survivingAt: end
+            persistentOnly: persistent options: options];
+}
+
+- (GSPCallTree *) callTreeFrom: (GSPTime)start to: (GSPTime)end
+                 survivingAt: (GSPTime)checkpoint persistentOnly: (BOOL)persistent
+                     options: (NSUInteger)options
+{
   GSPWeightedStack *in = malloc((_count + 1) * sizeof(GSPWeightedStack));
   NSUInteger used = 0;
   GSPTime e = end ? end : UINT64_MAX;
+  GSPTime observed = checkpoint ? checkpoint : UINT64_MAX;
+  NSParameterAssert(start <= e && observed >= e);
 
   for (NSUInteger i = 0; i < _count; i++)
     {
       const GSPAllocationRecord *r = &_records[i];
       if (r->allocTime < start || r->allocTime > e)
         continue;
-      if (persistent && !alive_at(r, e))
+      if (persistent && !alive_at(r, observed))
         continue;
       in[used].stack = r->stack;
       in[used].tid = r->tid;

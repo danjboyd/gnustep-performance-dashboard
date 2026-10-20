@@ -80,6 +80,125 @@ child(GSPCallTreeNode *n, NSString *name)
   return b;
 }
 
+
+- (void) testGenerationSurvivalUsesIndependentCheckpoint
+{
+  TraceBuilder *b = named_builder();
+  uint64_t frames[] = { A_HELPER + 0x10, A_MAIN + 0x10 };
+  [b stack: 1 frames: frames count: 2];
+  [b allocAt: b.start + MS address: 0x10000 size: 32 stack: 1];
+  [b allocAt: b.start + 2 * MS address: 0x20000 size: 64 stack: 1];
+  [b freeAt: b.start + 3 * MS address: 0x10000];
+  /* Reuse must not resurrect the first allocation in its generation. */
+  [b allocAt: b.start + 4 * MS address: 0x10000 size: 128 stack: 1];
+  [b freeAt: b.start + 5 * MS address: 0x20000];
+  [b end: b.start + 6 * MS];
+  GSPTrace *t = [self traceFrom: b name: @"generations" instruments: nil];
+  GSPAllocationAnalysis *a = [[GSPAllocationAnalysis alloc] initWithProcess: t.targetProcess];
+  GSPAllocationCategory *early = [a categoriesFrom: b.start to: b.start + 2 * MS][0];
+  XCTAssertEqual(early.persistentBytes, (uint64_t)96);
+  GSPAllocationCategory *later = [a categoriesFrom: b.start to: b.start + 2 * MS survivingAt: b.start + 4 * MS][0];
+  XCTAssertEqual(later.totalBytes, (uint64_t)96);
+  XCTAssertEqual(later.persistentBytes, (uint64_t)64);
+  XCTAssertEqual([a recordsInCategory: UINT32_MAX from: b.start to: b.start + 2 * MS
+    survivingAt: b.start + 4 * MS persistentOnly: YES].count, (NSUInteger)1);
+  GSPCallTree *tree = [a callTreeFrom: b.start to: b.start + 2 * MS
+    survivingAt: b.start + 4 * MS persistentOnly: YES options: 0];
+  XCTAssertEqual(tree.totalWeight, (uint64_t)64);
+  GSPAllocationCategory *atFree = [a categoriesFrom: b.start to: b.start + 2 * MS survivingAt: b.start + 5 * MS][0];
+  XCTAssertEqual(atFree.persistentBytes, (uint64_t)0);
+  GSPAllocationCategory *adjacent = [a categoriesFrom: b.start + 2 * MS + 1 to: 0 survivingAt: 0][0];
+  XCTAssertEqual(adjacent.totalBytes, (uint64_t)128);
+}
+
+- (void) testComparisonIndependentRangesAndCallPaths
+{
+  TraceBuilder *b = [self cpuBuilder];
+  [b end: b.start + 50 * MS];
+  GSPTrace *t = [self traceFrom: b name: @"comparison" instruments: nil];
+  NSArray *rows = [GSPComparison compare: t start: b.start end: b.start + 30 * MS
+    with: t start: b.start + 31 * MS end: b.start + 50 * MS kind: GSPCompareCPU];
+  XCTAssertEqual(rows.count, (NSUInteger)2);
+  GSPComparisonRow *compute = rows[0];
+  XCTAssertTrue([compute.name hasPrefix: @"-[Worker compute]"]);
+  XCTAssertEqualWithAccuracy(compute.before, .003, .000001);
+  XCTAssertEqualWithAccuracy(compute.after, 0, .000001);
+  NSArray *paths = [GSPComparison compare: t start: b.start end: b.start + 30 * MS
+    with: t start: b.start + 31 * MS end: b.start + 50 * MS kind: GSPCompareCPUCallPaths];
+  BOOL found = NO;
+  for (GSPComparisonRow *row in paths)
+    if ([row.name containsString: @" → -[Worker run]"] && [row.name containsString: @" → -[Worker compute]"])
+      { found = YES; XCTAssertEqualWithAccuracy(row.before, .003, .000001); }
+  XCTAssertTrue(found);
+  XCTAssertEqual([GSPComparison compare: t with: t kind: GSPCompareCPUCallPaths].count, (NSUInteger)0);
+}
+
+- (void) testComparisonExcludesPartialSignpostsAndLaterLeaks
+{
+  TraceBuilder *b = named_builder();
+  [b string: 1 value: "Work"]; [b string: 2 value: "PointsOfInterest"];
+  [b signpostAt: b.start + MS kind: GSP_SIGNPOST_BEGIN spid: 1 name: 1 category: 2 message: ""];
+  [b signpostAt: b.start + 4 * MS kind: GSP_SIGNPOST_END spid: 1 name: 1 category: 2 message: ""];
+  [b signpostAt: b.start + 5 * MS kind: GSP_SIGNPOST_BEGIN spid: 2 name: 1 category: 2 message: ""];
+  [b leakSnapshot: 1 at: b.start + 2 * MS leaks: @[@[@0x10000, @32, @0, @0]]];
+  [b leakSnapshot: 2 at: b.start + 6 * MS leaks: @[@[@0x10000, @32, @0, @0], @[@0x20000, @32, @0, @0]]];
+  [b end: b.start + 7 * MS];
+  GSPTrace *t = [self traceFrom: b name: @"comparison-boundaries" instruments: nil];
+  NSArray *rows = [GSPComparison compare: t start: b.start end: b.start + 3 * MS
+    with: t start: b.start end: b.start + 7 * MS kind: GSPCompareSignposts];
+  XCTAssertEqual(rows.count, (NSUInteger)1);
+  XCTAssertEqualWithAccuracy([(GSPComparisonRow *)rows[0] after], .003, .000001);
+  rows = [GSPComparison compare: t start: b.start end: b.start + 3 * MS
+    with: t start: b.start end: b.start + 7 * MS kind: GSPCompareLeaks];
+  XCTAssertEqual(rows.count, (NSUInteger)1);
+  XCTAssertEqualWithAccuracy([(GSPComparisonRow *)rows[0] before], 32, .001);
+  XCTAssertEqualWithAccuracy([(GSPComparisonRow *)rows[0] after], 64, .001);
+}
+
+- (void) testHangEvidenceUsesMainThreadAndOverlappingIO
+{
+  TraceBuilder *b = named_builder();
+  uint64_t frames[] = { A_HELPER + 0x10, A_MAIN + 0x10 };
+  [b sampleAt: b.start + 10 * MS tid: 4242 kind: GSP_SAMPLE_WALL weight: 1 frames: frames count: 2];
+  [b sampleAt: b.start + 20 * MS tid: 4242 kind: GSP_SAMPLE_WALL weight: 1 frames: frames count: 2];
+  [b sampleAt: b.start + 15 * MS tid: 4242 kind: GSP_SAMPLE_CPU weight: 7 frames: frames count: 2];
+  [b sampleAt: b.start + 15 * MS tid: 9999 kind: GSP_SAMPLE_CPU weight: 100 frames: frames count: 2];
+  [b ioAt: b.start duration: 15 * MS tid: 4242];
+  [b ioAt: b.start duration: MS tid: 4242];
+  [b ioAt: b.start + 15 * MS duration: MS tid: 9999];
+  [b end: b.start + 30 * MS];
+  GSPTrace *t = [self traceFrom: b name: @"hang-evidence" instruments: nil];
+  GSPHangAnalysis *a = [[GSPHangAnalysis alloc] initWithProcess: t.targetProcess thresholdSeconds: .25];
+  GSPHang *h = [GSPHang new]; h.startTime = b.start + 10 * MS; h.endTime = b.start + 20 * MS;
+  NSDictionary *e = [a evidenceForHang: h];
+  XCTAssertEqual([e[@"wallSamples"] unsignedIntegerValue], (NSUInteger)2);
+  XCTAssertEqualWithAccuracy([e[@"cpuSeconds"] doubleValue], .007, .000001);
+  XCTAssertEqual([e[@"ioIndices"] count], (NSUInteger)1);
+  XCTAssertEqual([a wallTreeForHang: h options: 0].totalWeight, (uint64_t)2);
+}
+
+- (void) testSourceMappingsPreserveDrivesAndDirectoryBoundaries
+{
+  XCTAssertEqualObjects([GSPSymbolicator executableSearchPathInEnvironment: @{ @"PATH": @"/tools" }], @"/tools");
+#if defined(_WIN32)
+  XCTAssertEqualObjects([GSPSymbolicator executableSearchPathInEnvironment: @{ @"Path": @"C:/tools" }], @"C:/tools");
+#else
+  XCTAssertNil([GSPSymbolicator executableSearchPathInEnvironment: @{ @"Path": @"/tools" }]);
+#endif
+  NSDictionary *maps = @{ @"C:/build": @"/local", @"C:/build/project": @"/chosen" };
+  NSDictionary *info = [GSPSymbolicator sourceFileAndLine: @"C:\\build\\project\\file.m:42" mappings: maps];
+  XCTAssertEqualObjects(info[@"path"], @"/chosen/file.m");
+  XCTAssertEqual([info[@"line"] integerValue], (NSInteger)42);
+  info = [GSPSymbolicator sourceFileAndLine: @"C:/builder/file.m:3" mappings: maps];
+  XCTAssertEqualObjects(info[@"path"], @"C:/builder/file.m");
+  info = [GSPSymbolicator sourceFileAndLine: @"file.m:2" mappings: @{ @".": @"/checkout" }];
+  XCTAssertEqualObjects(info[@"path"], @"/checkout/file.m");
+  XCTAssertNil([GSPSymbolicator sourceFileAndLine: @"??:0" mappings: maps]);
+  XCTAssertNil([GSPSymbolicator sourceFileAndLine: @"file.m:-1" mappings: maps]);
+  XCTAssertNil([GSPSymbolicator sourceFileAndLine: @"file.m:12junk" mappings: maps]);
+  XCTAssertNil([GSPSymbolicator sourceFileAndLine: nil mappings: maps]);
+}
+
 /* ------------------------------------------------------------------ */
 
 - (void) testReaderSortsSamplesAndToleratesTornRecord

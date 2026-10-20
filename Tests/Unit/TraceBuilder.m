@@ -38,6 +38,13 @@
           time: t tid: 0 a: message alen: strlen(message) + 1 b: NULL blen: 0];
 }
 
+- (void) ioAt: (uint64_t)time duration: (uint64_t)duration tid: (uint32_t)tid
+{
+  gsp_io_payload payload = { 128, duration, 3, 0, 0, 0 };
+  [self record: GSP_REC_IO aux: GSP_IO_READ time: time tid: tid
+             a: &payload alen: sizeof(payload) b: NULL blen: 0];
+}
+
 - (void) dropped: (uint64_t)count
 {
   [self record: GSP_REC_DROPPED aux: GSP_REC_SAMPLE time: _start tid: 0

@@ -38,6 +38,11 @@ typedef NS_ENUM(NSInteger, GSPHangSeverity)
 - (void) busyFraction: (double *)out buckets: (NSUInteger)n
                 start: (GSPTime)start end: (GSPTime)end;
 - (BOOL) isIdleStack: (uint32_t)stack;
+/* Evidence only: wall sample counts by stack, estimated main-thread CPU
+   seconds, and indices of main-thread I/O overlapping the interval.
+   Wall samples are not scheduler states or proof of lock ownership. */
+- (NSDictionary *) evidenceForHang: (GSPHang *)hang;
+- (GSPCallTree *) wallTreeForHang: (GSPHang *)hang options: (NSUInteger)options;
 @end
 
 /* ------------------------------------------------------------------ */
@@ -85,6 +90,18 @@ typedef struct GSPAllocationRecord
 
 - (GSPCallTree *) callTreeFrom: (GSPTime)start to: (GSPTime)end
                 persistentOnly: (BOOL)persistent options: (NSUInteger)options;
+
+/* Generation window is [start, end], independently observed at checkpoint.
+   Zero checkpoint means the end of the recording. checkpoint must be >= end.
+   For adjacent generations use previous end + 1 as the next start. */
+- (NSArray *) categoriesFrom: (GSPTime)start to: (GSPTime)end
+                survivingAt: (GSPTime)checkpoint;
+- (NSIndexSet *) recordsInCategory: (uint32_t)category from: (GSPTime)start
+                                to: (GSPTime)end survivingAt: (GSPTime)checkpoint
+                    persistentOnly: (BOOL)persistent;
+- (GSPCallTree *) callTreeFrom: (GSPTime)start to: (GSPTime)end
+                 survivingAt: (GSPTime)checkpoint persistentOnly: (BOOL)persistent
+                     options: (NSUInteger)options;
 
 /* Live heap bytes at the end of each bucket. */
 - (void) liveBytes: (double *)out buckets: (NSUInteger)n

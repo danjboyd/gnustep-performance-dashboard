@@ -1,12 +1,14 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #import "PDInspectorView.h"
 #import "PDTheme.h"
+#import "PDSourceWindowController.h"
 
 @interface PDInspectorView () <NSTableViewDataSource, NSTableViewDelegate>
 @end
 
 @implementation PDInspectorView
 {
+  PDSourceWindowController *_sourceWindow;
   NSTextField *_title;
   NSTextView *_text;
   NSScrollView *_textScroll;
@@ -49,7 +51,7 @@
 
       _sourceLines = [[NSButton alloc] initWithFrame: NSMakeRect(4, h - 146, w - 8, 20)];
       [_sourceLines setButtonType: NSSwitchButton];
-      [_sourceLines setTitle: @"Show source lines"];
+      [_sourceLines setTitle: @"Source lines (double-click a frame to open)"];
       [_sourceLines setFont: [PDTheme smallFont]];
       [_sourceLines setTarget: self];
       [_sourceLines setAction: @selector(toggleLines:)];
@@ -79,6 +81,8 @@
       [_frames addTableColumn: src];
       [_frames setDataSource: self];
       [_frames setDelegate: self];
+      [_frames setTarget: self];
+      [_frames setDoubleAction: @selector(openSource:)];
       [_frames setUsesAlternatingRowBackgroundColors: YES];
       [_frames setColumnAutoresizingStyle: NSTableViewUniformColumnAutoresizingStyle];
       [_framesScroll setDocumentView: _frames];
@@ -134,6 +138,22 @@
         [[_addresses objectAtIndex: i] unsignedLongLongValue] index: 0];
       [_lines replaceObjectAtIndex: i withObject: loc ? (id)loc : (id)[NSNull null]];
     }
+}
+
+- (void) openSource: (id)sender
+{
+  NSInteger row = [_frames clickedRow];
+  if (row < 0 || row >= (NSInteger)_addresses.count) return;
+  NSString *location = [_process.symbolicator sourceLocationForFrame:
+    [_addresses[row] unsignedLongLongValue] index: 0];
+  if (![GSPSymbolicator sourceFileAndLine: location mappings: @{}])
+    {
+      NSRunAlertPanel(@"Source location unavailable", @"This frame needs matching debug information and addr2line (or llvm-addr2line). Native PDB source lookup is not supported.", @"OK", nil, nil);
+      return;
+    }
+  [_sourceWindow close];
+  _sourceWindow = [[PDSourceWindowController alloc] initWithLocation: location];
+  [_sourceWindow showWindow: self];
 }
 
 - (void) toggleLines: (id)sender

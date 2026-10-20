@@ -611,6 +611,36 @@ static char *(*cxa_demangle)(const char *, char *, size_t *, int *);
   return nil;
 }
 
++ (NSDictionary *) sourceFileAndLine: (NSString *)location mappings: (NSDictionary *)mappings
+{
+  NSRange colon = [location rangeOfString: @":" options: NSBackwardsSearch];
+  if (!location.length || colon.location == NSNotFound) return nil;
+  NSString *number = [location substringFromIndex: colon.location + 1];
+  NSScanner *scanner = [NSScanner scannerWithString: number];
+  long long line = 0;
+  if (![scanner scanLongLong: &line] || !scanner.isAtEnd || line <= 0) return nil;
+  NSString *recorded = [[location substringToIndex: colon.location]
+    stringByReplacingOccurrencesOfString: @"\\" withString: @"/"];
+  if (!recorded.length || [recorded isEqual: @"??"]) return nil;
+  NSString *path = recorded;
+  if ([recorded rangeOfString: @"/"].location == NSNotFound
+      && [mappings[@"."] isKindOfClass: [NSString class]])
+    path = [mappings[@"."] stringByAppendingPathComponent: recorded];
+  NSUInteger best = 0;
+  for (NSString *key in mappings)
+    {
+      NSString *prefix = [key stringByReplacingOccurrencesOfString: @"\\" withString: @"/"];
+      if (![prefix hasSuffix: @"/"]) prefix = [prefix stringByAppendingString: @"/"];
+      if ([recorded hasPrefix: prefix] && prefix.length > best
+          && [mappings[key] isKindOfClass: [NSString class]])
+        {
+          best = prefix.length;
+          path = [mappings[key] stringByAppendingPathComponent: [recorded substringFromIndex: best]];
+        }
+    }
+  return @{ @"recordedPath": recorded, @"path": path, @"line": @(line) };
+}
+
 + (BOOL) isSystemLibraryPath: (NSString *)path
 {
   static NSArray *prefixes;
@@ -876,6 +906,18 @@ is_agent(GSPSymbol *s)
 
 /* addr2line on Linux; on Windows llvm-addr2line (MSYS2's clang ships it)
    or binutils' addr2line from PATH.  */
++ (NSString *) executableSearchPathInEnvironment: (NSDictionary *)environment
+{
+  NSString *path = environment[@"PATH"];
+  if (path) return path;
+#if defined(_WIN32)
+  for (NSString *key in environment)
+    if ([key caseInsensitiveCompare: @"PATH"] == NSOrderedSame)
+      return environment[key];
+#endif
+  return nil;
+}
+
 + (NSString *) addr2linePath
 {
   static NSString *path;
@@ -887,7 +929,7 @@ is_agent(GSPSymbol *s)
           looked = YES;
           NSFileManager *fm = [NSFileManager defaultManager];
 #if defined(_WIN32)
-          NSArray *dirs = [[[[NSProcessInfo processInfo] environment] objectForKey: @"PATH"]
+          NSArray *dirs = [[self executableSearchPathInEnvironment: [[NSProcessInfo processInfo] environment]]
                             componentsSeparatedByString: @";"];
           for (NSString *name in [NSArray arrayWithObjects: @"llvm-addr2line.exe",
                                    @"addr2line.exe", nil])
@@ -962,7 +1004,7 @@ is_agent(GSPSymbol *s)
                 ? [[s substringToIndex: colon.location]
                     stringByReplacingOccurrencesOfString: @"\\" withString: @"/"] : nil;
               if (line && [line length] && ![line isEqual: @"0"] && ![line isEqual: @"?"])
-                result = [NSString stringWithFormat: @"%@:%@", [file lastPathComponent], line];
+                result = [NSString stringWithFormat: @"%@:%@", file, line];
             }
         }
       @catch (NSException *e)

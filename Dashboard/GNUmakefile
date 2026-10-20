@@ -9,6 +9,8 @@ PerformanceDashboard_OBJC_FILES = \
   PDTrackRenderer.m \
   PDDetailController.m \
   PDInspectorView.m \
+  PDSourceWindowController.m \
+  PDInvestigationWindowController.m \
   PDRecordPanel.m \
   PDTheme.m
 
