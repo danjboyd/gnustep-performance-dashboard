@@ -52,6 +52,12 @@ jobs:
           export LD_LIBRARY_PATH="$PREFIX/System/Library/Libraries${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
           make CC=clang
 
+      - name: Install pinned investigation themes
+        run: |
+          . "$PREFIX/System/Library/Makefiles/GNUstep.sh"
+          export LD_LIBRARY_PATH="$PREFIX/System/Library/Libraries${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+          bash .github/scripts/install-investigation-themes.sh
+
       - name: make check
         run: |
           . "$PREFIX/System/Library/Makefiles/GNUstep.sh"
@@ -68,7 +74,6 @@ jobs:
         run: |
           . "$PREFIX/System/Library/Makefiles/GNUstep.sh"
           export LD_LIBRARY_PATH="$PREFIX/System/Library/Libraries${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-          bash .github/scripts/install-investigation-themes.sh
           sh Tests/investigation-gui-checks.sh
 
       - name: Keep investigation screenshots and logs
