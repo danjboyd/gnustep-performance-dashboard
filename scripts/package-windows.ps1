@@ -27,7 +27,9 @@ function Invoke-Checked([string]$Program, [string[]]$Arguments) {
 }
 function Get-PinnedSource([string]$Directory, [string]$Url, [string]$Revision) {
   if (-not (Test-Path -LiteralPath $Directory)) {
-    Invoke-Checked git @('clone', '--filter=blob:none', '--', $Url, $Directory)
+    # Preserve recipe/patch bytes. Hosted Windows Git defaults can rewrite
+    # upstream CRLF patches and make an otherwise pinned checkout dirty.
+    Invoke-Checked git @('clone', '--config', 'core.autocrlf=false', '--filter=blob:none', '--', $Url, $Directory)
     Invoke-Checked git @('-C', $Directory, 'checkout', '--detach', $Revision)
   }
   $actual = & git -C $Directory rev-parse HEAD
