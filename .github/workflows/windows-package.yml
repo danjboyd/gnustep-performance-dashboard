@@ -1,5 +1,9 @@
 name: Windows package review artifacts
 on:
+  # Exercise the new producer before it exists on the default branch, where
+  # workflow_dispatch registration is required by GitHub.
+  push:
+    branches: [work/windows-v0.1.1-qualification]
   workflow_dispatch:
     inputs:
       version:
@@ -30,7 +34,7 @@ jobs:
       - name: Produce unsigned MSI, ZIP, feed, provenance and corresponding sources
         shell: pwsh
         env:
-          PD_PACKAGE_VERSION: ${{ inputs.version }}
+          PD_PACKAGE_VERSION: ${{ inputs.version || '0.1.1-hosted.1' }}
         run: |
           # Git for Windows provides OpenSSL for manifest authentication.
           $env:PATH = 'C:\Program Files\Git\usr\bin;' + $env:PATH

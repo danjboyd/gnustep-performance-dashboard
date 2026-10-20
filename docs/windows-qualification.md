@@ -123,3 +123,42 @@ save/reopen/export, RC-to-RC-to-final updates and failure recovery remain
 independent acceptance cases. Native fixture coverage and a server-host
 MSI smoke result do not substitute for those gates. Tags, publication and
 update-feed deployment require Dan's separate in-session approval.
+
+## Clean producer result and host availability
+
+The clean producer completed successfully at
+`2b25780aa0e1a3a9a81d0be4904bd624c3e46d78`, version
+`0.1.1-qualification.2`. Provenance records clean application and packager
+trees. A fresh toolchain extraction and clean build were used. The final
+runtime inventory mapped 1,029 files after theme provisioning; package
+owners remained 41. Install, sanitized launch, runtime audit, uninstall and
+strict MSI-backend release assembly passed. Nothing was published.
+
+Artifacts are in `dist/ci/windows`; the validated copy and assembly receipt
+are in `dist/ci/windows-validated`. SHA256 values:
+
+| Artifact suffix after `PerformanceDashboard-0.1.1-qualification.2` | SHA256 |
+|---|---|
+| `-win64.msi` | `0d12df36946b3a957b92d5b0053e572eff87cc62f2205be3e41ac1acfe5b0d97` |
+| `-win64-portable.zip` | `a4817764123be8f6c7b285fa8fd269bbd2d5ee06d532689430d75c42a783fc56` |
+| `-windows-sources.tar.gz` | `4adda51ee0c9f80301f06a975072b3def4d68bad40a7bf2a15853ff2715beae7` |
+| `-win64.provenance.json` | `fc6f850bd1668f0265e35cc52fd4abae9e1d57833140ec5387a5f6b84129eeab` |
+| `-win64.update-feed.json` | `fcc756e4971305e2c973c48f7aa46bf7d483e0a27e296c0b904f8f5eaad73d84` |
+
+The packaged updater helper passed six preparation/recovery cases using
+disposable local plans: bad digest, retry, refused HTTP download, interrupted
+download, retry, and missing payload. Applying an intentionally invalid MSI
+reported Windows Installer exit code 1620 in the updater's failed state.
+Evidence is in `Tests/out/windows-updater-failures` and
+`Tests/out/windows-installer-failure`; installer policy was not changed.
+
+Dan answered the client availability question: **"No client available;
+record the gate as blocked"**. Clean Windows client distribution and update
+acceptance are therefore blocked, not passed. The integration agent received
+the result and exact artifact hashes through the mailbox.
+
+The first hosted workflow dispatch returned HTTP 404 because the new
+workflow is absent from the default branch. A push trigger limited to the
+Windows qualification branch allows hosted validation without merging or
+publishing. Hosted results must be recorded separately from this clean local
+producer result.
