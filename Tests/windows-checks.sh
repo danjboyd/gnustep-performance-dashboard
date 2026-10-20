@@ -31,11 +31,23 @@ check "two threads with CPU" "[ \$(grep -c 'CPU' '$OUT/spin-threads.txt') -ge 2 
 cat "$OUT/spin-sp.txt"
 check "4 Round signposts" "grep -E -q '^Round +PointsOfInterest +4 ' '$OUT/spin-sp.txt'"
 
+# Unwind metadata can temporarily disagree with a live assembly frame. The
+# agent must retain a partial sample and resume the thread, not kill it.
+clang -O2 -g "$ROOT/Tests/fixtures/unwindfault_win.c" -o "$OUT/unwindfault.exe" || exit 1
+rm -rf "$OUT/unwindfault.gstrace"
+timeout 30 "$GSTRACE" record --template "Time Profiler" -o "$OUT/unwindfault.gstrace" \
+  --launch "$OUT/unwindfault.exe" >"$OUT/unwindfault-record.log" 2>&1
+"$GSTRACE" info "$OUT/unwindfault.gstrace" >"$OUT/unwindfault-info.txt" 2>&1
+check "unwind fault: target survives and recording finishes" "grep -q 'transient frame survived sampling' '$OUT/unwindfault-record.log' && grep -q 'finished cleanly: yes' '$OUT/unwindfault-info.txt'"
+check "unwind fault: partial wall samples retained" "grep -E -q 'wall samples: [1-9][0-9]*' '$OUT/unwindfault-info.txt'"
+
 # Attaching to a running program
 "$OUT/spin.exe" 12 --heartbeat >"$OUT/spin-attached.log" 2>&1 &
 SPIN=$!
-WINPID=$(cat /proc/$SPIN/winpid 2>/dev/null || echo $SPIN)
 timeout 2 tail -f /dev/null 2>/dev/null
+# The background MSYS shell can still be execing spin.exe immediately after
+# $!: read its native PID after startup, or we can attach to sh.exe instead.
+WINPID=$(cat /proc/$SPIN/winpid 2>/dev/null || echo $SPIN)
 rm -rf "$OUT/attach.gstrace"
 timeout 180 "$GSTRACE" record --template "Time Profiler" --attach "$WINPID" --time-limit 2s \
   -o "$OUT/attach.gstrace" >"$OUT/attach-record.log" 2>&1

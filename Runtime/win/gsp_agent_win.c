@@ -566,7 +566,7 @@ lookup_function(uintptr_t pc, uintptr_t *image)
 
 /* Walks a suspended thread's stack.  No locks, no allocation.  */
 static unsigned
-walk(HANDLE h, uint64_t *frames, unsigned max)
+walk(HANDLE h, uint64_t *frames, unsigned max, bool *truncated)
 {
   CONTEXT ctx;
   unsigned n = 0;
@@ -584,19 +584,43 @@ walk(HANDLE h, uint64_t *frames, unsigned max)
         {
           PVOID handler_data = NULL;
           DWORD64 establisher = 0;
-          RtlVirtualUnwind(UNW_FLAG_NHANDLER, image, ctx.Rip, fe, &ctx,
-                           &handler_data, &establisher, NULL);
+          /* A sampled frame can disagree with its unwind metadata (for
+             example a temporary frame register in an assembly trampoline).
+             RtlVirtualUnwind directly dereferences the resulting addresses.
+             Keep the partial stack rather than crashing the target, and
+             always return to sample_thread so it resumes the suspended thread.
+             SEH here neither allocates nor takes a user-space lock. */
+          __try
+            {
+              RtlVirtualUnwind(UNW_FLAG_NHANDLER, image, ctx.Rip, fe, &ctx,
+                               &handler_data, &establisher, NULL);
+            }
+          __except (GetExceptionCode() == EXCEPTION_ACCESS_VIOLATION
+                    || GetExceptionCode() == EXCEPTION_IN_PAGE_ERROR
+                    ? EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH)
+            {
+              *truncated = true;
+              break;
+            }
         }
       else
         {
           /* leaf function without unwind data: return address on top */
           if (ctx.Rsp == 0 || (ctx.Rsp & 7))
-            break;
-          MEMORY_BASIC_INFORMATION mbi;
-          if (VirtualQuery((LPCVOID)ctx.Rsp, &mbi, sizeof(mbi)) == 0
-              || mbi.State != MEM_COMMIT)
-            break;
-          ctx.Rip = *(DWORD64 *)ctx.Rsp;
+            {
+              *truncated = true;
+              break;
+            }
+          DWORD64 caller;
+          SIZE_T read = 0;
+          if (!ReadProcessMemory(GetCurrentProcess(), (LPCVOID)ctx.Rsp,
+                                 &caller, sizeof(caller), &read)
+              || read != sizeof(caller))
+            {
+              *truncated = true;
+              break;
+            }
+          ctx.Rip = caller;
           ctx.Rsp += 8;
         }
     }
@@ -610,18 +634,19 @@ sample_thread(sampled_thread *t, uint32_t kind, uint16_t weight)
   gsp_frames_payload *fp = (gsp_frames_payload *)buf;
   uint64_t when;
   unsigned n;
+  bool truncated = false;
 
   if (SuspendThread(t->handle) == (DWORD)-1)
     return;
   when = now_ns();
-  n = walk(t->handle, buf + 1, MAX_FRAMES);
+  n = walk(t->handle, buf + 1, MAX_FRAMES, &truncated);
   ResumeThread(t->handle);
   if (n == 0)
     return;
   fp->count = n;
   fp->kernel_count = 0;
   fp->weight = weight;
-  emit(GSP_REC_SAMPLE, kind, n >= MAX_FRAMES ? GSP_FRAMES_TRUNCATED : 0, when, t->tid,
+  emit(GSP_REC_SAMPLE, kind, truncated || n >= MAX_FRAMES ? GSP_FRAMES_TRUNCATED : 0, when, t->tid,
        buf, sizeof(*fp) + n * 8, NULL, 0);
 }
 
