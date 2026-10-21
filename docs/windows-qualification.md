@@ -162,3 +162,126 @@ workflow is absent from the default branch. A push trigger limited to the
 Windows qualification branch allows hosted validation without merging or
 publishing. Hosted results must be recorded separately from this clean local
 producer result.
+
+## Exact RC1 candidates, October 21
+
+Dan authorized building, fixing, validating and preparing review artifacts for
+both release tracks. Tags, publication and feed deployment still require
+separate approval. The original checkout was preserved; clean detached
+worktrees produced these unpublished candidates:
+
+| Package version | Full application source commit | Local worktree |
+|---|---|---|
+| `0.1.1-rc1` | `ee730c6b919d474e462584a6f78661daf68db1df` | `out/candidates/v011` |
+| `0.1.2-rc1` | `7ddc66368a17d273100f1ffc63662787fd094876` | `out/candidates/v012` |
+
+Both producers used fresh toolchain extractions and clean pinned dependency
+sources. Locked toolchain digests and the manifest signature were verified.
+Each producer completed MSI install, sanitized launch, runtime audit,
+uninstall and strict MSI-backend assembly. Each final runtime inventory maps
+1,029 files to 41 package owners. These are Windows Server 2022 developer
+environment results; they do not establish clean Windows 10/11 acceptance.
+No application source fix was needed during this qualification.
+
+### Exact artifact hashes
+
+Each worktree retains five transferable files under `dist/ci/windows`, plus
+an independent assembly receipt under `dist/ci/windows-validated`.
+Artifact names below have the prefix `PerformanceDashboard-<package version>`.
+
+| Version | Artifact suffix | SHA256 |
+|---|---|---|
+| `0.1.1-rc1` | `-win64.msi` | `089b57e50f222dbf8dde87b9d0e73ac7428854b607e538d25d813efd3a7c9f78` |
+| `0.1.1-rc1` | `-win64-portable.zip` | `cc3f05422c47d87f83583d16f2e6c1a405bd9061b6fe5c9e170884b34a182910` |
+| `0.1.1-rc1` | `-windows-sources.tar.gz` | `5d02706fe97e8969d18b34e324f0a575c3df8ae22d82ca05fe9aa154a864b6ab` |
+| `0.1.1-rc1` | `-win64.provenance.json` | `f971a40410a5d215fc08639418eb43e3db7e8e681a63d9fc0b3072625ab297be` |
+| `0.1.1-rc1` | `-win64.update-feed.json` | `a68685a4c66f005e555495834c0cc5c436eedfdb9aad26e45c119a3c37add8ee` |
+| `0.1.2-rc1` | `-win64.msi` | `d4dda1bc89fc6c0775c240bae3b19991037bc8fd5391b96ea58489be68c4fa1a` |
+| `0.1.2-rc1` | `-win64-portable.zip` | `03c44ada29abb2460658e70d96af10a7b80275349289d5227d4e82ae7340af7a` |
+| `0.1.2-rc1` | `-windows-sources.tar.gz` | `65f376bb236a8b744271383f96ba8cc437442c65107d5e0d58eb2b348263316e` |
+| `0.1.2-rc1` | `-win64.provenance.json` | `badfe73e5bb4dea8aa48e6e0756f791e55670f3ac0e080fc5336023d2f36ec56` |
+| `0.1.2-rc1` | `-win64.update-feed.json` | `f8d3595840d86587463764c08ac65854528d4438fa849d86dfccea6f03935057` |
+
+Dan explicitly approved private transfer to the Linux coordinator. All ten
+files arrived with matching independently checked remote SHA256 values;
+native fixture captures were transferred separately. This was a private
+review handoff, not publication. Matching Linux producers are runs
+`39678830470` and `39678834584`, respectively. The Linux coordinator reported
+in mailbox message 92 that both strict combined AppImage/MSI assemblies passed
+at the same source revisions, all source-archive checksum entries passed, and
+its packaged readers verified both transferred native Windows captures.
+
+### Checks performed
+
+| Check | v0.1.1 | v0.1.2 |
+|---|---:|---:|
+| Applicable framework unit tests | 18 passed | 23 passed |
+| Assembly / runtime ownership / source-integrity tooling tests | 12 / 6 / 4 passed | 12 / 6 / 4 passed |
+| Exact portable viewer / synthetic portability / recording checks | 10 / 6 / 25 passed | 10 / 6 / 25 passed |
+| Exact packaged reader verifies matching native Linux summary and exports | Passed | Passed |
+| Packaged native Windows capture, embedded symbols, reopen and exports | Passed | Passed |
+| Updater preparation, rejected digest/download, interruption and recovery | 6 passed | 6 passed |
+| Invalid MSI apply failure propagated as exit 1620 | Passed | Passed |
+| Real Dashboard and ScreenshotTool recordings, all five requested instruments | Both clean | Both clean |
+| Native AppKit fixture: three hangs and three `Block` signpost intervals | Passed | Passed |
+| Native investigation-controller assertions | Not applicable | 14 passed |
+
+The installed `0.1.1-rc1` helper also prepared and applied the exact
+`0.1.2-rc1` MSI, reported `completed`, and relaunched the updated app. There
+was exactly one product entry before and after, changing from MSI version
+`0.1.1.1` to `0.1.2.1`; installed application bytes matched the respective
+portable packages. Windows Installer reported the initial installation as
+`MSIINSTALLCONTEXT_USERUNMANAGED` (context 2). The test product was uninstalled
+afterward. Evidence is `dist/rc1-local-upgrade-resumed/result.json`,
+`state.json`, `msiexec.log` and `cleanup.json` in the original workspace.
+This tests the cross-version RC1 transition on the developer environment;
+it does not qualify same-version RC ordering, final-package updates or a
+clean client. The initial HKCU-only product lookup and UTF-16 log parsing
+assumptions failed in the temporary harness; the exact known test product
+was verified before cleanup, and those failed logs were retained.
+
+The exact ZIPs were extracted under `dist/RC portable café` in their respective
+worktrees. Each extraction had all 1,255 original files byte-matched against
+its ZIP. Package checks used those packaged executables; framework tests used
+the existing tools-xctest installation. Matching native Linux inputs came from
+candidate CI runs `39678772273` and `39678773175`. The generated native Windows
+captures are under `Tests/out/native-windows-rc1`.
+
+Both real GUI targets had CPU and allocation data, wall samples, two leak
+scans and a clean stop. Only their owned windows were captured. The
+ScreenshotTool revision and input remain those identified above. These
+workloads produced no signposts or induced hangs. Positive event evidence
+comes from the separate `hangapp.m` fixture, not those two applications.
+That fixture uses a separate copy of the packaged runtime plus its own
+target-side `gsperf.dll` and verified pthread dependency. Its three observed
+hangs fall near the expected 0.3, 0.7 and 2.2 seconds.
+
+The v0.1.2 investigation gate reports the exact clean source revision and exit
+zero in `Tests/out/investigations-rc1/result.json`. Its generations,
+comparison, hang drill-down and source screenshots were inspected. This is
+AppKit-event/controller evidence; physical file-picker interaction and a
+full client-display layout were not accepted by this run.
+
+Producer logs are `dist/v011-rc1-producer*` and `dist/v012-rc1-producer*` in the
+original workspace. Per-candidate packaged logs, updater results, GUI
+screenshots and integrity receipts are under `dist/qualification`; framework
+logs are `dist/v011-rc1-framework*` and `dist/v012-rc1-framework*` in the original
+workspace. Initial temporary-harness failures are retained: MSYS path
+conversion, an incorrect updater test path, missing target-side pthread,
+standalone fixture backend lookup and native-menu discovery. They were not
+product fixes or passing acceptance evidence. In particular, recorder exit
+zero alone was insufficient: an aborted fixture's trace was explicitly
+rejected until `finished cleanly: yes`, three hangs and three signposts were
+observed.
+
+### Remaining acceptance limits
+
+Clean Windows client distribution and update acceptance remains blocked by
+the unavailable client. The complete RC-to-RC-to-final install/update chain and interactive
+record/attach/stop/save/reopen/export acceptance remains incomplete for these
+exact packages. Attempted packaged Save As/export automation could open the
+trace window but could not address its custom-drawn menu through a native
+Windows menu handle; no passing UI workflow is claimed. The earlier
+controller and CLI checks do not waive this gap. Positive signpost/hang
+evidence in two real applications and supported-client layout acceptance
+also remain open. No tag, release publication or feed deployment occurred.
