@@ -274,14 +274,102 @@ zero alone was insufficient: an aborted fixture's trace was explicitly
 rejected until `finished cleanly: yes`, three hangs and three signposts were
 observed.
 
+### Subsequent exact-package GUI acceptance
+
+Both RC1 portable packages subsequently passed actual foreground menu and
+control interaction: Record, Stop, Record again, Stop, Save As, reopen and
+JSON export. Saved trace files byte-matched their inputs; exported CPU counts
+matched the packaged reader. Both also attached to their own disposable
+fixture process through the process picker, stopped cleanly while leaving the
+target running, saved the attached trace with the exact selected PID, and
+showed the visible refusal to record the same process a second time.
+Evidence is each candidate's `dist/qualification/package-ui-result.json`,
+`live-ui-result.json` and `attach-ui/result.json`, with owned-window captures.
+These checks used the production packaged executables, pointer/keyboard input
+and native dialogs, without controller-selector substitutes.
+
+The v0.1.2 packaged comparison window accepted `objleaks.gstrace` through the
+actual directory picker and displayed the expected baseline/current caption.
+Allocated Bytes was selected and Compare invoked. The inspected screenshot
+showed zero changed rows; this is picker/metric interaction evidence, not a
+positive allocation-difference result. Generations and comparison default
+windows fit the current 1100 by 1332 desktop. At a requested width of 1008,
+controls and the detail inspector remained visible, while some table headings
+were truncated. This does not establish acceptance at every supported display
+size. Evidence is `dist/qualification/layout-ui-comparison-1008-baseline-native-backslashes`
+and the generations/comparison layout captures.
+
+Temporary input-driver failures were retained: hidden windows, absent native
+menu handles for custom menus, unsupported text-entry approaches and forward
+slashes rejected by the native folder picker. Native Windows paths corrected
+the last failure. No product change was made to accommodate the driver.
+
+### RC2 and numeric-final review sequence
+
+Four additional unpublished review sets were produced: `0.1.1-rc2`, `0.1.1`,
+`0.1.2-rc2` and `0.1.2`. They use the unchanged pinned packager backend and
+verified RC1 staging, not fresh application rebuilds. Application binaries
+are byte-identical to their respective RC1 binaries; the corresponding-source
+archives are also byte-identical to the respective RC1 closures. Source
+worktrees and packager were clean. RC2 uses prerelease configuration and each
+numeric final retains its original stable configuration. Each set passed MSI
+install, sanitized launch, uninstall and strict assembly. Artifacts and their
+validation logs are under each candidate's `dist/review-sequence/<version>`;
+assembly receipts are in the adjacent `<version>-validated` directory.
+
+Each track passed both installed transitions, RC1 to RC2 and RC2 to numeric
+final. The installed updater selected the private prerelease final feed in
+an API probe, downloaded and hash-checked the exact MSI, applied it, reported
+completed and relaunched the replacement. Each transition retained exactly
+one per-user unmanaged product entry; installed application and updater
+configuration bytes matched the target portable package. The final installed
+stable configuration reported up-to-date. All known disposable test products
+were uninstalled. Evidence is `dist/review-sequence-acceptance/results.json`
+and its per-track receipts, state, plans, selection logs and cleanup records
+in the original workspace. Feed URL substitution was in memory in the API
+probe; this was not an in-app updater GUI check. The loopback server was
+stopped, and no public feed was deployed.
+
+The exact review hashes below are also recorded with staging/source provenance
+in `dist/review-sequence-artifacts.json` in the original workspace.
+
+| Version | Artifact | SHA256 |
+|---|---|---|
+| `0.1.1-rc2` | `PerformanceDashboard-0.1.1-rc2-win64-portable.zip` | `7d0a07c248f912a51adf59a15a43d30453e2138ca7d64f451c891198dd41b60f` |
+| `0.1.1-rc2` | `PerformanceDashboard-0.1.1-rc2-win64.msi` | `ed81e856fe2ee471a0b9533fe73f4974df7e83dcf926850fa890509befaf934d` |
+| `0.1.1-rc2` | `PerformanceDashboard-0.1.1-rc2-win64.provenance.json` | `1f28f28ddb8677b0e179e6190ce1982f035bb63db337c9f247f9bb58606c9e47` |
+| `0.1.1-rc2` | `PerformanceDashboard-0.1.1-rc2-win64.update-feed.json` | `9d100c7b2d8669c6428529debdf0e0c7abcfdfab0cffd552111bc7178c900756` |
+| `0.1.1-rc2` | `PerformanceDashboard-0.1.1-rc2-windows-sources.tar.gz` | `5d02706fe97e8969d18b34e324f0a575c3df8ae22d82ca05fe9aa154a864b6ab` |
+| `0.1.1` | `PerformanceDashboard-0.1.1-win64-portable.zip` | `af1bc71032eecc25eadda82aad4b5ab57d35924c7e623231f52be862b7a4e57f` |
+| `0.1.1` | `PerformanceDashboard-0.1.1-win64.msi` | `81634b2007bddedb2f88830a22ee51f710f54e2b9f0f59ca87ba35d292561b73` |
+| `0.1.1` | `PerformanceDashboard-0.1.1-win64.provenance.json` | `7e15b575291479dd5bdcb01e0d904e1bc11851cb1bc8a69159fc666fbba99c64` |
+| `0.1.1` | `PerformanceDashboard-0.1.1-win64.update-feed.json` | `bd639536f2e464cca1210c6fb05090b3befefc5b640c2ed029aa0573792e8a50` |
+| `0.1.1` | `PerformanceDashboard-0.1.1-windows-sources.tar.gz` | `5d02706fe97e8969d18b34e324f0a575c3df8ae22d82ca05fe9aa154a864b6ab` |
+| `0.1.2-rc2` | `PerformanceDashboard-0.1.2-rc2-win64-portable.zip` | `eddd367383377e1c42c33e5d147bd3300d267b66c9df31f5603e92ffceeb851d` |
+| `0.1.2-rc2` | `PerformanceDashboard-0.1.2-rc2-win64.msi` | `76ddf406d2147378e814ee72026d90c3c7e6816d2b8fdb0e15fd4f5b051c40b5` |
+| `0.1.2-rc2` | `PerformanceDashboard-0.1.2-rc2-win64.provenance.json` | `5d0d4c5ef75760088d9cafd37a9a707c605bfce9259743ee2aef9fb7906f984d` |
+| `0.1.2-rc2` | `PerformanceDashboard-0.1.2-rc2-win64.update-feed.json` | `a250160b34249f3f277291abc4bf5e3b7967419f33823ce743b89046962de138` |
+| `0.1.2-rc2` | `PerformanceDashboard-0.1.2-rc2-windows-sources.tar.gz` | `65f376bb236a8b744271383f96ba8cc437442c65107d5e0d58eb2b348263316e` |
+| `0.1.2` | `PerformanceDashboard-0.1.2-win64-portable.zip` | `1373936d669bc0fd258b0c1b5fdd6efdbfeff5e6d7bd5340685e6253e76b33e8` |
+| `0.1.2` | `PerformanceDashboard-0.1.2-win64.msi` | `7d80e633541906eda5074b9279877aadddb5c1d6b90d2bf980dd3f8e74f5f229` |
+| `0.1.2` | `PerformanceDashboard-0.1.2-win64.provenance.json` | `f77fef5909ffda0b8329ed48c90def13761c3b1d1356cc5dd510ed3eca84069e` |
+| `0.1.2` | `PerformanceDashboard-0.1.2-win64.update-feed.json` | `97ba476ec427ddfd03769efc738ca6e0f2726fe5029a6bfa43a8dc6c613b01e9` |
+| `0.1.2` | `PerformanceDashboard-0.1.2-windows-sources.tar.gz` | `65f376bb236a8b744271383f96ba8cc437442c65107d5e0d58eb2b348263316e` |
+
+The numeric-final ZIPs were additionally checked in separate clean source
+worktrees `out/candidates/v011-final-checks` and `v012-final-checks` using the
+same portable viewer, synthetic, recording, native interchange and positive
+AppKit fixture checks. Per-worktree `dist/qualification/integrity.json`
+records the archive digest and all 1,255 original package files unchanged.
+These are targeted exact-package checks on the developer host, not blanket
+final release qualification or a new source build.
+
 ### Remaining acceptance limits
 
-Clean Windows client distribution and update acceptance remains blocked by
-the unavailable client. The complete RC-to-RC-to-final install/update chain and interactive
-record/attach/stop/save/reopen/export acceptance remains incomplete for these
-exact packages. Attempted packaged Save As/export automation could open the
-trace window but could not address its custom-drawn menu through a native
-Windows menu handle; no passing UI workflow is claimed. The earlier
-controller and CLI checks do not waive this gap. Positive signpost/hang
-evidence in two real applications and supported-client layout acceptance
-also remain open. No tag, release publication or feed deployment occurred.
+Clean Windows 10/11 distribution and update acceptance remains blocked by the
+unavailable client. Positive signpost/hang evidence in two real applications
+and supported-client layout acceptance remain open. The two selected real
+applications contain no signpost emission calls in their unchanged source;
+the positive fixture does not waive that gate. The comparison picker check
+above does not replace positive changed-row allocation evidence. No tag,
+release publication or feed deployment occurred.
