@@ -1,7 +1,7 @@
 include $(GNUSTEP_MAKEFILES)/common.make
 
 LIBRARY_NAME = libGSPerformance
-VERSION = 0.1.0
+VERSION = 0.1.2
 
 libGSPerformance_OBJC_FILES = \
   GSPTrace.m \
