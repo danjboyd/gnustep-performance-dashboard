@@ -4,6 +4,8 @@
 Usage: python3 with-private-home.py UNUSED_DIRECTORY [--read INPUT] -- COMMAND...
 The project and /tmp remain writable; other host files are read-only. No real
 home defaults or user session bus are exposed. Working files are retained.
+Explicit CI markers permit an existing ephemeral home instead, with a logged
+passthrough. Dan's development passwd home always requires bwrap.
 """
 import argparse
 import os
@@ -13,7 +15,13 @@ import subprocess
 import sys
 
 home = pwd.getpwuid(os.getuid()).pw_dir
+ephemeral_ci = (home != '/home/danboyd'
+                and any(os.environ.get(key) == 'true' for key in ('GITHUB_ACTIONS', 'CI')))
+ci_notice = 'with-private-home: explicit ephemeral CI home; using existing runner isolation (no bwrap)'
 if sys.argv[1:] == ['--check']:
+    if ephemeral_ci:
+        print(ci_notice, file=sys.stderr)
+        sys.exit(0)
     private = os.environ.get('PD_PRIVATE_HOME_DIR', '')
     sys.exit(0 if private and private != home and Path(private).is_dir()
              and os.path.samefile(private, home) else 1)
@@ -28,6 +36,10 @@ args = parser.parse_args(sys.argv[1:separator])
 command = sys.argv[separator + 1:]
 if not command:
     parser.error('COMMAND is required')
+if ephemeral_ci:
+    print(ci_notice, file=sys.stderr)
+    env = dict(os.environ, PD_PRIVATE_HOME_MODE='ephemeral-ci')
+    os.execvpe(command[0], command, env)
 scratch = args.directory.resolve()
 scratch.mkdir(mode=0o700, parents=True)  # Never reuse a previous check's home.
 for name in ('home', 'run'):
