@@ -33,8 +33,8 @@ ADDITIONAL_OBJCFLAGS += -fobjc-arc -Wall -Wno-deprecated-declarations -Wno-proto
 # main.m keeps a real NSAutoreleasePool at the bottom (see the comment there).
 main.m_FILE_FILTER_OUT_FLAGS = -fobjc-arc
 ADDITIONAL_INCLUDE_DIRS += -I../Runtime/include -I..
-ADDITIONAL_LIB_DIRS += -L../GSPerformance/obj
-ADDITIONAL_GUI_LIBS += -lGSPerformance
+ADDITIONAL_LIB_DIRS += -L../GSPerformance/obj -L../Runtime/obj
+ADDITIONAL_GUI_LIBS += -lGSPerformance -lgsperf
 
 # The packaged updater (third_party/gnustep-packager-updater/VENDORED.md):
 # GPUpdaterCore and GPUpdaterUI linked in, gp-update-helper in the bundle.
@@ -51,7 +51,7 @@ ADDITIONAL_GUI_LIBS += -lwinhttp -lshell32
 endif
 ifeq (,$(WINDOWS))
 # the build tree, and the packaged layout (app/ next to runtime/lib)
-ADDITIONAL_LDFLAGS += -Wl,-rpath,'$$ORIGIN/../../GSPerformance/obj:$$ORIGIN/../../runtime/lib'
+ADDITIONAL_LDFLAGS += -Wl,-rpath,'$$ORIGIN/../../GSPerformance/obj:$$ORIGIN/../../Runtime/obj:$$ORIGIN/../../runtime/lib'
 endif
 
 include $(GNUSTEP_MAKEFILES)/application.make
@@ -65,6 +65,9 @@ updater:
 
 # GPStandardUpdaterController looks for the helper beside the executable.
 after-all::
+ifneq (,$(WINDOWS))
+	cp ../Runtime/obj/gsperf.dll PerformanceDashboard.app/
+endif
 	@if [ -x "$(UPDATER_HELPER_DIR)/gp-update-helper.exe" ]; then \
 	  cp "$(UPDATER_HELPER_DIR)/gp-update-helper.exe" PerformanceDashboard.app/; \
 	else \
