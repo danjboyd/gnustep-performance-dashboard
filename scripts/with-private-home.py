@@ -40,12 +40,14 @@ except FileNotFoundError:
     lookup = None
 original_repo = (repo / lookup.stdout.strip()).resolve().parent if lookup and lookup.returncode == 0 else repo
 runtime = f'/run/user/{os.getuid()}'
+runtime_exists = Path(runtime).is_dir()
+if not runtime_exists:
+    runtime = str(scratch / 'run')
 wrapped = ['bwrap', '--unshare-user', '--die-with-parent', '--ro-bind', '/', '/', '--bind', '/tmp', '/tmp',
            '--dev-bind', '/dev', '/dev', '--proc', '/proc',
            '--bind', str(scratch / 'home'), home,
            '--bind', str(repo), str(repo),
            '--bind', str(original_repo), str(original_repo),
-           '--tmpfs', '/run/user', '--bind', str(scratch / 'run'), runtime,
            '--setenv', 'HOME', home, '--setenv', 'GNUSTEP_HOME', home,
            '--setenv', 'PD_PRIVATE_HOME_DIR', str(scratch / 'home'),
            '--setenv', 'XDG_RUNTIME_DIR', runtime,
@@ -54,6 +56,8 @@ wrapped = ['bwrap', '--unshare-user', '--die-with-parent', '--ro-bind', '/', '/'
            '--setenv', 'XDG_CACHE_HOME', home + '/.cache',
            '--setenv', 'DBUS_SESSION_BUS_ADDRESS', 'unix:path=/nonexistent',
            '--chdir', os.getcwd()]
+if runtime_exists:
+    wrapped += ['--bind', str(scratch / 'run'), runtime]
 for path in args.read:
     path = path.resolve(strict=True)
     wrapped += ['--ro-bind', str(path), str(path)]
