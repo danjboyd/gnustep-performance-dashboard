@@ -10,8 +10,12 @@ with one local change:
   twice, in libdispatch's `os/generic_win_base.h` and in the CRT. Re-apply
   it after a sync until the packager has it.
 
-- Source commit: `23f17080e37ef73e786aed9d34f65abd07eeb97e` (gnustep-packager
-  v0.1.1, 2026-10-19)
+- Source commit: `211d9136ca2359fdb91af8245b5c86b497e07220` (gnustep-packager
+  v0.1.4, 2026-10-22)
+
+This sync includes the install-failed alert punctuation fix. The three local
+compatibility lines above remain for the currently pinned Windows toolchain;
+remove them only after validating the replacement input.
 
 `Dashboard/GNUmakefile` builds GPUpdaterCore, GPUpdaterUI and
 gp-update-helper from this copy and puts the helper in the app bundle. A

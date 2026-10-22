@@ -6,10 +6,10 @@
     "revision": "b74231f84bc139a50ad50459acfaed10a07a4642"
   },
   "gnustep-packager": {
-    "comment": "Stable packager v0.1.3, including launcher argument fixes. Requalify v0.1.4 when published.",
+    "comment": "Stable packager v0.1.4, including launcher argument fixes and corrected install-failure alert punctuation; vendored updater synced to the same revision.",
     "url": "https://github.com/danjboyd/gnustep-packager.git",
-    "tag": "v0.1.3",
-    "revision": "00555f61adead1bd0db9f58b57c057821e819fd3"
+    "tag": "v0.1.4",
+    "revision": "211d9136ca2359fdb91af8245b5c86b497e07220"
   },
   "appimagetool": {
     "comment": "gnustep-packager's default is appimagetool's moving continuous build; 0.1.3 was made with build 295 (8c8c91f). Release 1.9.1 is build 296 from the same commit. scripts/fetch-appimagetool.sh installs it where the packager looks, and the packager takes the AppImage runtime from it.",
