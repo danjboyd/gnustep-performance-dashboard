@@ -14,12 +14,17 @@ that package separately and retains both package identities, the actual
 recorder/framework/agent hashes and the target API-library hash when present.
 The recorded target uses its own packaged libraries.
 
-The output directory must be unused and outside the input trace. Dependencies
-are Python 3, Xvfb, xdotool and ImageMagick's `import` and `identify`. Keep the repository's
+The output directory must be unused, under `/tmp` or this checkout, and outside
+the input trace. Other home paths are hidden by isolation. Dependencies
+are Python 3, `bwrap`, Xvfb, xdotool and ImageMagick's `import` and `identify`. Keep the repository's
 small sample trace available. The invocation allocates a private 1280×900 Xvfb
-display and private temporary directory; each run uses separate preferences
+display and private temporary directory. It reexecutes under the shared
+`scripts/with-private-home.py` helper, binding a retained `OUTPUT-sandbox/home`
+over the passwd home and isolating the user runtime directory. Each run uses separate preferences
 and the packaged Adwaita theme, with automatic updater checks disabled. No
-user display or session bus is used. The existing `PDOpenTrace` launch option
+user display or session bus is used. This also isolates packaged CLI wrappers
+that override `GNUSTEP_CONFIG_FILE`; setting `HOME` alone does not.
+The existing `PDOpenTrace` launch option
 opens the small startup sample after menus are built, so its addition to
 recent files cannot change which submenu entry selects the measured input.
 The tool assumes the standard

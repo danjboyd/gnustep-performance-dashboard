@@ -15,6 +15,8 @@ import signal
 import subprocess
 import time
 import plistlib
+import pwd
+import sys
 
 
 def identity(path):
@@ -48,12 +50,25 @@ parser.add_argument('--runs', type=int, default=3, choices=range(1, 11))
 parser.add_argument('--timeout', type=int, default=60, help='Per-operation limit in seconds')
 args = parser.parse_args()
 image, source, out = args.appimage.resolve(), args.trace.resolve(), args.output.resolve()
+repo = Path(__file__).resolve().parents[1]
+if not any(root in out.parents for root in (Path('/tmp').resolve(), repo)):
+    parser.error('Output must be under /tmp or this checkout for home isolation')
 if out == source or source in out.parents or args.timeout < 5:
     parser.error('Choose output outside the input trace, and timeout >= 5')
+sandbox = Path(str(out) + '-sandbox')
+private_home = Path(os.environ.get('PD_PRIVATE_HOME_DIR', str(sandbox / 'home')))
+passwd_home = pwd.getpwuid(os.getuid()).pw_dir
+if str(private_home) == passwd_home or not private_home.exists() or not os.path.samefile(private_home, passwd_home):
+    helper = Path(__file__).with_name('with-private-home.py')
+    inputs = [image, source] + ([args.recorder_appimage.resolve()] if args.recorder_appimage else [])
+    reads = [part for path in inputs for part in ('--read', str(path))]
+    os.execv(sys.executable, [sys.executable, str(helper), str(sandbox), *reads, '--',
+                            sys.executable, str(Path(__file__).resolve()), *sys.argv[1:]])
 out.mkdir(mode=0o700, parents=True)  # Refuse reuse, preserving previous evidence.
 sample = Path(__file__).resolve().parents[1] / 'Tests/data/sample.gstrace'
 receipt = {'diagnosticOnly': True, 'appimage': identity(image), 'inputPath': str(source),
            'inputFiles': trace_identity(source), 'initialFiles': trace_identity(sample), 'runs': []}
+receipt['isolatedHome'] = str(private_home)
 recorder_image = args.recorder_appimage.resolve() if args.recorder_appimage else image
 receipt['recorderAppimage'] = identity(recorder_image)
 xvfb = record = pid = None
