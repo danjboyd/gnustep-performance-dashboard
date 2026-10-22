@@ -364,12 +364,57 @@ records the archive digest and all 1,255 original package files unchanged.
 These are targeted exact-package checks on the developer host, not blanket
 final release qualification or a new source build.
 
-### Remaining acceptance limits
+### Exact numeric-final follow-up
 
-Clean Windows 10/11 distribution and update acceptance remains blocked by the
-unavailable client. Positive signpost/hang evidence in two real applications
-and supported-client layout acceptance remain open. The two selected real
-applications contain no signpost emission calls in their unchanged source;
-the positive fixture does not waive that gate. The comparison picker check
-above does not replace positive changed-row allocation evidence. No tag,
-release publication or feed deployment occurred.
+Both exact final portable packages passed physical Record/Stop/Record again,
+Save As/reopen/export and Attach/Stop/save, including a visible once-per-process
+refusal. Saved captures were clean, with 7,700 and 7,708 CPU samples matching
+the packaged reader and GUI JSON. Attach used visually verified owned PIDs;
+Stop preserved each target and saved traces retained the exact selected PID.
+Receipts are `dist/qualification/final-live-ui-result.json` and
+`attach-ui/result.json` under `out/candidates/v011-final-checks` and
+`v012-final-checks`.
+
+The exact v0.1.2 final UI selected the real Dashboard baseline and ScreenshotTool
+current capture through its actual folder picker, then displayed 604 changed
+Allocated Bytes rows. Malloc 264 Bytes changed from 830,016 to 6,799,056 bytes,
+delta 5,969,040, agreeing with the exact CLI. Different workloads do not
+establish a performance regression. The receipt and image are under
+`dist/qualification/layout-ui-comparison-1008-baseline-real-app-delta-corrected`
+in the final v0.1.2 check worktree. Each final extraction's 1,255 original files
+were reverified unchanged after live GUI checks.
+
+The approved private transfer of all 20 additional files and the 297-entry
+receipt archive completed. The Linux owner independently checked all digests,
+all four combined AppImage/MSI assemblies, the four portable inventories and
+both source closures (mailbox 137). These are independently reported Linux
+results, not locally executed Windows checks.
+
+
+## October 22 applicability and documented limitations
+
+ReleaseCoordinator relayed Dan's decisions from user-edited QUESTIONS.md in
+messages 176/179. The original file was not independently read by the Windows
+agent. This provenance does not authorize tags, pushes or publication.
+
+There was no Windows v0.1.0 release, so its Windows upgrade to v0.1.1 is not
+applicable. It is not a passed upgrade. Both RC1-to-RC2-to-final chains and
+v0.1.1-to-v0.1.2 remain required on the clean client.
+
+Positive hangs and signposts were verified in test programs. The two unchanged
+real GNUstep apps recorded for Windows supplied CPU/allocation/leak and
+clean-stop evidence, but not positive hang/signpost intervals. Dan accepted
+fixture evidence with this explicit limitation. This is a release-scope
+decision, not a claim that real-application positive events were observed.
+The OpenTrace signpost draft `59d752f` remains a v0.1.3 candidate.
+
+Some table headings truncate around a 1008-pixel window width. Dan selected
+shipping the frozen versions with this known limitation; the layout fix is
+reserved for v0.1.3 (`4f0092e`). No layout or signposting draft is in these packages.
+This does not claim successful testing on every client display.
+
+The remaining execution gate is the clean Windows client run. A separate
+Windows 11 evaluation guest is reportedly being prepared but has not been
+accessed or qualified by this Windows agent. Kit preparation and developer-
+host results do not replace its install/launch/record, portable Unicode/space
+paths, per-user identity, upgrades, uninstall and cleanup acceptance.
