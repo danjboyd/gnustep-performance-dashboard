@@ -46,9 +46,12 @@ AppImage smoke and update checks require `bwrap`. The shared
 `scripts/with-private-home.py` helper binds a scratch directory over the
 passwd home and isolates its runtime directory. A private `HOME` or caller
 `GNUSTEP_CONFIG_FILE` alone is insufficient: AppRun sets its own config.
-Container runners must permit nested user/mount namespaces. Default Docker
-filtering rejects this helper; a namespace-enabled runner needs separate
-configuration and qualification. Namespace setup failure stops the check.
+With `GITHUB_ACTIONS=true` or `CI=true` and a passwd home other than
+`/home/danboyd`, the helper logs that it uses the existing ephemeral runner
+isolation and runs directly. The development home always requires `bwrap`,
+even with CI markers set; namespace failure stops the check there. CI keeps
+its existing seccomp/AppArmor settings. `Tests/private-home-checks.py` covers
+both paths and the development-home veto.
 This is a package smoke test, not the entire real-application acceptance gate.
 Results and provenance (source commit, pins, library build IDs and checks)
 are written to `dist/packages/`. A dirty-tree dry run is never release evidence

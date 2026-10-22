@@ -25,6 +25,7 @@ git diff --binary HEAD >"$out/working-tree.patch"
 git ls-files --others --exclude-standard >"$out/untracked-files.txt"
 date -u +%FT%TZ >"$out/date.txt"
 uname -a >"$out/host.txt"
+python3 Tests/private-home-checks.py 2>&1 | tee "$out/private-home.log"
 sh Tests/run.sh 2>&1 | tee "$out/regression.log"
 # The development suite permits missing UI facilities; the release gate does not.
 if grep -Ei 'skipped|shortcuts do not reach' "$out/regression.log"; then
