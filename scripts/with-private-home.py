@@ -37,7 +37,7 @@ lookup = subprocess.run(['git', '-C', str(repo), 'rev-parse', '--git-common-dir'
                         text=True, capture_output=True)
 original_repo = (repo / lookup.stdout.strip()).resolve().parent if lookup.returncode == 0 else repo
 runtime = f'/run/user/{os.getuid()}'
-wrapped = ['bwrap', '--die-with-parent', '--ro-bind', '/', '/', '--bind', '/tmp', '/tmp',
+wrapped = ['bwrap', '--unshare-user', '--die-with-parent', '--ro-bind', '/', '/', '--bind', '/tmp', '/tmp',
            '--dev-bind', '/dev', '/dev', '--proc', '/proc',
            '--bind', str(scratch / 'home'), home,
            '--bind', str(repo), str(repo),
