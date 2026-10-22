@@ -8,6 +8,12 @@ python3 scripts/benchmark-trace-load.py /path/to/PerformanceDashboard.AppImage \
   /path/to/workload.gstrace /tmp/pd-load-results --runs 3
 ```
 
+To keep the recorder fixed while comparing app builds, add
+`--recorder-appimage /path/to/frozen-recorder.AppImage`. The runner extracts
+that package separately and retains both package identities, the actual
+recorder/framework/agent hashes and the target API-library hash when present.
+The recorded target uses its own packaged libraries.
+
 The output directory must be unused and outside the input trace. Dependencies
 are Python 3, Xvfb, xdotool and ImageMagick's `import` and `identify`. Keep the repository's
 small sample trace available. The invocation allocates a private 1280×900 Xvfb
@@ -23,10 +29,11 @@ stopping. It requires Linux `/proc` access; an incompatible UI or wait-state
 layout fails with a timeout rather than inventing a measurement.
 
 `receipt.json` records SHA256 and sizes for the AppImage, actual app/recorder/
-framework/agent and every input file; per-run hang count, longest hang in
+framework/agent and every input file; per-run signpost summaries, hang count, longest hang in
 seconds, CPU/wall sample counts and dropped samples; and a final unchanged-hash
 check. Raw captures, recorder commands/logs, JSON exports and loaded-window
-screenshots remain in the output. Failed runtime attempts retain an error
+screenshots, loaded-library maps and individual signpost CSV intervals remain
+in the output. Failed runtime attempts retain an error
 receipt. CPU sample counts use the recorder's weighted definition. Counts
 cover the full capture, including startup and menu dispatch, rather than an
 instrumented load interval. A zero hang count is a valid diagnostic outcome.
