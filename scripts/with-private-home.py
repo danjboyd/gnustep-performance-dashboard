@@ -12,6 +12,12 @@ import pwd
 import subprocess
 import sys
 
+home = pwd.getpwuid(os.getuid()).pw_dir
+if sys.argv[1:] == ['--check']:
+    private = os.environ.get('PD_PRIVATE_HOME_DIR', '')
+    sys.exit(0 if private and private != home and Path(private).is_dir()
+             and os.path.samefile(private, home) else 1)
+
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('directory', type=Path)
 parser.add_argument('--read', action='append', type=Path, default=[])
@@ -26,17 +32,19 @@ scratch = args.directory.resolve()
 scratch.mkdir(mode=0o700, parents=True)  # Never reuse a previous check's home.
 for name in ('home', 'run'):
     (scratch / name).mkdir(mode=0o700)
-home = pwd.getpwuid(os.getuid()).pw_dir
 repo = Path(__file__).resolve().parents[1]
-common = subprocess.check_output(['git', '-C', str(repo), 'rev-parse', '--git-common-dir'], text=True).strip()
-original_repo = (repo / common).resolve().parent
+lookup = subprocess.run(['git', '-C', str(repo), 'rev-parse', '--git-common-dir'],
+                        text=True, capture_output=True)
+original_repo = (repo / lookup.stdout.strip()).resolve().parent if lookup.returncode == 0 else repo
 runtime = f'/run/user/{os.getuid()}'
 wrapped = ['bwrap', '--die-with-parent', '--ro-bind', '/', '/', '--bind', '/tmp', '/tmp',
            '--dev-bind', '/dev', '/dev', '--proc', '/proc',
            '--bind', str(scratch / 'home'), home,
+           '--bind', str(repo), str(repo),
            '--bind', str(original_repo), str(original_repo),
            '--tmpfs', '/run/user', '--bind', str(scratch / 'run'), runtime,
            '--setenv', 'HOME', home, '--setenv', 'GNUSTEP_HOME', home,
+           '--setenv', 'PD_PRIVATE_HOME_DIR', str(scratch / 'home'),
            '--setenv', 'XDG_RUNTIME_DIR', runtime,
            '--setenv', 'XDG_CONFIG_HOME', home + '/.config',
            '--setenv', 'XDG_DATA_HOME', home + '/.local/share',
