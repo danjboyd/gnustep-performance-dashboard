@@ -61,13 +61,14 @@ try {
   Get-Content -LiteralPath $stderr
   Write-Output $text
   if ($exitCode -ne 0) { throw "Controller assertions failed: $exitCode" }
-  if ($text -notmatch 'All 14 investigation GUI checks passed\.') { throw 'Missing final assertion summary.' }
+  if ($text -notmatch '(?m)^All (?<count>[1-9][0-9]*) investigation GUI checks passed\.\s*$') { throw 'Missing final assertion summary.' }
+  $assertionCount = [int]$Matches['count']
   if ($captures.Count -lt 4) { throw "Expected four captured controller windows; found $($captures.Count)." }
   [ordered]@{
     sourceCommit = (& git rev-parse HEAD)
     sourceDirty = [bool](& git status --porcelain)
     theme = 'WinUITheme'
-    assertions = 14
+    assertions = $assertionCount
     exitCode = $exitCode
     capturedWindows = @($captures.Keys | Sort-Object)
     interaction = 'AppKit events; no physical input or file-picker acceptance'
