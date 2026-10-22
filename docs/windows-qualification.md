@@ -274,7 +274,7 @@ zero alone was insufficient: an aborted fixture's trace was explicitly
 rejected until `finished cleanly: yes`, three hangs and three signposts were
 observed.
 
-### Remaining acceptance limits
+### RC1 acceptance limits at the earlier checkpoint
 
 Clean Windows client distribution and update acceptance remains blocked by
 the unavailable client. The complete RC-to-RC-to-final install/update chain and interactive
@@ -285,3 +285,93 @@ Windows menu handle; no passing UI workflow is claimed. The earlier
 controller and CLI checks do not waive this gap. Positive signpost/hang
 evidence in two real applications and supported-client layout acceptance
 also remain open. No tag, release publication or feed deployment occurred.
+
+## Final review results, October 22
+
+Native-owner mailbox reports 104–108, 115, 117, 119, 123 and 124 supersede the
+earlier incomplete interactive-workflow and update-sequence statuses. These
+remain Windows Server 2022 developer-host results. Following Dan's explicit
+approval, the additional review payloads and receipts were privately
+transferred and independently checked by the Linux coordinator.
+
+Both exact RC1 packages passed actual File menus, native Save As, JSON Export
+and reopening, plus Record/Stop/repeat and Attach/Stop/save/exact-target-PID
+checks. Repeated attachment visibly showed the once-per-process refusal.
+Saved trace files and all 1,255 portable-package files were byte-preserved.
+
+For each release, unpublished RC2 and numeric-final MSI/ZIP review sets were
+assembled from the unchanged verified RC1 stage using packager
+`23f17080e37ef73e786aed9d34f65abd07eeb97e`. Application executables and
+source-closure archives match the respective RC1 bytes; these were not fresh
+application rebuilds. Each set passed developer-host MSI install, launch,
+uninstall and strict MSI assembly. Both installed RC1 → RC2 → numeric-final
+sequences passed asset validation, packaged helper application, one per-user
+product entry, installed app/config byte checks, relaunch and cleanup. Final
+configurations use the stable channel. Feed selection used probes built
+against the unchanged pinned updater core with private loopback URLs; this
+does not establish actual updater-GUI selection acceptance. No feed deployed.
+
+Both exact numeric-final portable suites passed ten viewer, six synthetic and
+25 recording checks, native interchange and the positive three-hang/
+three-signpost fixture. Both final actual GUI Stop/Record-again/Stop/Save As/
+Export/reopen workflows passed; the clean recordings' CPU sample counts
+(7,700 and 7,708) matched the GUI JSON and packaged reader. All 1,255 original
+files in each final portable extraction remained unchanged. Report 124 adds
+both exact final actual File Attach/PID selection/Stop/Save As workflows and
+visible once-per-process refusal. Stop preserved each owned target; the clean
+saved traces identified the selected PIDs (8,940 and 5,692). Test apps and
+targets were cleaned up afterward. Receipts are `attach-ui/result.json` in
+each final qualification directory. An initial temporary verification-file
+field mismatch refused the operation before attachment and was retained;
+no product fix was needed.
+
+The exact v0.1.2 final GUI selected a real Dashboard recording as baseline
+against a ScreenshotTool recording and showed 604 changed allocation rows.
+The first Malloc 264 Bytes row showed 830,016 before, 6,799,056 after and a
+5,969,040-byte delta, matching the packaged CLI. The workloads differ, so this
+is positive comparison evidence, not a regression claim. Controls fit a
+forced 1,008-pixel window on the current developer desktop; some headings
+truncate. This does not qualify supported-client layout.
+
+Windows retains per-track `dist/qualification/final-live-ui-result.json`,
+`final-live-trace-info.log`, comparison screenshots/receipts and the complete
+review-update sequence receipts. Initial filename-selection and comparison
+harness failures were corrected without product changes and retained.
+
+### Independent review handoff and assembly
+
+All twenty RC2/numeric-final MSI, ZIP, source, provenance and feed files matched
+the hashes in reports 106/107 and the native owner's fresh readiness manifest.
+The acceptance bundle matched SHA256
+`24b3f71413756583f844313529d50c2a9fd37d677884b947c2e98af1542b6103`
+and supplied 297 entries. Reviewed receipts confirm all four installed update
+transitions used the transferred MSI digests, one per-user product, matching
+application/configuration bytes and relaunch; both cleanup receipts contain
+no remaining products. Final GUI/reopen and comparison captures were inspected.
+
+Each ZIP contains 1,255 files. Its application bytes match the respective RC1,
+all 1,029 runtime-file digests match the inventory, and all 199 license-file
+references and three provenance-file digests match. The source closures are
+byte-identical to the respective audited RC1 closures; their 41 archive
+digests/sizes and exact coverage of 41 runtime package owners were rechecked.
+The archived inventory matches the portable ZIP. Archive signatures remain
+not independently verified. RC2 configurations use prerelease; numeric-final
+configurations use stable.
+
+Strict combined AppImage/MSI assembly and every output checksum passed for all
+four additional sets. Review trees are `dist/review-20261022/combined/VERSION`;
+independent receipts are retained under `Tests/out/final-review-20261022`.
+This was a private review handoff, not publication. Exact binary hashes:
+
+| Version | MSI SHA256 | Portable ZIP SHA256 |
+|---|---|---|
+| `0.1.1-rc2` | `ed81e856fe2ee471a0b9533fe73f4974df7e83dcf926850fa890509befaf934d` | `7d0a07c248f912a51adf59a15a43d30453e2138ca7d64f451c891198dd41b60f` |
+| `0.1.1` | `81634b2007bddedb2f88830a22ee51f710f54e2b9f0f59ca87ba35d292561b73` | `af1bc71032eecc25eadda82aad4b5ab57d35924c7e623231f52be862b7a4e57f` |
+| `0.1.2-rc2` | `76ddf406d2147378e814ee72026d90c3c7e6816d2b8fdb0e15fd4f5b051c40b5` | `eddd367383377e1c42c33e5d147bd3300d267b66c9df31f5603e92ffceeb851d` |
+| `0.1.2` | `7d80e633541906eda5074b9279877aadddb5c1d6b90d2bf980dd3f8e74f5f229` | `1373936d669bc0fd258b0c1b5fdd6efdbfeff5e6d7bd5340685e6253e76b33e8` |
+
+Clean Windows client distribution/update acceptance is still **blocked** at
+Dan's instruction. No unchanged real application emitting the required
+positive signposts/hangs has been identified; fixture positives remain
+distinct. Supported-client layout remains open. Overall final qualification,
+tags, publication and feed deployment are not approved.
