@@ -3,7 +3,7 @@
 set -eu
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
-OUT="$ROOT/Tests/out/investigations"
+OUT=${PD_GUI_OUTPUT_ROOT:-"$ROOT/Tests/out/investigations"}
 mkdir -p "$OUT"
 clang $(gnustep-config --objc-flags) -fobjc-arc -Wno-protocol -I. -IRuntime/include \
   Tests/GUI/InvestigationChecks.m Tests/Unit/TraceBuilder.m \
@@ -13,7 +13,7 @@ clang $(gnustep-config --objc-flags) -fobjc-arc -Wno-protocol -I. -IRuntime/incl
   -LGSPerformance/obj -lGSPerformance $(gnustep-config --gui-libs) \
   -Wl,-rpath,"$ROOT/GSPerformance/obj" -o "$OUT/checks"
 display_file=$(mktemp)
-Xvfb -displayfd 3 -screen 0 1280x900x24 -nolisten tcp -ac 3>"$display_file" >"$OUT/xvfb.log" 2>&1 &
+Xvfb -displayfd 3 -screen 0 "${PD_GUI_SCREEN:-1280x900x24}" -nolisten tcp -ac 3>"$display_file" >"$OUT/xvfb.log" 2>&1 &
 xpid=$!
 app_pid=
 trap '[ -z "$app_pid" ] || kill "$app_pid" 2>/dev/null || :; kill "$xpid" 2>/dev/null || :; rm -f "$display_file"' EXIT HUP INT TERM

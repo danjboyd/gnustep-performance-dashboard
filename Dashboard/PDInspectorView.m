@@ -2,6 +2,7 @@
 #import "PDInspectorView.h"
 #import "PDTheme.h"
 #import "PDSourceWindowController.h"
+#include <math.h>
 
 @interface PDInspectorView () <NSTableViewDataSource, NSTableViewDelegate>
 @end
@@ -84,15 +85,40 @@
       [_frames setTarget: self];
       [_frames setDoubleAction: @selector(openSource:)];
       [_frames setUsesAlternatingRowBackgroundColors: YES];
-      [_frames setColumnAutoresizingStyle: NSTableViewUniformColumnAutoresizingStyle];
+      [_frames setColumnAutoresizingStyle: NSTableViewNoColumnAutoresizing];
       [_framesScroll setDocumentView: _frames];
       [self addSubview: _framesScroll];
 
       _symbols = [NSMutableArray array];
       _addresses = [NSMutableArray array];
       _lines = [NSMutableArray array];
+      [self layoutStackColumns];
     }
   return self;
+}
+
+- (void) layoutStackColumns
+{
+  if (!_frames) return;
+  CGFloat minimum = _frames.intercellSpacing.width * _frames.tableColumns.count;
+  for (NSTableColumn *column in _frames.tableColumns)
+    {
+      NSFont *font = column.headerCell.font ?: [NSFont systemFontOfSize: [NSFont systemFontSize]];
+      [column setMinWidth: ceil([column.headerCell.stringValue
+        sizeWithAttributes: @{NSFontAttributeName: font}].width) + 16];
+      minimum += column.minWidth;
+    }
+  CGFloat width = MAX(minimum, floor(NSWidth(_framesScroll.contentView.bounds)));
+  for (NSTableColumn *column in _frames.tableColumns)
+    [column setWidth: column.minWidth + (width - minimum)
+      * ([column.identifier isEqual: @"symbol"] ? .6 : .2)];
+  [_frames setFrameSize: NSMakeSize(width, NSHeight(_frames.frame))];
+}
+
+- (void) resizeSubviewsWithOldSize: (NSSize)size
+{
+  [super resizeSubviewsWithOldSize: size];
+  [self layoutStackColumns];
 }
 
 - (void) clear

@@ -9,6 +9,7 @@
 #import "Dashboard/PDTrackRenderer.h"
 #import "Dashboard/PDInspectorView.h"
 #include <stdlib.h>
+#include <math.h>
 
 @interface PDDetailController (Checks)
 - (void) modeChanged: (id)sender;
@@ -30,7 +31,9 @@ static void setText(id controller, NSString *key, NSString *value)
 { [[controller valueForKey: key] setStringValue: value]; }
 static void capture(NSWindowController *controller, NSString *output, NSString *name)
 {
-  [controller.window setFrameOrigin: NSMakePoint(60, 130)];
+  NSRect visible = (controller.window.screen ?: [NSScreen mainScreen]).visibleFrame;
+  [controller.window setFrameOrigin: NSMakePoint(MAX(NSMinX(visible), MIN(60, NSMaxX(visible) - NSWidth(controller.window.frame))),
+    MAX(NSMinY(visible), MIN(130, NSMaxY(visible) - NSHeight(controller.window.frame))))];
   [controller showWindow: nil];
   [controller.window makeKeyAndOrderFront: nil];
   NSDate *until = [NSDate dateWithTimeIntervalSinceNow: .4];
@@ -48,6 +51,63 @@ static void capture(NSWindowController *controller, NSString *output, NSString *
   [task launch]; [task waitUntilExit];
   check(task.terminationStatus == 0, @"screenshot captured");
 #endif
+}
+
+static void checkLayout(NSWindowController *controller, NSString *output, NSString *name)
+{
+  NSWindow *window = controller.window;
+  NSRect original = window.frame;
+  check(NSContainsRect((window.screen ?: [NSScreen mainScreen]).visibleFrame, original),
+    [name stringByAppendingString: @" initial window fits the available display"]);
+  for (NSUInteger i = 0; i < 2; i++)
+    {
+      NSSize size = i ? window.minSize : NSMakeSize(1008, 650);
+      [window setFrame: NSMakeRect(60, 130, size.width, size.height) display: YES];
+      NSString *label = [NSString stringWithFormat: @"%@-%@", name, i ? @"minimum" : @"1008"];
+      capture(controller, output, [label stringByAppendingPathExtension: @"png"]);
+      NSView *content = window.contentView;
+      BOOL contained = YES;
+      for (NSView *view in content.subviews)
+        if (!view.isHidden && !NSContainsRect(NSInsetRect(content.bounds, -1, -1), view.frame))
+          { NSLog(@"Outside content: %@ %@ in %@", view, NSStringFromRect(view.frame), NSStringFromRect(content.bounds)); contained = NO; }
+      check(contained, [label stringByAppendingString: @" controls remain within the content view"]);
+      NSTableView *table = [controller valueForKey: @"table"];
+      NSRect last = [table rectOfColumn: table.tableColumns.count - 1];
+      check(NSMaxX(last) <= NSWidth(table.enclosingScrollView.contentView.bounds) + 1,
+        [label stringByAppendingString: @" all column headings are visible without scrolling"]);
+      BOOL readable = YES;
+      for (NSTableColumn *column in table.tableColumns)
+        {
+          NSCell *header = column.headerCell;
+          NSFont *font = header.font ?: [NSFont systemFontOfSize: [NSFont systemFontSize]];
+          CGFloat title = [header.stringValue sizeWithAttributes: @{NSFontAttributeName: font}].width;
+          if (column.width < ceil(title) + 8) readable = NO;
+        }
+      check(readable, [label stringByAppendingString: @" column headings retain room for their text"]);
+      NSArray *rows = [controller valueForKey: @"rows"];
+      BOOL valuesFit = YES;
+      if (rows.count)
+        for (NSUInteger columnIndex = 1; columnIndex < table.tableColumns.count; columnIndex++)
+          {
+            NSTableColumn *column = table.tableColumns[columnIndex];
+            NSFont *font = column.dataCell.font ?: [NSFont systemFontOfSize: [NSFont systemFontSize]];
+            NSString *value = rows[0][@"cells"][columnIndex];
+            if (column.width < ceil([value sizeWithAttributes: @{NSFontAttributeName: font}].width) + 8)
+              valuesFit = NO;
+          }
+      check(valuesFit, [label stringByAppendingString: @" numeric values remain readable"]);
+      NSTableView *frames = [[controller valueForKey: @"inspector"] valueForKey: @"frames"];
+      BOOL inspectorHeadings = NSMaxX([frames rectOfColumn: frames.tableColumns.count - 1])
+        <= NSWidth(frames.enclosingScrollView.contentView.bounds) + 1;
+      for (NSTableColumn *column in frames.tableColumns)
+        {
+          NSFont *font = column.headerCell.font ?: [NSFont systemFontOfSize: [NSFont systemFontSize]];
+          CGFloat title = [column.headerCell.stringValue sizeWithAttributes: @{NSFontAttributeName: font}].width;
+          if (column.width < ceil(title) + 8) inspectorHeadings = NO;
+        }
+      check(inspectorHeadings, [label stringByAppendingString: @" inspector column headings remain readable"]);
+    }
+  [window setFrame: original display: YES];
 }
 
 int main(int argc, char **argv)
@@ -85,6 +145,7 @@ int main(int argc, char **argv)
       check(table.numberOfRows == 3, @"generation category summary");
       check([[[generation valueForKey: @"rows"][0] objectForKey: @"cells"][1] isEqual: @"64 Bytes"], @"survival measured after free");
       capture(generation, output, @"generations.png");
+      checkLayout(generation, output, @"generations-layout");
       [[generation valueForKey: @"mode"] selectItemAtIndex: 1]; [generation refresh: nil];
       check(table.numberOfRows == 1, @"surviving stack counts leaf allocations once");
       [table selectRowIndexes: [NSIndexSet indexSetWithIndex: 0] byExtendingSelection: NO];
@@ -108,6 +169,7 @@ int main(int argc, char **argv)
       check(table.numberOfRows == 1, @"independent comparison ranges");
       [table selectRowIndexes: [NSIndexSet indexSetWithIndex: 0] byExtendingSelection: NO];
       capture(comparison, output, @"comparison.png");
+      checkLayout(comparison, output, @"comparison-layout");
       setText(comparison, @"beforeStart", @"not a number"); [comparison refresh: nil];
       check(table.numberOfRows == 0, @"invalid input clears stale results");
       [comparison close];

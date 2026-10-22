@@ -4,7 +4,7 @@
 #import "PDTheme.h"
 #include <math.h>
 
-@interface PDInvestigationWindowController () <NSTableViewDataSource, NSTableViewDelegate>
+@interface PDInvestigationWindowController () <NSTableViewDataSource, NSTableViewDelegate, NSWindowDelegate>
 @end
 
 @implementation PDInvestigationWindowController
@@ -62,8 +62,10 @@ button(NSView *view, NSString *title, NSRect rect, id target, SEL action)
       _trace = trace; _process = process; _generations = generations;
       _rows = [NSMutableArray array]; _marks = [NSMutableArray array];
       [w setReleasedWhenClosed: NO]; [w setMinSize: NSMakeSize(1000, 500)];
+      [w setDelegate: self];
       [w setTitle: generations ? @"Allocation Generations" : @"Compare Recordings"];
       NSView *v = w.contentView;
+      CGFloat width = NSWidth(v.bounds), height = NSHeight(v.bounds);
       if (generations)
         {
           _marksPath = [trace.path stringByAppendingPathComponent:
@@ -78,58 +80,70 @@ button(NSView *view, NSString *title, NSRect rect, id target, SEL action)
                 if (time > last && time >= process.startTime && time <= process.endTime)
                   { [_marks addObject: mark]; last = time; }
               }
-          field(v, @"Generation name", NSMakeRect(10, 620, 140, 20), NO);
-          _name = field(v, @"Generation", NSMakeRect(150, 618, 180, 24), YES);
-          field(v, @"End (seconds)", NSMakeRect(340, 620, 110, 20), NO);
+          field(v, @"Generation name", NSMakeRect(10, height - 30, 140, 20), NO);
+          _name = field(v, @"Generation", NSMakeRect(150, height - 32, 180, 24), YES);
+          field(v, @"End (seconds)", NSMakeRect(340, height - 30, 110, 20), NO);
           _markTime = field(v, [NSString stringWithFormat: @"%.9f", [trace relativeTime: end ?: process.endTime]],
-            NSMakeRect(450, 618, 130, 24), YES);
-          button(v, @"Mark Generation", NSMakeRect(590, 615, 160, 28), self, @selector(mark:));
-          button(v, @"Mark Now", NSMakeRect(760, 615, 130, 28), self, @selector(markNow:));
-          _choice = [self popup: v frame: NSMakeRect(10, 580, 470, 26) titles: @[] action: @selector(refresh:)];
-          _mode = [self popup: v frame: NSMakeRect(490, 580, 250, 26)
+            NSMakeRect(450, height - 32, 130, 24), YES);
+          button(v, @"Mark Generation", NSMakeRect(590, height - 35, 160, 28), self, @selector(mark:));
+          button(v, @"Mark Now", NSMakeRect(760, height - 35, 130, 28), self, @selector(markNow:));
+          _choice = [self popup: v frame: NSMakeRect(10, height - 70, 470, 26) titles: @[] action: @selector(refresh:)];
+          _mode = [self popup: v frame: NSMakeRect(490, height - 70, 250, 26)
             titles: @[@"Categories", @"Surviving Stacks", @"Surviving Allocations"] action: @selector(refresh:)];
-          field(v, @"Observe survival at (seconds)", NSMakeRect(10, 544, 210, 20), NO);
+          field(v, @"Observe survival at (seconds)", NSMakeRect(10, height - 106, 210, 20), NO);
           _observation = field(v, [NSString stringWithFormat: @"%.9f", [trace relativeTime: process.endTime]],
-            NSMakeRect(225, 542, 130, 24), YES);
-          button(v, @"Refresh", NSMakeRect(370, 540, 110, 28), self, @selector(refresh:));
-          button(v, @"Remove Last Mark", NSMakeRect(490, 540, 170, 28), self, @selector(removeMark:));
+            NSMakeRect(225, height - 108, 130, 24), YES);
+          button(v, @"Refresh", NSMakeRect(370, height - 110, 110, 28), self, @selector(refresh:));
+          button(v, @"Remove Last Mark", NSMakeRect(490, height - 110, 170, 28), self, @selector(removeMark:));
           [self rebuildGenerations];
         }
       else
         {
-          button(v, @"Choose Baseline…", NSMakeRect(10, 612, 180, 30), self, @selector(chooseBaseline:));
-          _choice = [self popup: v frame: NSMakeRect(200, 615, 240, 26)
+          button(v, @"Choose Baseline…", NSMakeRect(10, height - 38, 180, 30), self, @selector(chooseBaseline:));
+          _choice = [self popup: v frame: NSMakeRect(200, height - 35, 240, 26)
             titles: @[@"CPU Self Time", @"Allocated Bytes", @"Leaked Bytes", @"Signpost Duration", @"File Bytes", @"Network Bytes", @"CPU Call Paths"] action: @selector(refresh:)];
-          button(v, @"Compare", NSMakeRect(450, 612, 110, 30), self, @selector(refresh:));
-          field(v, @"Baseline range (seconds)", NSMakeRect(10, 582, 180, 20), NO);
-          _beforeStart = field(v, @"0", NSMakeRect(200, 580, 100, 24), YES);
-          _beforeEnd = field(v, @"0", NSMakeRect(310, 580, 100, 24), YES);
-          _beforeSignpost = [self popup: v frame: NSMakeRect(420, 580, 320, 26)
+          button(v, @"Compare", NSMakeRect(450, height - 38, 110, 30), self, @selector(refresh:));
+          field(v, @"Baseline range (seconds)", NSMakeRect(10, height - 68, 180, 20), NO);
+          _beforeStart = field(v, @"0", NSMakeRect(200, height - 70, 100, 24), YES);
+          _beforeEnd = field(v, @"0", NSMakeRect(310, height - 70, 100, 24), YES);
+          _beforeSignpost = [self popup: v frame: NSMakeRect(420, height - 70, 320, 26)
             titles: @[@"Choose a baseline first"] action: @selector(selectSignpost:)];
-          field(v, @"Current range (seconds)", NSMakeRect(10, 546, 180, 20), NO);
+          field(v, @"Current range (seconds)", NSMakeRect(10, height - 104, 180, 20), NO);
           _afterStart = field(v, [NSString stringWithFormat: @"%.9f", start ? [trace relativeTime: start] : 0],
-            NSMakeRect(200, 544, 100, 24), YES);
+            NSMakeRect(200, height - 106, 100, 24), YES);
           _afterEnd = field(v, [NSString stringWithFormat: @"%.9f", end ? [trace relativeTime: end] : trace.duration],
-            NSMakeRect(310, 544, 100, 24), YES);
-          _afterSignpost = [self popup: v frame: NSMakeRect(420, 544, 320, 26)
+            NSMakeRect(310, height - 106, 100, 24), YES);
+          _afterSignpost = [self popup: v frame: NSMakeRect(420, height - 106, 320, 26)
             titles: @[] action: @selector(selectSignpost:)];
           [self fillSignposts: _afterSignpost trace: trace];
-          field(v, @"Target processes only. Values are absolute; unequal workload lengths are not normalized.", NSMakeRect(10, 512, 1000, 20), NO);
+          NSTextField *explanation = field(v, @"Target processes only. Values are absolute; unequal workload lengths are not normalized.", NSMakeRect(10, height - 138, width - 20, 20), NO);
+          [explanation setAutoresizingMask: NSViewWidthSizable | NSViewMinYMargin];
         }
-      NSScrollView *scroll = [[NSScrollView alloc] initWithFrame: NSMakeRect(10, 40, 720, 466)];
+      NSScrollView *scroll = [[NSScrollView alloc] initWithFrame: NSMakeRect(10, 40, width - 380, height - 184)];
       [scroll setAutoresizingMask: NSViewWidthSizable | NSViewHeightSizable];
       [scroll setHasVerticalScroller: YES]; [scroll setHasHorizontalScroller: YES];
       [scroll setBorderType: NSBezelBorder];
       _table = [[NSTableView alloc] initWithFrame: scroll.contentView.bounds];
       [_table setDataSource: self]; [_table setDelegate: self];
       [_table setUsesAlternatingRowBackgroundColors: YES];
+      [_table setColumnAutoresizingStyle: NSTableViewNoColumnAutoresizing];
       [scroll setDocumentView: _table]; [v addSubview: scroll];
-      _inspector = [[PDInspectorView alloc] initWithFrame: NSMakeRect(740, 40, 350, 466)];
+      _inspector = [[PDInspectorView alloc] initWithFrame: NSMakeRect(width - 360, 40, 350, height - 184)];
       [_inspector setAutoresizingMask: NSViewMinXMargin | NSViewHeightSizable]; [v addSubview: _inspector];
-      _status = field(v, @"", NSMakeRect(10, 7, 1080, 26), NO);
+      _status = field(v, @"", NSMakeRect(10, 7, width - 20, 26), NO);
       [_status setAutoresizingMask: NSViewWidthSizable | NSViewMaxYMargin];
       [w setInitialFirstResponder: _generations ? (NSView *)_name : (NSView *)_beforeStart];
       [self refresh: nil];
+      NSScreen *screen = w.screen ?: [NSScreen mainScreen];
+      if (screen)
+        {
+          NSRect frame = w.frame, available = screen.visibleFrame;
+          if (NSWidth(frame) > NSWidth(available))
+            frame.size.width = MAX(w.minSize.width, NSWidth(available) - 16);
+          if (NSHeight(frame) > NSHeight(available))
+            frame.size.height = MAX(w.minSize.height, NSHeight(available) - 16);
+          [w setFrame: [w constrainFrameRect: frame toScreen: screen] display: NO];
+        }
     }
   return self;
 }
@@ -198,8 +212,57 @@ button(NSView *view, NSString *title, NSRect rect, id target, SEL action)
     {
       NSTableColumn *c = [[NSTableColumn alloc] initWithIdentifier: @(i)];
       [c.headerCell setStringValue: names[i]]; [c setEditable: NO];
-      [c setWidth: i == 0 ? (_generations ? 340 : 260) : (_generations ? 120 : 100)]; [_table addTableColumn: c];
+      NSFont *font = c.headerCell.font ?: [NSFont systemFontOfSize: [NSFont systemFontSize]];
+      CGFloat title = [names[i] sizeWithAttributes: @{NSFontAttributeName: font}].width;
+      CGFloat minimum = ceil(title) + 16;
+      if (i)
+        {
+          NSString *sample = _generations ? (i == 2 ? @"123456789" : @"123.45 GiB")
+            : (i == 4 ? @"+1000.0%" : ([GSPComparison kindIsTime: _choice.indexOfSelectedItem]
+              ? @"-0.000000 s" : @"-123456789 B"));
+          NSFont *dataFont = c.dataCell.font ?: [NSFont systemFontOfSize: [NSFont systemFontSize]];
+          minimum = MAX(minimum, ceil([sample sizeWithAttributes: @{NSFontAttributeName: dataFont}].width) + 16);
+        }
+      [c setMinWidth: minimum];
+      [_table addTableColumn: c];
     }
+  [self layoutColumns];
+}
+
+- (void) layoutColumns
+{
+  NSArray *columns = _table.tableColumns;
+  if (!columns.count) return;
+  NSScrollView *scroll = _table.enclosingScrollView;
+  NSView *content = self.window.contentView;
+  CGFloat contentWidth = NSWidth(content.bounds);
+  NSRect inspectorFrame = _inspector.frame;
+  inspectorFrame.size.width = MIN(350, MAX(300, floor(contentWidth * .30)));
+  inspectorFrame.origin.x = contentWidth - 10 - inspectorFrame.size.width;
+  [_inspector setFrame: inspectorFrame];
+  NSRect tableFrame = scroll.frame;
+  tableFrame.size.width = inspectorFrame.origin.x - 20;
+  [scroll setFrame: tableFrame];
+  CGFloat spacing = _table.intercellSpacing.width * columns.count;
+  CGFloat minimum = spacing;
+  for (NSTableColumn *column in columns) minimum += column.minWidth;
+  CGFloat width = MAX(minimum, floor(NSWidth(scroll.contentView.bounds)));
+  CGFloat extra = width - minimum;
+  for (NSUInteger i = 0; i < columns.count; i++)
+    {
+      NSTableColumn *column = columns[i];
+      /* Keep each heading readable before giving the name column most of
+         the remaining space. A small window must not squeeze the last
+         numeric column to zero. */
+      CGFloat share = columns.count == 1 ? 1 : (i == 0 ? .55 : .45 / (columns.count - 1));
+      [column setWidth: column.minWidth + extra * share];
+    }
+  [_table setFrameSize: NSMakeSize(width, NSHeight(_table.frame))];
+}
+
+- (void) windowDidResize: (NSNotification *)notification
+{
+  [self layoutColumns];
 }
 
 - (void) refresh: (id)sender
