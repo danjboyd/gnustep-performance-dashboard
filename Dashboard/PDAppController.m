@@ -5,7 +5,9 @@
 #import "PDTimelineView.h"
 #import <GSPerformance/GSPerformance.h>
 #import "GPStandardUpdaterController.h"
-#include <os/signpost.h>
+#if PD_ENABLE_SIGNPOSTS
+#  include <os/signpost.h>
+#endif
 
 #if !defined(_WIN32)
 #  include <fcntl.h>
@@ -21,7 +23,9 @@
   NSFileHandle *_terminationPipe;
   /* nil unless packaged: the packager writes the updater's configuration */
   GPStandardUpdaterController *_updater;
+#if PD_ENABLE_SIGNPOSTS
   os_log_t _openTraceLog;
+#endif
 }
 
 - (instancetype) init
@@ -29,8 +33,10 @@
   if ((self = [super init]) != nil)
     {
       _windows = [NSMutableArray array];
-      _openTraceLog = os_log_create("org.gnustep.PerformanceDashboard.OpenTraceDraft",
+#if PD_ENABLE_SIGNPOSTS
+      _openTraceLog = os_log_create("org.gnustep.PerformanceDashboard",
         OS_LOG_CATEGORY_POINTS_OF_INTEREST);
+#endif
       [[NSNotificationCenter defaultCenter] addObserver: self
         selector: @selector(windowClosed:) name: @"PDTraceWindowClosed" object: nil];
     }
@@ -247,15 +253,20 @@ termination_signal(int sig)
       && [[[path stringByDeletingLastPathComponent] pathExtension] isEqual: @"gstrace"])
     path = [path stringByDeletingLastPathComponent];
   PDTraceWindowController *wc = nil;
+#if PD_ENABLE_SIGNPOSTS
   os_signpost_id_t interval = os_signpost_id_generate(_openTraceLog);
   os_signpost_interval_begin(_openTraceLog, interval, "OpenTrace");
+#endif
   @try
     {
       wc = [[PDTraceWindowController alloc] initWithTracePath: path error: &error];
     }
   @finally
     {
-      os_signpost_interval_end(_openTraceLog, interval, "OpenTrace");
+#if PD_ENABLE_SIGNPOSTS
+      os_signpost_interval_end(_openTraceLog, interval, "OpenTrace", "%s",
+        wc ? "success" : "error");
+#endif
     }
   if (wc == nil)
     {

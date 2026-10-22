@@ -79,6 +79,7 @@
         "runtime/etc/GNUstep/GNUstep.conf",
         "runtime/etc/GNUstep/GlobalDefaults.plist",
         "runtime/lib/libGSPerformance.so.0",
+        "runtime/lib/libgsperf.so.0",
         "runtime/lib/libgnustep-gui.so.0.32",
         "runtime/System/Library/Bundles/libgnustep-back-032.bundle/libgnustep-back-032",
         "runtime/System/Library/Themes/Adwaita.theme/Adwaita",
@@ -118,6 +119,7 @@
         "usr/metadata/icons/PerformanceDashboard.png",
         "usr/runtime/etc/GNUstep/GlobalDefaults.plist",
         "usr/app/PerformanceDashboard.app/Resources/libgsperf-agent.so",
+        "usr/runtime/lib/libgsperf.so.0",
         "usr/runtime/bin/gstrace-bin"
       ]
     }
@@ -312,6 +314,7 @@
             "metadata/licenses/PerformanceDashboard.txt",
             "runtime/bin/defaults.exe",
             "runtime/bin/gstrace.exe",
+            "runtime/bin/gsperf.dll",
             "runtime/bin/GNUstep.conf",
             "runtime/System/Tools/gdnc.exe"
           ]

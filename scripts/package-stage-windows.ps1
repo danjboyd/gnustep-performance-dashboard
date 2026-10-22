@@ -55,7 +55,7 @@ function Resolve-MsysRoot {
 
 $exe = Join-Path $appSource "PerformanceDashboard.exe"
 if (-not (Test-Path $exe)) { throw "No built app at $exe; run scripts/package-build-windows.ps1 first." }
-foreach ($built in @((Join-Path $appSource "Resources\gsperf-agent.dll"), (Join-Path $repoRoot "Tools\gstrace\obj\gstrace.exe"))) {
+foreach ($built in @((Join-Path $appSource "Resources\gsperf-agent.dll"), (Join-Path $repoRoot "Tools\gstrace\obj\gstrace.exe"), (Join-Path $repoRoot "Runtime\obj\gsperf.dll"))) {
   if (-not (Test-Path $built)) { throw "Missing $built; run scripts/package-build-windows.ps1 first." }
 }
 
@@ -77,6 +77,8 @@ Get-ChildItem -Path (Join-Path $repoRoot "GSPerformance\obj") -Filter "*.dll" -F
 Copy-Item (Join-Path $repoRoot "Tools\gstrace\obj\gstrace.exe") (Join-Path $runtimeBin "gstrace.exe") -Force
 # gstrace looks for the recording agent next to the GSPerformance DLL.
 Copy-Item (Join-Path $appSource "Resources\gsperf-agent.dll") (Join-Path $runtimeBin "gsperf-agent.dll") -Force
+# The app's OpenTrace intervals use the public API DLL, not the injected agent.
+Copy-Item (Join-Path $repoRoot "Runtime\obj\gsperf.dll") (Join-Path $runtimeBin "gsperf.dll") -Force
 
 # GNUstep: fonts configuration, the back bundle and the gui's shared resources.
 Copy-Tree (Join-Path $clang64 "etc\fonts") (Join-Path $runtime "etc\fonts") | Out-Null

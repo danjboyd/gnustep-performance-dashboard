@@ -45,6 +45,7 @@ def inventory(stage, toolchain, project, source_cache=None):
             candidates.setdefault(Path(relative).name.lower(), []).append((name, relative))
 
     own = {"runtime/bin/gstrace.exe": project / "Tools/gstrace/obj/gstrace.exe",
+           "runtime/bin/gsperf.dll": project / "Runtime/obj/gsperf.dll",
            "runtime/bin/gsperf-agent.dll": project / "Runtime/obj/gsperf-agent.dll"}
     for path in (project / "GSPerformance/obj").glob("*.dll"):
         own["runtime/bin/" + path.name] = path

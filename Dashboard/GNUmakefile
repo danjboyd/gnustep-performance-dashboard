@@ -34,7 +34,13 @@ ADDITIONAL_OBJCFLAGS += -fobjc-arc -Wall -Wno-deprecated-declarations -Wno-proto
 main.m_FILE_FILTER_OUT_FLAGS = -fobjc-arc
 ADDITIONAL_INCLUDE_DIRS += -I../Runtime/include -I..
 ADDITIONAL_LIB_DIRS += -L../GSPerformance/obj -L../Runtime/obj
-ADDITIONAL_GUI_LIBS += -lGSPerformance -lgsperf
+ADDITIONAL_GUI_LIBS += -lGSPerformance
+# Use PD_ENABLE_SIGNPOSTS=0 for builds without the optional API library.
+PD_ENABLE_SIGNPOSTS ?= 1
+ifeq ($(PD_ENABLE_SIGNPOSTS),1)
+ADDITIONAL_OBJCFLAGS += -DPD_ENABLE_SIGNPOSTS=1
+ADDITIONAL_GUI_LIBS += -lgsperf
+endif
 
 # The packaged updater (third_party/gnustep-packager-updater/VENDORED.md):
 # GPUpdaterCore and GPUpdaterUI linked in, gp-update-helper in the bundle.
@@ -66,7 +72,9 @@ updater:
 # GPStandardUpdaterController looks for the helper beside the executable.
 after-all::
 ifneq (,$(WINDOWS))
+ifeq ($(PD_ENABLE_SIGNPOSTS),1)
 	cp ../Runtime/obj/gsperf.dll PerformanceDashboard.app/
+endif
 endif
 	@if [ -x "$(UPDATER_HELPER_DIR)/gp-update-helper.exe" ]; then \
 	  cp "$(UPDATER_HELPER_DIR)/gp-update-helper.exe" PerformanceDashboard.app/; \

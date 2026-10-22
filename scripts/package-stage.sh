@@ -115,7 +115,8 @@ cp "$app_source/Resources/libgsperf-agent.so" "$runtime/lib/libgsperf-agent.so"
 # (scripts/stage-linux-runtime.py). The recording agent in the app's
 # Resources links only libc, so nothing is added for it.
 python3 "$repo_root/scripts/stage-linux-runtime.py" "$stage_root" \
-  "$repo_root/GSPerformance/obj" "$gnustep_library/Libraries" "$gnustep_root/lib"
+  "$repo_root/GSPerformance/obj" "$repo_root/Runtime/obj" \
+  "$gnustep_library/Libraries" "$gnustep_root/lib"
 
 # GNUstep.conf with paths relative to itself (gnustep-base resolves './' and
 # '../' against the config file's directory), so the AppImage mount point can
