@@ -22,7 +22,7 @@ step() { printf '\n== %s\n' "$*"; }
 version_args=()
 [ -n "${1:-}" ] && version_args=(--version "$1")
 
-step "GNUstep toolchain (gnustep-cli-new v0.1.0)"
+step "GNUstep toolchain (gnustep-cli-new $("$pin" --field gnustep-toolchain release))"
 [ ! -e "$gnustep_root" ] || die "use a clean build home; an existing toolchain is not release provenance"
 python3 scripts/fetch-toolchain.py "$work/toolchain"
 sh "$work/toolchain/gnustep-bootstrap.sh" --yes --json setup --user \

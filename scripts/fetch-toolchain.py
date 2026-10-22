@@ -47,8 +47,8 @@ def fetch(destination, platform="linux", metadata_only=False):
             raise ValueError(f"{name}: cached SHA256 mismatch")
         print(f"{name}: verified {expected}", flush=True)
 
-    # The PowerShell bootstrap only verifies payload hashes. Authenticate the
-    # pinned manifest before allowing either platform's bootstrap to run.
+    # Authenticate metadata for every consumer, including Windows packaging
+    # which extracts archives directly without invoking a bootstrap.
     subprocess.run(["openssl", "dgst", "-sha256", "-verify",
                     str(ROOT / "packaging/toolchain-release-public.pem"),
                     "-signature", str(destination / "release-manifest.json.sig"),

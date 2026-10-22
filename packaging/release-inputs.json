@@ -6,10 +6,10 @@
     "revision": "b74231f84bc139a50ad50459acfaed10a07a4642"
   },
   "gnustep-packager": {
-    "comment": "Stable packager v0.1.1, including the smoke validation alert fix.",
+    "comment": "Stable packager v0.1.3, including launcher argument fixes. Requalify v0.1.4 when published.",
     "url": "https://github.com/danjboyd/gnustep-packager.git",
-    "tag": "v0.1.1",
-    "revision": "23f17080e37ef73e786aed9d34f65abd07eeb97e"
+    "tag": "v0.1.3",
+    "revision": "00555f61adead1bd0db9f58b57c057821e819fd3"
   },
   "appimagetool": {
     "comment": "gnustep-packager's default is appimagetool's moving continuous build; 0.1.3 was made with build 295 (8c8c91f). Release 1.9.1 is build 296 from the same commit. scripts/fetch-appimagetool.sh installs it where the packager looks, and the packager takes the AppImage runtime from it.",
@@ -24,16 +24,16 @@
     "sha256": "6f6015203c47806c5cc444c19d8ed019695e610fbd948154264bf9ca8e157561"
   },
   "gnustep-toolchain": {
-    "release": "v0.1.0",
+    "release": "v0.1.2",
     "platform": "linux-amd64-clang",
     "supportedHost": "Debian 13 amd64",
-    "baseUrl": "https://github.com/danjboyd/gnustep-cli-new/releases/download/v0.1.0",
+    "baseUrl": "https://github.com/danjboyd/gnustep-cli-new/releases/download/v0.1.2",
     "files": {
-      "gnustep-bootstrap.sh": "3bdfa7a29a6442ce1bb994b027bfcba78beec649ae820391f009ac9eeb40ba63",
-      "release-manifest.json": "9a7d88fd934d3c941de2541ae80427f444d91fef8653d2e13b3a8b9f47f25d1f",
-      "release-manifest.json.sig": "29e137dd20c65b9429e192950ed492d0ea454b3d7ffbd46d5107b190c4814298",
-      "gnustep-cli-linux-amd64-clang-0.1.0.tar.gz": "39a79b9b679dbc3a8e2426e6fb4b05397bc417bc64bd606ff7219be6857ff5f1",
-      "gnustep-toolchain-linux-amd64-clang-0.1.0.tar.gz": "41fd4b8323f877d70b5cb1fa08403f0c6edbea2afe799de2c0d0024781a73acb"
+      "gnustep-bootstrap.sh": "5fe9e1aa56187d7d5c4c7f93064ff964f1023689bfdcfc565b5eae82abeff216",
+      "release-manifest.json": "470146512221024633076f6107ffbaac1a4e2f063845297cfb362b1f6f3f5797",
+      "release-manifest.json.sig": "eab4f5741bf4f927db7efbeba1f967d3e11fac0b5b004855361ba904afa6a3f5",
+      "gnustep-cli-linux-amd64-clang-0.1.2.tar.gz": "247b21b207856ed38351b9975a05cde8fbcff3a6a0a1c69c68654240ddf4b30c",
+      "gnustep-toolchain-linux-amd64-clang-0.1.2.tar.gz": "41fd4b8323f877d70b5cb1fa08403f0c6edbea2afe799de2c0d0024781a73acb"
     }
   },
   "gnustep-toolchain-windows": {

@@ -47,8 +47,11 @@ Get-PinnedSource out/WinUITheme 'https://github.com/danjboyd/plugins-themes-winu
 Invoke-Checked python @('scripts/fetch-toolchain.py', '--platform', 'windows', 'dist/toolchain-windows')
 $toolchain = [System.IO.Path]::GetFullPath((Join-Path $repoRoot $ToolchainRoot))
 if (-not (Test-Path -LiteralPath $toolchain)) {
+  $archives = @($inputs.'gnustep-toolchain-windows'.files.PSObject.Properties.Name |
+    Where-Object { $_ -like 'gnustep-toolchain-windows-*.zip' })
+  if ($archives.Count -ne 1) { throw 'Expected one pinned Windows toolchain archive.' }
   New-Item -ItemType Directory -Path $toolchain | Out-Null
-  Invoke-Checked (Join-Path $env:SystemRoot 'System32/tar.exe') @('-xf', 'dist/toolchain-windows/gnustep-toolchain-windows-amd64-msys2-clang64-0.1.1.zip', '-C', $toolchain)
+  Invoke-Checked (Join-Path $env:SystemRoot 'System32/tar.exe') @('-xf', (Join-Path 'dist/toolchain-windows' $archives[0]), '-C', $toolchain)
 } elseif ($Release) {
   throw 'Release builds require a new toolchain extraction. Choose an unused ToolchainRoot.'
 }

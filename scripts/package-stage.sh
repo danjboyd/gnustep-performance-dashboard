@@ -37,9 +37,6 @@ app_source="$repo_root/Dashboard/PerformanceDashboard.app"
 gnustep_root="${GNUSTEP_CLI_ROOT:-$HOME/.local/share/gnustep-cli}"
 gnustep_library="$gnustep_root/Local/Library"
 gnustep_tools="$gnustep_root/Local/Tools"
-# libobjc2 and libdispatch live in the install's lib, which GNUstep.sh does
-# not add; the theme and back builds run GNUstep tools that need them.
-export LD_LIBRARY_PATH="$gnustep_root/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
 require() {
   if [[ ! -e "$1" ]]; then
@@ -47,6 +44,14 @@ require() {
     exit 1
   fi
 }
+
+# The pinned toolchain's activation supplies its runtime library path as
+# well as the GNUstep build environment used by the theme and back builds.
+require "$gnustep_root/System/Library/Makefiles/GNUstep.sh" "set GNUSTEP_CLI_ROOT"
+set +u
+# shellcheck disable=SC1091
+. "$gnustep_root/System/Library/Makefiles/GNUstep.sh"
+set -u
 
 if [[ ! -x "$app_source/PerformanceDashboard" ]]; then
   "$repo_root/scripts/package-build.sh"

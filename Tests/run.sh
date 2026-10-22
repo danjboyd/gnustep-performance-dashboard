@@ -32,7 +32,7 @@ cc -O1 -g -fno-omit-frame-pointer "$ROOT/Tests/fixtures/stress.c" -o "$OUT/stres
 cc -O0 -g -Wno-unused-result "$ROOT/Tests/fixtures/iofix.c" -o "$OUT/iofix" || exit 1
 cc -shared -fPIC "$ROOT/Tests/fixtures/preloadmark.c" -o "$OUT/libpreloadmark.so" || exit 1
 cc -shared -fPIC "$ROOT/Tests/fixtures/deniedread.c" -o "$OUT/libdeniedread.so" || exit 1
-clang $OBJCFLAGS -O0 -Wno-unused-but-set-variable -I"$ROOT/Runtime/include" \
+clang $OBJCFLAGS -g -O0 -Wno-unused-but-set-variable -I"$ROOT/Runtime/include" \
   "$ROOT/Tests/fixtures/objcwork.m" -o "$OUT/objcwork" $(gnustep-config --base-libs) \
   -L"$ROOT/Runtime/obj" -lgsperf -Wl,-rpath,"$ROOT/Runtime/obj" || exit 1
 clang $OBJCFLAGS -O0 "$ROOT/docs/upstream-issues/jpeg_probe_leak.m" \

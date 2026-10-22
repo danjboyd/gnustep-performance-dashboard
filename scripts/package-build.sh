@@ -15,9 +15,6 @@ set +u
 # shellcheck disable=SC1091
 . "$gnustep_root/System/Library/Makefiles/GNUstep.sh"
 set -u
-# libobjc2 and libdispatch live in the install's lib, which GNUstep.sh does
-# not add; the build runs GNUstep tools (pl2link) that need them.
-export LD_LIBRARY_PATH="$gnustep_root/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
 # Objects made against a different GNUstep installation are not reusable:
 # make does not know that the toolchain/environment changed.
