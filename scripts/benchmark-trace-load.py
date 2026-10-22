@@ -58,7 +58,11 @@ if out == source or source in out.parents or args.timeout < 5:
 sandbox = Path(str(out) + '-sandbox')
 private_home = Path(os.environ.get('PD_PRIVATE_HOME_DIR', str(sandbox / 'home')))
 passwd_home = pwd.getpwuid(os.getuid()).pw_dir
-if str(private_home) == passwd_home or not private_home.exists() or not os.path.samefile(private_home, passwd_home):
+ci_home = (os.environ.get('PD_PRIVATE_HOME_MODE') == 'ephemeral-ci'
+           and passwd_home != '/home/danboyd'
+           and any(os.environ.get(key) == 'true' for key in ('GITHUB_ACTIONS', 'CI')))
+if not ci_home and (str(private_home) == passwd_home or not private_home.exists()
+                    or not os.path.samefile(private_home, passwd_home)):
     helper = Path(__file__).with_name('with-private-home.py')
     inputs = [image, source] + ([args.recorder_appimage.resolve()] if args.recorder_appimage else [])
     reads = [part for path in inputs for part in ('--read', str(path))]
@@ -68,7 +72,8 @@ out.mkdir(mode=0o700, parents=True)  # Refuse reuse, preserving previous evidenc
 sample = Path(__file__).resolve().parents[1] / 'Tests/data/sample.gstrace'
 receipt = {'diagnosticOnly': True, 'appimage': identity(image), 'inputPath': str(source),
            'inputFiles': trace_identity(source), 'initialFiles': trace_identity(sample), 'runs': []}
-receipt['isolatedHome'] = str(private_home)
+receipt['isolatedHome'] = None if ci_home else str(private_home)
+receipt['homeIsolationMode'] = 'ephemeral-ci' if ci_home else 'bwrap'
 recorder_image = args.recorder_appimage.resolve() if args.recorder_appimage else image
 receipt['recorderAppimage'] = identity(recorder_image)
 xvfb = record = pid = None

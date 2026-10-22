@@ -24,6 +24,11 @@ over the passwd home and isolating the user runtime directory. Each run uses sep
 and the packaged Adwaita theme, with automatic updater checks disabled. No
 user display or session bus is used. This also isolates packaged CLI wrappers
 that override `GNUSTEP_CONFIG_FILE`; setting `HOME` alone does not.
+With `GITHUB_ACTIONS=true` or `CI=true` and a passwd home other than
+`/home/danboyd`, the helper logs that it uses the existing ephemeral runner
+home and runs directly. The receipt labels that mode; it does not claim a
+bind-mounted home. The development home always requires `bwrap`, even with
+CI markers set, and missing namespace support never silently falls back there.
 The existing `PDOpenTrace` launch option
 opens the small startup sample after menus are built, so its addition to
 recent files cannot change which submenu entry selects the measured input.
