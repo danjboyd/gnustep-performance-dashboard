@@ -33,9 +33,12 @@ scratch.mkdir(mode=0o700, parents=True)  # Never reuse a previous check's home.
 for name in ('home', 'run'):
     (scratch / name).mkdir(mode=0o700)
 repo = Path(__file__).resolve().parents[1]
-lookup = subprocess.run(['git', '-C', str(repo), 'rev-parse', '--git-common-dir'],
-                        text=True, capture_output=True)
-original_repo = (repo / lookup.stdout.strip()).resolve().parent if lookup.returncode == 0 else repo
+try:
+    lookup = subprocess.run(['git', '-C', str(repo), 'rev-parse', '--git-common-dir'],
+                            text=True, capture_output=True)
+except FileNotFoundError:
+    lookup = None
+original_repo = (repo / lookup.stdout.strip()).resolve().parent if lookup and lookup.returncode == 0 else repo
 runtime = f'/run/user/{os.getuid()}'
 wrapped = ['bwrap', '--unshare-user', '--die-with-parent', '--ro-bind', '/', '/', '--bind', '/tmp', '/tmp',
            '--dev-bind', '/dev', '/dev', '--proc', '/proc',
