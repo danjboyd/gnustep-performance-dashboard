@@ -62,7 +62,7 @@ jobs:
             libx11-dev libxext-dev libxft-dev libxrender-dev libfreetype-dev \
             libfontconfig-dev libcairo2-dev libglib2.0-dev \
             xvfb xauth x11-utils fonts-dejavu-core \
-            squashfs-tools desktop-file-utils
+            squashfs-tools desktop-file-utils bubblewrap
 
       - uses: actions/checkout@v4
 

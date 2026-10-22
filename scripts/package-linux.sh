@@ -107,7 +107,9 @@ read -r -t 10 display_number <&3 || die "Xvfb did not start"
 mkdir -p "$work/home" "$work/xdg"
 DISPLAY=":$display_number" GNUSTEP_HOME="$work/home" XDG_DATA_HOME="$work/xdg" XDG_CONFIG_HOME="$work/xdg" \
   DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent \
-  pwsh "$packager" -Manifest "$manifest" -Command validate -Backend appimage -RunSmoke "${version_args[@]}"
+  APPIMAGE_EXTRACT_AND_RUN=1 \
+  python3 scripts/with-private-home.py "$work/smoke-sandbox" -- \
+    pwsh "$packager" -Manifest "$manifest" -Command validate -Backend appimage -RunSmoke "${version_args[@]}"
 kill "$xvfb_pid" 2>/dev/null || true
 xvfb_pid=""
 

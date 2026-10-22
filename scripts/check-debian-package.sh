@@ -5,7 +5,7 @@
 set -euo pipefail
 apt-get update
 apt-get install -y --no-install-recommends gcc libc6-dev binutils libunwind8 \
-  xvfb xauth x11-utils fonts-dejavu-core python3 procps ca-certificates \
+  xvfb xauth x11-utils fonts-dejavu-core python3 procps ca-certificates bubblewrap \
   libxft2 libxt6t64 libcairo2 libglib2.0-0t64 libdbus-1-3
 export APPIMAGE_EXTRACT_AND_RUN=1
 bash /src/scripts/check-appimage-record.sh /candidate.AppImage

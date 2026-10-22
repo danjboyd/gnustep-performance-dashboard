@@ -42,6 +42,13 @@ inputs; `pinned-checkout.sh` checks them out under `out/`.
 
 `check-appimage-record.sh` launches a private Xvfb and verifies that the app
 and its bundled gstrace record a fixture's ten known leaks and finish cleanly.
+AppImage smoke and update checks require `bwrap`. The shared
+`scripts/with-private-home.py` helper binds a scratch directory over the
+passwd home and isolates its runtime directory. A private `HOME` or caller
+`GNUSTEP_CONFIG_FILE` alone is insufficient: AppRun sets its own config.
+Container runners must permit nested user/mount namespaces. Default Docker
+filtering rejects this helper; a namespace-enabled runner needs separate
+configuration and qualification. Namespace setup failure stops the check.
 This is a package smoke test, not the entire real-application acceptance gate.
 Results and provenance (source commit, pins, library build IDs and checks)
 are written to `dist/packages/`. A dirty-tree dry run is never release evidence

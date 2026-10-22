@@ -15,6 +15,15 @@ appimage="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 die() { echo "check-appimage-record: $*" >&2; exit 1; }
 
+if ! python3 "$repo_root/scripts/with-private-home.py" --check; then
+  sandbox_parent="$(mktemp -d "${TMPDIR:-/tmp}/pd-record-home.XXXXXX")"
+  exec python3 "$repo_root/scripts/with-private-home.py" "$sandbox_parent/sandbox" \
+    --read "$appimage" -- bash "$repo_root/scripts/check-appimage-record.sh" "$appimage"
+fi
+
+# Extraction works inside the private mount namespace without FUSE helpers.
+export APPIMAGE_EXTRACT_AND_RUN=1
+
 work="$(mktemp -d "${TMPDIR:-/tmp}/pd-record-check.XXXXXX")"
 xvfb_pid=""; app_pid=""
 cleanup() {

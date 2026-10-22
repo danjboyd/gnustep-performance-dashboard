@@ -13,6 +13,12 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 old_appimage="$(realpath "$1")"
 new_appimage="$(realpath "$2")"
 new_feed="$(realpath "$3")"
+if ! python3 "$repo_root/scripts/with-private-home.py" --check; then
+  sandbox_parent="$(mktemp -d "${TMPDIR:-/tmp}/pd-update-home.XXXXXX")"
+  exec python3 "$repo_root/scripts/with-private-home.py" "$sandbox_parent/sandbox" \
+    --read "$old_appimage" --read "$new_appimage" --read "$new_feed" -- \
+    bash "$repo_root/scripts/check-appimage-update.sh" "$old_appimage" "$new_appimage" "$new_feed"
+fi
 for tool in Xvfb xdotool xwininfo openssl; do
   command -v "$tool" >/dev/null || { echo "test-appimage-update: needs $tool" >&2; exit 1; }
 done
@@ -199,18 +205,11 @@ PYEDIT
   stop_app || true
 }
 
-real_settings="$HOME/GNUstep/Defaults/PerformanceDashboard.plist"
-settings_before="$(stat -c %Y "$real_settings" 2>/dev/null || echo none)"
-
 run_scenario valid
 run_scenario bad-hash
 run_scenario missing
 # A valid retry after failures must still update and restart.
 run_scenario valid
-
-if [ "$(stat -c %Y "$real_settings" 2>/dev/null || echo none)" != "$settings_before" ]; then
-  fail "$real_settings changed"
-fi
 
 if [ "$failures" -ne 0 ]; then
   echo "test-appimage-update: $failures failure(s); logs were in $work" >&2
