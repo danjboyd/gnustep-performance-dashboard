@@ -278,10 +278,34 @@ typedef struct addr_slot
   uint32_t used;
 } addr_slot;
 
+/* Finished process event arrays are immutable. Keep only derived data until
+   a caller requests the public contiguous records; raw fields stay in the
+   retained process instead of being duplicated in every analysis row. */
+typedef struct compact_allocation
+{
+  GSPTime freeTime;
+  uint32_t sourceIndex;
+  uint32_t category;
+} compact_allocation;
+
+static inline GSPAllocationRecord
+allocation_record(const GSPAllocationRecord *records, const compact_allocation *compact,
+                  const GSPAllocationEvent *events, NSUInteger index)
+{
+  if (records) return records[index];
+  const compact_allocation *c = &compact[index];
+  const GSPAllocationEvent *e = &events[c->sourceIndex];
+  GSPAllocationRecord value = { e->time, c->freeTime, e->address, e->size,
+                               e->stack, c->category, e->tid, 0 };
+  return value;
+}
+
 @implementation GSPAllocationAnalysis
 {
   GSPProcess *_process;
   GSPAllocationRecord *_records;
+  compact_allocation *_compact;
+  const GSPAllocationEvent *_events;
   NSUInteger _count, _cap;
   NSMutableArray *_categoryNames;
   NSMutableDictionary *_categoryIndex;
@@ -341,6 +365,7 @@ slot_for(addr_slot *slots, uint64_t mask, uint64_t address)
 
   const GSPAllocationEvent *ev = process.allocationEvents;
   NSUInteger ne = process.allocationEventCount;
+  BOOL compactable = process.finishedCleanly && ne <= UINT32_MAX;
   const GSPTagEvent *tags = process.tagEvents;
   NSUInteger nt = process.tagEventCount;
   uint64_t cap = 1024;
@@ -436,7 +461,7 @@ slot_for(addr_slot *slots, uint64_t mask, uint64_t address)
               bySize[h].category = r->category;
               bySize[h].used = 1;
             }
-          r->reserved = 0;
+          r->reserved = compactable ? (uint32_t)i : 0;
           addr_slot *sl = slot_for(slots, mask, e->address);
           if (sl->used && sl->record != UINT32_MAX)
             {
@@ -456,15 +481,47 @@ slot_for(addr_slot *slots, uint64_t mask, uint64_t address)
   free(bySize);
   free(byClass);
   free(slots);
+  if (compactable && _count)
+    {
+      _compact = malloc(_count * sizeof(compact_allocation));
+      if (_compact)
+        {
+          for (NSUInteger i = 0; i < _count; i++)
+            _compact[i] = (compact_allocation){ _records[i].freeTime,
+              _records[i].reserved, _records[i].category };
+          _events = ev;
+          free(_records);
+          _records = NULL;
+        }
+      else
+        for (NSUInteger i = 0; i < _count; i++) _records[i].reserved = 0;
+    }
   return self;
 }
 
 - (void) dealloc
 {
   free(_records);
+  free(_compact);
 }
 
-- (const GSPAllocationRecord *) records { return _records; }
+- (const GSPAllocationRecord *) records
+{
+  if (_records == NULL && _count)
+    {
+      GSPAllocationRecord *expanded = malloc(_count * sizeof(GSPAllocationRecord));
+      if (expanded == NULL)
+        [NSException raise: NSMallocException format: @"Cannot expand allocation records"];
+      for (NSUInteger i = 0; i < _count; i++)
+        expanded[i] = allocation_record(NULL, _compact, _events, i);
+      _records = expanded;
+      _cap = _count;
+      free(_compact);
+      _compact = NULL;
+      _events = NULL;
+    }
+  return _records;
+}
 - (NSUInteger) recordCount { return _count; }
 - (NSArray *) categoryNames { return _categoryNames; }
 - (uint64_t) peakLiveBytes { return _peak; }
@@ -503,7 +560,8 @@ alive_at(const GSPAllocationRecord *r, GSPTime t)
     }
   for (NSUInteger i = 0; i < _count; i++)
     {
-      const GSPAllocationRecord *r = &_records[i];
+      GSPAllocationRecord value = allocation_record(_records, _compact, _events, i);
+      const GSPAllocationRecord *r = &value;
       if (r->allocTime < start || r->allocTime > e)
         continue;
       GSPAllocationCategory *cat = [cats objectAtIndex: r->category];
@@ -558,7 +616,8 @@ alive_at(const GSPAllocationRecord *r, GSPTime t)
   NSParameterAssert(start <= e && observed >= e);
   for (NSUInteger i = 0; i < _count; i++)
     {
-      const GSPAllocationRecord *r = &_records[i];
+      GSPAllocationRecord value = allocation_record(_records, _compact, _events, i);
+      const GSPAllocationRecord *r = &value;
       if (r->allocTime < start || r->allocTime > e)
         continue;
       if (category != UINT32_MAX && r->category != category)
@@ -589,7 +648,8 @@ alive_at(const GSPAllocationRecord *r, GSPTime t)
 
   for (NSUInteger i = 0; i < _count; i++)
     {
-      const GSPAllocationRecord *r = &_records[i];
+      GSPAllocationRecord value = allocation_record(_records, _compact, _events, i);
+      const GSPAllocationRecord *r = &value;
       if (r->allocTime < start || r->allocTime > e)
         continue;
       if (persistent && !alive_at(r, observed))
@@ -622,7 +682,8 @@ alive_at(const GSPAllocationRecord *r, GSPTime t)
   double span = (double)(end - start);
   for (NSUInteger i = 0; i < _count; i++)
     {
-      const GSPAllocationRecord *r = &_records[i];
+      GSPAllocationRecord value = allocation_record(_records, _compact, _events, i);
+      const GSPAllocationRecord *r = &value;
       double sz = (double)r->size;
       if (r->allocTime < start)
         {

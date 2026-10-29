@@ -975,6 +975,10 @@ compare_raw_signposts(const void *a, const void *b)
       _haveHeader = YES;
     }
 
+  /* END seals an epoch. This also keeps finished-event pointers held by
+     compact analyses stable. A different header creates a fresh process in
+     parseMore:, including when the previous epoch was already finished. */
+  if (_clean) return YES;
   unsigned long long before = _offset;
   while (_offset + sizeof(gsp_record) <= length)
     {

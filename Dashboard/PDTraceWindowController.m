@@ -8,9 +8,6 @@
 #import "PDAppController.h"
 #import "PDRecordPanel.h"
 #import "PDInvestigationWindowController.h"
-#if defined(__GLIBC__)
-#  include <malloc.h>
-#endif
 
 @interface PDTraceWindowController () <PDTimelineDelegate, PDDetailControllerDelegate,
                                        GSPRecorderDelegate, NSWindowDelegate>
@@ -221,7 +218,6 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
 - (void) loadTraceInBackground: (NSString *)path
 {
   NSDictionary *completed = nil;
-  BOOL bulkLoad = NO;
   @autoreleasepool
     {
       NSMutableDictionary *result = [NSMutableDictionary dictionary];
@@ -233,7 +229,6 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
             {
               PDTrackRenderer *renderer = [[PDTrackRenderer alloc] initWithTrace: trace];
               [renderer prepareAnalyses];
-              bulkLoad = trace.targetProcess.allocationEventCount >= 1000000;
               [result setObject: trace forKey: @"trace"];
               [result setObject: renderer forKey: @"renderer"];
             }
@@ -246,14 +241,7 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
       if (error) [result setObject: error forKey: @"error"];
       completed = [result copy];
     }
-  /* Drain temporary Foundation objects before publishing the immutable model.
-     After a bulk load, glibc can return unused arena pages to the OS instead
-     of retaining this one-off high-water mark for the life of the window. */
-#if defined(__GLIBC__)
-  if (bulkLoad) malloc_trim(0);
-#else
-  (void)bulkLoad;
-#endif
+  /* Temporary Foundation objects are drained before publishing the model. */
   [self performSelectorOnMainThread: @selector(didLoadTrace:)
                          withObject: completed waitUntilDone: NO];
 }

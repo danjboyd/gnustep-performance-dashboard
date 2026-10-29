@@ -66,6 +66,38 @@ child(GSPCallTreeNode *n, NSString *name)
   return t;
 }
 
+- (void) testFinishedAllocationAnalysisMatchesExpandedRecords
+{
+  TraceBuilder *b = named_builder();
+  uint64_t frames[] = { A_HELPER + 0x10 };
+  [b stack: 1 frames: frames count: 1];
+  [b allocAt: b.start + MS address: 0x10000 size: 32 stack: 1];
+  [b allocAt: b.start + 2 * MS address: 0x20000 size: 64 stack: 1];
+  [b freeAt: b.start + 3 * MS address: 0x10000];
+  [b end: b.start + 4 * MS];
+  GSPTrace *t = [self traceFrom: b name: @"compact-analysis" instruments: nil];
+  GSPAllocationAnalysis *a = [[GSPAllocationAnalysis alloc] initWithProcess: t.targetProcess];
+  double before[4], after[4];
+  [a liveBytes: before buckets: 4 start: b.start end: b.start + 4 * MS];
+  GSPAllocationCategory *summary = [[a categoriesFrom: 0 to: 0] objectAtIndex: 0];
+  uint64_t weight = [a callTreeFrom: 0 to: 0 persistentOnly: NO options: 0].totalWeight;
+  const GSPAllocationRecord *records = a.records;
+  XCTAssertEqual(records[0].address, (uint64_t)0x10000);
+  XCTAssertEqual(records[0].freeTime, b.start + 3 * MS);
+  XCTAssertEqual(records[0].reserved, (uint32_t)0);
+  XCTAssertEqual(records[1].address, (uint64_t)0x20000);
+  XCTAssertEqual(records[1].freeTime, (uint64_t)0);
+  XCTAssertTrue(a.records == records);
+  [a liveBytes: after buckets: 4 start: b.start end: b.start + 4 * MS];
+  for (NSUInteger i = 0; i < 4; i++) XCTAssertEqual(before[i], after[i]);
+  GSPAllocationCategory *expanded = [[a categoriesFrom: 0 to: 0] objectAtIndex: 0];
+  XCTAssertEqual(summary.persistentBytes, expanded.persistentBytes);
+  XCTAssertEqual(summary.totalCount, expanded.totalCount);
+  XCTAssertEqual(weight, [a callTreeFrom: 0 to: 0 persistentOnly: NO options: 0].totalWeight);
+  XCTAssertTrue([t reload: NULL]);
+  XCTAssertEqual(records[1].size, (uint64_t)64);
+}
+
 - (void) testStableAllocationSortKeepsEqualTimeFreeOrder
 {
   TraceBuilder *b = named_builder();
