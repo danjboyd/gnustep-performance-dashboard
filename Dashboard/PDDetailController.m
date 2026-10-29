@@ -507,9 +507,13 @@ col(NSString *ident, NSString *title, CGFloat width)
   else
     {
       _weightIsBytes = NO;
-      _tree = [GSPCallTree cpuTreeForProcess: p start: _start end: _end
-                                     threads: [self selectedThreads]
-                                     options: [self treeOptions]];
+      NSSet *threads = [self selectedThreads];
+      GSPCallTreeOptions options = [self treeOptions];
+      if (_start == 0 && _end == 0 && threads == nil && options == 0)
+        _tree = [_renderer takePreparedCPUCallTree];
+      if (_tree == nil)
+        _tree = [GSPCallTree cpuTreeForProcess: p start: _start end: _end
+                                       threads: threads options: options];
     }
   [[[_outline tableColumnWithIdentifier: @"weight"] headerCell]
     setStringValue: _weightIsBytes ? @"Bytes" : @"Weight"];

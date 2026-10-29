@@ -24,6 +24,9 @@
 /* Prepare immutable loaded-trace analyses before publishing on the UI thread.
    The renderer must have no UI consumer while this runs. */
 - (void) prepareAnalyses;
+/* Transfers the default initial CPU tree once. Modified/ranged trees still
+   use the ordinary builder, and invalidation discards the prepared tree. */
+- (GSPCallTree *) takePreparedCPUCallTree;
 - (NSString *) instrumentForTrack: (NSUInteger)track;
 - (NSUInteger) trackForInstrument: (NSString *)identifier;
 /* Per-thread CPU sub-tracks: the thread id, or 0 for instrument tracks. */

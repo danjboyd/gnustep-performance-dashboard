@@ -17,6 +17,7 @@
   GSPIOAnalysis *_io;
   NSMutableDictionary *_signpostLanes;   /* name -> color index */
   double _peakCPU;
+  GSPCallTree *_preparedCPUTree;
 }
 
 - (instancetype) initWithTrace: (GSPTrace *)trace
@@ -129,6 +130,7 @@
 
 - (void) invalidate
 {
+  _preparedCPUTree = nil;
   _hangs = nil;
   _allocs = nil;
   _leaks = nil;
@@ -142,11 +144,23 @@
   /* Embedded symbol dictionaries can be large too. Build this cache while
      the process is still owned exclusively by the loader worker. */
   (void)_process.symbolicator;
+  NSString *first = [_tracks firstObject];
+  if ([first isEqual: GSPInstrumentTimeProfiler]
+      || [first isEqual: GSPInstrumentSystemProfiler])
+    _preparedCPUTree = [GSPCallTree cpuTreeForProcess: _process start: 0 end: 0
+                                            threads: nil options: 0];
   if ([_tracks containsObject: GSPInstrumentHangs]) [self hangAnalysis];
   if ([_tracks containsObject: GSPInstrumentAllocations]) [self allocationAnalysis];
   if ([_tracks containsObject: GSPInstrumentLeaks]) [self leakAnalysis];
   if ([_tracks containsObject: GSPInstrumentFileActivity]
       || [_tracks containsObject: GSPInstrumentNetwork]) [self ioAnalysis];
+}
+
+- (GSPCallTree *) takePreparedCPUCallTree
+{
+  GSPCallTree *tree = _preparedCPUTree;
+  _preparedCPUTree = nil;
+  return tree;
 }
 
 - (GSPHangAnalysis *) hangAnalysis
