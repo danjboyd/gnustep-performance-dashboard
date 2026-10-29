@@ -139,6 +139,9 @@
 
 - (void) prepareAnalyses
 {
+  /* Embedded symbol dictionaries can be large too. Build this cache while
+     the process is still owned exclusively by the loader worker. */
+  (void)_process.symbolicator;
   if ([_tracks containsObject: GSPInstrumentHangs]) [self hangAnalysis];
   if ([_tracks containsObject: GSPInstrumentAllocations]) [self allocationAnalysis];
   if ([_tracks containsObject: GSPInstrumentLeaks]) [self leakAnalysis];
