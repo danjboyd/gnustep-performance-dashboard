@@ -22,10 +22,14 @@ It has three parts:
 are deferred. See [the v0.1.0 gates](docs/v0.1.0-plan.md),
 [release process](docs/release.md), and [Windows notes](docs/windows.md).
 
-The development branch adds allocation generations, in-app recording
-comparisons, richer hang evidence and source navigation. See the
-[v0.1.2 feature and acceptance plan](docs/v0.1.2-plan.md); these features are
-not part of the published v0.1.0 package.
+The next planned release is **v0.1.3 for Debian 13 amd64**, Linux-only.
+It includes allocation generations, in-app recording comparisons, richer hang
+evidence, source navigation and investigation-window layout improvements.
+**v0.1.1 and v0.1.2 were unpublished internal milestones**; v0.1.3 includes their
+changes. Windows packages remain deferred. See the
+[v0.1.3 release notes](docs/releases/v0.1.3.md) and
+[release process](docs/release.md). v0.1.0 remains the published release until
+v0.1.3 publication is separately approved.
 
 ## Installing
 
