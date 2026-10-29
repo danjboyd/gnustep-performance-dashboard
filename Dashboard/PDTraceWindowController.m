@@ -198,8 +198,13 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
       [_targetLabel setStringValue: [path lastPathComponent]];
       [_statusLabel setStringValue: @"Reading trace and preparing analyses…"];
       [_recordButton setEnabled: NO];
+      [_mainSplit setHidden: YES];
+      NSRect bounds = [[[self window] contentView] bounds];
       _loadProgress = [[NSProgressIndicator alloc] initWithFrame:
-        NSMakeRect(16, 18, 260, 16)];
+        NSMakeRect((bounds.size.width - 320) / 2, (bounds.size.height - 16) / 2,
+                   320, 16)];
+      [_loadProgress setAutoresizingMask: NSViewMinXMargin | NSViewMaxXMargin
+                                         | NSViewMinYMargin | NSViewMaxYMargin];
       [_loadProgress setIndeterminate: YES];
       [_loadProgress setStyle: NSProgressIndicatorBarStyle];
       [[[self window] contentView] addSubview: _loadProgress];
@@ -257,6 +262,7 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
       [_detail showInstrument: [_renderer instrumentForTrack: 0]];
       [self attachTrace: trace];
       [self updateLabels];
+      [_mainSplit setHidden: NO];
       [_recordButton setEnabled: YES];
     }
   void (^completion)(BOOL, NSError *) = _loadCompletion;
