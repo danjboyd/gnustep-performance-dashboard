@@ -247,36 +247,45 @@ termination_signal(int sig)
 
 - (BOOL) openTraceAtPath: (NSString *)path
 {
-  NSError *error = nil;
   /* accept a file inside the bundle too */
   if (![[path pathExtension] isEqual: @"gstrace"]
       && [[[path stringByDeletingLastPathComponent] pathExtension] isEqual: @"gstrace"])
     path = [path stringByDeletingLastPathComponent];
-  PDTraceWindowController *wc = nil;
 #if PD_ENABLE_SIGNPOSTS
   os_signpost_id_t interval = os_signpost_id_generate(_openTraceLog);
   os_signpost_interval_begin(_openTraceLog, interval, "OpenTrace");
 #endif
+  PDTraceWindowController *wc = nil;
   @try
     {
-      wc = [[PDTraceWindowController alloc] initWithTracePath: path error: &error];
+      wc = [[PDTraceWindowController alloc] initForLoadingTraceAtPath: path
+        completion: ^(BOOL success, NSError *error) {
+#if PD_ENABLE_SIGNPOSTS
+          os_signpost_interval_end(_openTraceLog, interval, "OpenTrace", "%s",
+            success ? "success" : error ? "error" : "cancelled");
+#endif
+          if (success) [self remember: path];
+          else if (error)
+            NSRunAlertPanel(@"Cannot Open Trace", @"%@", @"OK", nil, nil,
+                            [error localizedDescription] ?: path);
+        }];
     }
-  @finally
+  @catch (NSException *exception)
     {
 #if PD_ENABLE_SIGNPOSTS
-      os_signpost_interval_end(_openTraceLog, interval, "OpenTrace", "%s",
-        wc ? "success" : "error");
+      os_signpost_interval_end(_openTraceLog, interval, "OpenTrace", "%s", "error");
 #endif
+      @throw;
     }
   if (wc == nil)
     {
-      NSRunAlertPanel(@"Cannot Open Trace", @"%@", @"OK", nil, nil,
-                      [error localizedDescription] ?: path);
+#if PD_ENABLE_SIGNPOSTS
+      os_signpost_interval_end(_openTraceLog, interval, "OpenTrace", "%s", "error");
+#endif
       return NO;
     }
   [_windows addObject: wc];
   [wc showWindow: self];
-  [self remember: path];
   return YES;
 }
 

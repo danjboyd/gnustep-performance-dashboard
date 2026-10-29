@@ -21,6 +21,9 @@
 @property (nonatomic, readonly) GSPIOAnalysis *ioAnalysis;
 
 - (void) invalidate;
+/* Prepare immutable loaded-trace analyses before publishing on the UI thread.
+   The renderer must have no UI consumer while this runs. */
+- (void) prepareAnalyses;
 - (NSString *) instrumentForTrack: (NSUInteger)track;
 - (NSUInteger) trackForInstrument: (NSString *)identifier;
 /* Per-thread CPU sub-tracks: the thread id, or 0 for instrument tracks. */

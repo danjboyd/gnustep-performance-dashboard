@@ -66,6 +66,60 @@ child(GSPCallTreeNode *n, NSString *name)
   return t;
 }
 
+- (void) testAllocationStacksResolveBeforeAndAfterTheirDefinitions
+{
+  TraceBuilder *b = named_builder();
+  uint64_t frames[] = { A_HELPER + 0x10 };
+  [b stack: 1 frames: frames count: 1];
+  [b allocAt: b.start + MS address: 0x10000 size: 32 stack: 1];
+  [b allocAt: b.start + 2 * MS address: 0x20000 size: 64 stack: 2];
+  [b stack: 2 frames: frames count: 1];
+  [b end: b.start + 3 * MS];
+  GSPTrace *trace = [self traceFrom: b name: @"stack-order" instruments: nil];
+  const GSPAllocationEvent *events = trace.targetProcess.allocationEvents;
+  XCTAssertEqual(trace.targetProcess.allocationEventCount, (NSUInteger)2);
+  XCTAssertTrue(events[0].stack != 0);
+  XCTAssertEqual(events[0].stack, events[1].stack);
+  GSPAllocationAnalysis *analysis = [[GSPAllocationAnalysis alloc]
+    initWithProcess: trace.targetProcess];
+  GSPAllocationCategory *all = [[analysis categoriesFrom: 0 to: 0] objectAtIndex: 0];
+  XCTAssertEqual(all.persistentBytes, (uint64_t)96);
+}
+
+- (void) testReloadReplacesExecEpochWithoutKeepingOldDefinitions
+{
+  TraceBuilder *b = [self cpuBuilder];
+  [b end: b.start + 50 * MS];
+  GSPTrace *trace = [self traceFrom: b name: @"exec-epoch" instruments: nil];
+  GSPProcess *old = trace.targetProcess;
+  XCTAssertEqual(old.sampleCount, (NSUInteger)4);
+  NSString *stream = old.streamPath;
+  TraceBuilder *next = named_builder();
+  uint64_t frames[] = { A_HELPER + 0x10 };
+  [next sampleAt: next.start + MS tid: 4242 kind: GSP_SAMPLE_CPU weight: 7
+          frames: frames count: 1];
+  [next end: next.start + 2 * MS];
+  NSString *path = [next writeBundleNamed: @"exec-replacement" instruments: nil];
+  [_bundles addObject: path];
+  NSMutableData *data = [NSMutableData dataWithContentsOfFile:
+    [path stringByAppendingPathComponent: @"events-4242.bin"]];
+  gsp_file_header *header = [data mutableBytes];
+  header->start_ns += 1;
+  strcpy(header->exe, "/usr/bin/replaced");
+  XCTAssertTrue([data writeToFile: stream atomically: YES]);
+  XCTAssertTrue([trace reload: NULL]);
+  XCTAssertTrue(trace.changedOnLastReload);
+  GSPProcess *replaced = trace.targetProcess;
+  XCTAssertTrue(replaced != old);
+  XCTAssertEqual(replaced.sampleCount, (NSUInteger)1);
+  XCTAssertEqual(replaced.samples[0].weight, (uint16_t)7);
+  XCTAssertEqualObjects(replaced.executablePath, @"/usr/bin/replaced");
+  XCTAssertTrue(replaced.finishedCleanly);
+  XCTAssertTrue([trace reload: NULL]);
+  XCTAssertFalse(trace.changedOnLastReload);
+  XCTAssertTrue(trace.targetProcess == replaced);
+}
+
 - (TraceBuilder *) cpuBuilder
 {
   TraceBuilder *b = named_builder();

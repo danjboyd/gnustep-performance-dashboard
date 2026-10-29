@@ -85,6 +85,19 @@ check "cburn: inverted call tree leads with hot_inner" "sed -n 4p '$OUT/cburn-tr
 record framepointer --template 'Time Profiler' --env GSP_UNWIND=fp --launch "$OUT/cburn"
 check "frame-pointer fallback is disclosed" "'$GSTRACE' info '$OUT/framepointer.gstrace' 2>/dev/null | grep -q 'Frame-pointer unwinding selected'"
 
+echo "== Shell wrappers: exec keeps the recording, forked children stay excluded"
+record wrapper --template 'Time Profiler' --launch /bin/sh -c 'exec "$1"' wrapper "$OUT/cburn"
+"$GSTRACE" export "$OUT/wrapper.gstrace" --format json -o "$OUT/wrapper.json" 2>/dev/null
+check "wrapper exec: clean samples attributed to the replaced target" "python3 - '$OUT/wrapper.json' <<'EOF'
+import json,sys
+x=json.load(open(sys.argv[1]))
+sys.exit(0 if x['finishedCleanly'] and x['cpuSamples'] > 0 and x['executable'].endswith('/cburn') and any(f['symbol']=='hot_inner' for f in x['topFunctions']) else 1)
+EOF"
+record wrapper-delayed --template 'Time Profiler' --launch /bin/sh -c 'sleep 1; exec "$1"' wrapper "$OUT/cburn"
+check "delayed wrapper exec: target epoch finishes with samples" "'$GSTRACE' info '$OUT/wrapper-delayed.gstrace' 2>/dev/null | grep -q 'CPU samples: [1-9]' && '$GSTRACE' info '$OUT/wrapper-delayed.gstrace' 2>/dev/null | grep -q 'finished cleanly: yes'"
+record wrapper-child --template 'Time Profiler' --launch /bin/sh -c '"$1" & wait' wrapper "$OUT/cburn"
+check "wrapper fork: children are still excluded by default" "[ \$(find '$OUT/wrapper-child.gstrace' -name 'events-*.bin' | wc -l) -eq 1 ] && '$GSTRACE' info '$OUT/wrapper-child.gstrace' 2>/dev/null | grep -q 'finished cleanly: yes'"
+
 echo "== Stress: 8 threads allocating during sampling and leak checks"
 record deniedread --template Leaks --env LD_PRELOAD="$OUT/libdeniedread.so" --launch "$OUT/cburn"
 check "denied memory reads: trace explains unavailable scan" "'$GSTRACE' info '$OUT/deniedread.gstrace' 2>/dev/null | grep -q 'Leak scan unavailable'"

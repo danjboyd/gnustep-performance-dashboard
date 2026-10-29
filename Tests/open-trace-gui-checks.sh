@@ -4,9 +4,10 @@ set -eu
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 OUT="$ROOT/Tests/out/open-trace"
-mkdir -p "$OUT" "$OUT/tmp"
-chmod 700 "$OUT/tmp"
-export TMP="$OUT/tmp" DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent
+mkdir -p "$OUT"
+# GNUstep IPC socket paths must fit even in deeply nested worktrees.
+private_tmp=$(mktemp -d /tmp/pd-open-trace.XXXXXX)
+export TMP="$private_tmp" DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent
 clang $(gnustep-config --objc-flags) -fobjc-arc -Wno-protocol \
   -Wno-deprecated-declarations -DPD_ENABLE_SIGNPOSTS=1 -I. -IRuntime/include \
   -Ithird_party/gnustep-packager-updater/objc/GPUpdaterCore/Headers \
@@ -19,7 +20,7 @@ clang $(gnustep-config --objc-flags) -fobjc-arc -Wno-protocol \
 display_file=$(mktemp)
 Xvfb -displayfd 3 -screen 0 1280x900x24 -nolisten tcp -ac 3>"$display_file" >"$OUT/xvfb.log" 2>&1 &
 xpid=$!
-trap 'kill "$xpid" 2>/dev/null || :; rm -f "$display_file"' EXIT HUP INT TERM
+trap 'kill "$xpid" 2>/dev/null || :; rm -f "$display_file"; rm -rf "$private_tmp"' EXIT HUP INT TERM
 n=0
 while [ ! -s "$display_file" ] && [ "$n" -lt 10 ]; do sleep 1; n=$((n + 1)); done
 [ -s "$display_file" ] || { echo 'Private Xvfb failed to start'; exit 1; }

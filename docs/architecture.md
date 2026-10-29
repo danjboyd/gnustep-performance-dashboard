@@ -82,6 +82,10 @@ finish the recording before the process dies.
 **Children.** GNUstep caches the environment before the agent can scrub it, so
 helper processes (gdnc, gpbs) inherit `LD_PRELOAD`. The agent records only when
 its parent is the recorder (`GSP_RECORDER_PID`) unless children are followed.
+Injection settings remain across exec so wrapper scripts can replace their
+image while retaining recording. `GSP_TARGET_PID` also excludes fork/exec
+children. An exec atomically replaces this PID's event-stream epoch; readers
+discard the prior epoch's definitions and samples on the next reload.
 
 ## The Windows agent (gsperf-agent.dll)
 

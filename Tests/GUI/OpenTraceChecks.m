@@ -52,8 +52,43 @@ NSInteger NSRunAlertPanel(NSString *title, NSString *message, NSString *def,
 
 static NSInteger cancelPanel(id self, SEL cmd, id directory, id file, id types)
 { return NSCancelButton; }
-static id throwDuringOpen(id self, SEL cmd, id path, NSError **error)
+static id throwDuringOpen(id self, SEL cmd, id path, id completion)
 { [NSException raise: @"OpenTraceCheck" format: @"reader exception"]; return nil; }
+
+static IMP originalRead;
+static NSCondition *readGate;
+static BOOL releasedReader, readerWasOnMain, heartbeatRan;
+@interface LoadHeartbeat : NSObject
+- (void) releaseReader: (id)sender;
+@end
+@implementation LoadHeartbeat
+- (void) releaseReader: (id)sender
+{
+  [readGate lock];
+  heartbeatRan = YES;
+  releasedReader = YES;
+  [readGate broadcast];
+  [readGate unlock];
+}
+@end
+static id gatedRead(id receiver, SEL selector, id path, NSError **error)
+{
+  [readGate lock];
+  readerWasOnMain = [NSThread isMainThread];
+  NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow: 10];
+  while (!releasedReader && [deadline timeIntervalSinceNow] > 0)
+    [readGate waitUntilDate: deadline];
+  [readGate unlock];
+  return ((id (*)(id, SEL, id, NSError **))originalRead)(receiver, selector, path, error);
+}
+
+static void waitForEnds(unsigned count)
+{
+  NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow: 10];
+  while (ends < count && [deadline timeIntervalSinceNow] > 0)
+    [[NSRunLoop currentRunLoop] runUntilDate: [NSDate dateWithTimeIntervalSinceNow: .01]];
+  check(ends == count, @"asynchronous load completes on the main run loop");
+}
 
 int main(int argc, const char **argv)
 {
@@ -62,11 +97,24 @@ int main(int argc, const char **argv)
       [NSApplication sharedApplication];
       PDAppController *controller = [PDAppController new];
       NSString *sample = [NSString stringWithUTF8String: getenv("PD_OPEN_TRACE_SAMPLE")];
+      readGate = [NSCondition new];
+      Method read = class_getClassMethod([GSPTrace class], @selector(traceWithPath:error:));
+      originalRead = method_setImplementation(read, (IMP)gatedRead);
+      LoadHeartbeat *heartbeat = [LoadHeartbeat new];
       check([controller openTraceAtPath: sample], @"actual sample reader succeeds");
+      PDTraceWindowController *opening = [[controller valueForKey: @"windows"] lastObject];
+      check(opening.isLoading, @"loading window and progress are available before parsing finishes");
+      [NSTimer scheduledTimerWithTimeInterval: .05 target: heartbeat
+                                     selector: @selector(releaseReader:) userInfo: nil repeats: NO];
+      waitForEnds(1);
+      method_setImplementation(read, originalRead);
+      check(heartbeatRan && !readerWasOnMain && !opening.isLoading,
+        @"main-loop heartbeat runs while the trace reader is blocked on its worker");
       check(begins == 1 && ends == 1 && strcmp(lastOutcome, "success") == 0,
         @"successful open emits one balanced success interval");
-      check(![controller openTraceAtPath: [sample stringByAppendingPathComponent: @"missing.gstrace"]],
-        @"actual missing trace returns an error");
+      check([controller openTraceAtPath: [sample stringByAppendingPathComponent: @"missing.gstrace"]],
+        @"missing trace request accepted for asynchronous reading");
+      waitForEnds(2);
       check(begins == 2 && ends == 2 && alerts == 1 && strcmp(lastOutcome, "error") == 0,
         @"failed open emits one balanced error interval");
 
@@ -79,7 +127,7 @@ int main(int argc, const char **argv)
         @"cancelled file selection emits no interval");
 
       Method reader = class_getInstanceMethod([PDTraceWindowController class],
-        @selector(initWithTracePath:error:));
+        @selector(initForLoadingTraceAtPath:completion:));
       original = method_setImplementation(reader, (IMP)throwDuringOpen);
       BOOL caught = NO;
       @try { [controller openTraceAtPath: sample]; }
@@ -87,6 +135,24 @@ int main(int argc, const char **argv)
       @finally { method_setImplementation(reader, original); }
       check(caught && begins == 3 && ends == 3 && activeID == 0
         && strcmp(lastOutcome, "error") == 0, @"exception unwinding closes its interval");
+      readGate = [NSCondition new];
+      releasedReader = NO;
+      method_setImplementation(read, (IMP)gatedRead);
+      __block BOOL closedCompleted = NO;
+      PDTraceWindowController *closed = [[PDTraceWindowController alloc]
+        initForLoadingTraceAtPath: sample completion: ^(BOOL success, NSError *error) {
+          check([NSThread isMainThread] && !success && error == nil,
+            @"closing during loading completes once without an error alert");
+          closedCompleted = YES;
+        }];
+      [[closed window] close];
+      [heartbeat releaseReader: nil];
+      NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow: 10];
+      while (!closedCompleted && [deadline timeIntervalSinceNow] > 0)
+        [[NSRunLoop currentRunLoop] runUntilDate: [NSDate dateWithTimeIntervalSinceNow: .01]];
+      method_setImplementation(read, originalRead);
+      check(closedCompleted && !closed.isLoading,
+        @"closed loading window does not publish the worker's completed model");
       printf("All %u OpenTrace checks passed.\n", checks);
       exit(0);
     }

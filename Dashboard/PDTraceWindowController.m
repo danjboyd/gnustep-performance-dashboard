@@ -21,6 +21,9 @@
   GSPRecorder *_recorder;
   GSPRecordingOptions *_options;
   BOOL _temporary;
+  BOOL _loading, _closed;
+  NSProgressIndicator *_loadProgress;
+  void (^_loadCompletion)(BOOL, NSError *);
 
   PDTrackRenderer *_renderer;
   PDTimelineView *_timeline;
@@ -42,6 +45,7 @@
 - (NSString *) tracePath { return _tracePath; }
 - (BOOL) isRecording { return _recorder.isRecording; }
 - (BOOL) isTemporary { return _temporary; }
+- (BOOL) isLoading { return _loading; }
 
 /* ------------------------------------------------------------------ */
 /* construction                                                        */
@@ -181,6 +185,86 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
   return self;
 }
 
+- (instancetype) initForLoadingTraceAtPath: (NSString *)path
+                              completion: (void (^)(BOOL, NSError *))completion
+{
+  if ((self = [super initWithWindow: nil]) != nil)
+    {
+      _tracePath = [path copy];
+      _loading = YES;
+      _loadCompletion = [completion copy];
+      [self buildWindow];
+      [[self window] setTitle: @"Opening Trace…"];
+      [_targetLabel setStringValue: [path lastPathComponent]];
+      [_statusLabel setStringValue: @"Reading trace and preparing analyses…"];
+      [_recordButton setEnabled: NO];
+      _loadProgress = [[NSProgressIndicator alloc] initWithFrame:
+        NSMakeRect(16, 18, 260, 16)];
+      [_loadProgress setIndeterminate: YES];
+      [_loadProgress setStyle: NSProgressIndicatorBarStyle];
+      [[[self window] contentView] addSubview: _loadProgress];
+      [_loadProgress startAnimation: self];
+      [NSThread detachNewThreadSelector: @selector(loadTraceInBackground:)
+                              toTarget: self withObject: _tracePath];
+    }
+  return self;
+}
+
+- (void) loadTraceInBackground: (NSString *)path
+{
+  @autoreleasepool
+    {
+      NSMutableDictionary *result = [NSMutableDictionary dictionary];
+      NSError *error = nil;
+      @try
+        {
+          GSPTrace *trace = [GSPTrace traceWithPath: path error: &error];
+          if (trace)
+            {
+              PDTrackRenderer *renderer = [[PDTrackRenderer alloc] initWithTrace: trace];
+              [renderer prepareAnalyses];
+              [result setObject: trace forKey: @"trace"];
+              [result setObject: renderer forKey: @"renderer"];
+            }
+        }
+      @catch (NSException *exception)
+        {
+          error = [NSError errorWithDomain: GSPTraceErrorDomain code: 5
+            userInfo: @{NSLocalizedDescriptionKey: exception.reason ?: @"Cannot read trace"}];
+        }
+      if (error) [result setObject: error forKey: @"error"];
+      /* No published model is mutated by this worker. All AppKit work and
+         the ownership transfer to timeline/detail happen on the main thread. */
+      [self performSelectorOnMainThread: @selector(didLoadTrace:)
+                             withObject: result waitUntilDone: NO];
+    }
+}
+
+- (void) didLoadTrace: (NSDictionary *)result
+{
+  _loading = NO;
+  [_loadProgress stopAnimation: self];
+  [_loadProgress removeFromSuperview];
+  _loadProgress = nil;
+  GSPTrace *trace = [result objectForKey: @"trace"];
+  NSError *error = [result objectForKey: @"error"];
+  BOOL success = !_closed && trace != nil && error == nil;
+  if (success)
+    {
+      _renderer = [result objectForKey: @"renderer"];
+      _timeline.dataSource = _renderer;
+      _detail.renderer = _renderer;
+      [_detail showInstrument: [_renderer instrumentForTrack: 0]];
+      [self attachTrace: trace];
+      [self updateLabels];
+      [_recordButton setEnabled: YES];
+    }
+  void (^completion)(BOOL, NSError *) = _loadCompletion;
+  _loadCompletion = nil;
+  if (completion) completion(success, _closed ? nil : error);
+  if (!success && !_closed) [[self window] close];
+}
+
 - (instancetype) initWithRecordingOptions: (GSPRecordingOptions *)options
 {
   if ((self = [super initWithWindow: nil]) != nil)
@@ -204,7 +288,7 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
       _detail.renderer = _renderer;
       [_detail showInstrument: [_renderer instrumentForTrack: 0]];
     }
-  else
+  else if (_renderer.trace != trace)
     {
       _renderer.trace = trace;
       [_renderer invalidate];
@@ -405,6 +489,7 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
   [_trace reload: NULL];
   if (_trace.changedOnLastReload)
     {
+      _renderer.trace = _trace;  /* exec may replace the selected process epoch */
       [_renderer invalidate];
       [self fitTimelineToTracks];
       if (_ticks % 4 == 0)
@@ -617,7 +702,7 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
   if (item.action == @selector(compareRecording:)) return _trace && !self.isRecording;
   SEL a = [item action];
   if (a == @selector(startRecording:))
-    return !_recorder.isRecording;
+    return !_loading && !_recorder.isRecording;
   if (a == @selector(stopRecording:))
     return _recorder.isRecording;
   if (a == @selector(checkForLeaksNow:))
@@ -655,6 +740,7 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
 
 - (void) windowWillClose: (NSNotification *)note
 {
+  _closed = YES;
   [_generationsWindow close];
   [_comparisonWindow close];
   [_timer invalidate];

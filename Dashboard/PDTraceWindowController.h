@@ -9,6 +9,11 @@
 
 /* Open an existing trace bundle. */
 - (instancetype) initWithTracePath: (NSString *)path error: (NSError **)error;
+/* Show progress immediately; parsing and initial analyses run on a worker.
+   Completion runs on the main thread. NO with nil error means window closed. */
+- (instancetype) initForLoadingTraceAtPath: (NSString *)path
+                              completion: (void (^)(BOOL, NSError *))completion;
+@property (nonatomic, readonly) BOOL isLoading;
 /* Record a new trace; the window shows it live. */
 - (instancetype) initWithRecordingOptions: (GSPRecordingOptions *)options;
 

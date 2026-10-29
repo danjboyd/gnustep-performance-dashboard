@@ -92,7 +92,7 @@ typedef struct pending_ref
 
 @interface GSPProcess ()
 - (instancetype) initWithPath: (NSString *)path;
-- (BOOL) parseMore: (NSError **)error;
+- (GSPProcess *) parseMore: (NSError **)error;
 @end
 
 @implementation GSPProcess
@@ -389,7 +389,8 @@ payload_string(const uint8_t *p, size_t max)
             e->address = ap->address;
             e->size = ap->size;
             e->oldAddress = ap->old_address;
-            if (ap->stack)
+            e->stack = [self localStack: ap->stack];
+            if (ap->stack && e->stack == 0)
               [self addPending: _allocCount stack: ap->stack table: 0];
           }
         else if (r->type == GSP_REC_FREE && plen >= sizeof(gsp_free_payload))
@@ -663,6 +664,12 @@ compare_refs(const void *a, const void *b)
         _io[pr->index].stack = local;
     }
   _pendingCount = keep;
+  if (_pendingCount == 0)
+    {
+      free(_pending);
+      _pending = NULL;
+      _pendingCap = 0;
+    }
 
   /* Allocation events are in ring order per thread; sort by time while
      keeping each thread's order (insertion sort on nearly sorted data is
@@ -844,7 +851,7 @@ compare_raw_signposts(const void *a, const void *b)
   return s;
 }
 
-- (BOOL) parseMore: (NSError **)error
+- (GSPProcess *) parseMore: (NSError **)error
 {
   const uint8_t *bytes = NULL;
   NSUInteger length = 0;
@@ -893,14 +900,23 @@ compare_raw_signposts(const void *a, const void *b)
           userInfo: [NSDictionary dictionaryWithObject:
             [NSString stringWithFormat: @"Cannot read %@", _streamPath]
                                                 forKey: NSLocalizedDescriptionKey]];
-      return NO;
+      return nil;
     }
-  ok = [self parseBytes: bytes length: length error: error];
+  GSPProcess *process = self;
+  if (_haveHeader && length >= sizeof(gsp_file_header))
+    {
+      const gsp_file_header *header = (const gsp_file_header *)bytes;
+      if (memcmp(header->magic, GSP_MAGIC, 8) == 0
+          && header->version == GSP_FORMAT_VERSION
+          && (header->start_ns != _start || header->pid != (uint32_t)_pid))
+        process = [[GSPProcess alloc] initWithPath: _streamPath];
+    }
+  ok = [process parseBytes: bytes length: length error: error];
 #if !defined(_WIN32)
   if (map != NULL)
     munmap(map, length);
 #endif
-  return ok;
+  return ok ? process : nil;
 }
 
 - (BOOL) parseBytes: (const uint8_t *)bytes length: (NSUInteger)length
@@ -1005,15 +1021,20 @@ compare_raw_signposts(const void *a, const void *b)
       for (GSPProcess *p in _processes)
         if ([[p streamPath] isEqual: full])
           proc = p;
-      if (proc == nil)
-        {
-          proc = [[GSPProcess alloc] initWithPath: full];
-          if (![proc parseMore: error])
-            return NO;
-          [_processes addObject: proc];
-        }
-      else if (![proc parseMore: error])
+      BOOL isNew = proc == nil;
+      if (isNew)
+        proc = [[GSPProcess alloc] initWithPath: full];
+      GSPProcess *parsed = [proc parseMore: error];
+      if (parsed == nil)
         return NO;
+      if (isNew)
+        [_processes addObject: parsed];
+      else if (parsed != proc)
+        {
+          [_processes replaceObjectAtIndex: [_processes indexOfObjectIdenticalTo: proc]
+                                withObject: parsed];
+          parsed->_changed = YES;
+        }
     }
   _changed = [_processes count] != processCount;
   for (GSPProcess *p in _processes)

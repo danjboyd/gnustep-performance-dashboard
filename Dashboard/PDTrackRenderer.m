@@ -137,6 +137,15 @@
   [self rebuildTracks];
 }
 
+- (void) prepareAnalyses
+{
+  if ([_tracks containsObject: GSPInstrumentHangs]) [self hangAnalysis];
+  if ([_tracks containsObject: GSPInstrumentAllocations]) [self allocationAnalysis];
+  if ([_tracks containsObject: GSPInstrumentLeaks]) [self leakAnalysis];
+  if ([_tracks containsObject: GSPInstrumentFileActivity]
+      || [_tracks containsObject: GSPInstrumentNetwork]) [self ioAnalysis];
+}
+
 - (GSPHangAnalysis *) hangAnalysis
 {
   if (_hangs == nil)

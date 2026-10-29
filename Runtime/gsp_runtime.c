@@ -228,53 +228,19 @@ read_config(void)
     gsp_cfg.allocations = true;
 }
 
-/* Remove this agent from LD_PRELOAD so child processes run untraced,
-   unless GSP_FOLLOW_CHILDREN asks otherwise.  */
+/* Keep injection settings across exec in the recorded process. A wrapper
+   replaces its image without changing PID; scrubbing LD_PRELOAD/GSP_OUTPUT
+   would silently end the recording at the wrapper. Children still inherit
+   the settings, but the PID/recorder guard below rejects them by default. */
 static void
-scrub_environment(void)
+preserve_exec_environment(void)
 {
-  if (env_flag("GSP_FOLLOW_CHILDREN", false))
-    return;
-
-  const char *pre = getenv("LD_PRELOAD");
-  Dl_info info;
-  if (pre != NULL && dladdr((void *)scrub_environment, &info)
-      && info.dli_fname != NULL)
+  if (!env_flag("GSP_FOLLOW_CHILDREN", false))
     {
-      const char *base = strrchr(info.dli_fname, '/');
-      char kept[4096];
-      size_t used = 0;
-      const char *p = pre;
-
-      base = base ? base + 1 : info.dli_fname;
-      kept[0] = '\0';
-      while (*p)
-        {
-          size_t len = strcspn(p, ": ");
-          const char *slash = memrchr(p, '/', len);
-          const char *name = slash ? slash + 1 : p;
-          size_t nlen = len - (size_t)(name - p);
-
-          if (len > 0 && !(nlen == strlen(base) && memcmp(name, base, nlen) == 0)
-              && used + len + 2 < sizeof(kept))
-            {
-              if (used)
-                kept[used++] = ':';
-              memcpy(kept + used, p, len);
-              used += len;
-              kept[used] = '\0';
-            }
-          p += len;
-          while (*p == ':' || *p == ' ')
-            p++;
-        }
-      if (used)
-        setenv("LD_PRELOAD", kept, 1);
-      else
-        unsetenv("LD_PRELOAD");
+      char pid[32];
+      snprintf(pid, sizeof(pid), "%d", (int)getpid());
+      setenv("GSP_TARGET_PID", pid, 1);
     }
-  unsetenv("GSP_OUTPUT");
-  unsetenv("GSP_RECORDER_PID");
 }
 
 /* ------------------------------------------------------------------ */
@@ -1100,6 +1066,7 @@ gsp_init(void)
   struct timespec rt;
   struct sigaction sa;
   char exe[256] = "";
+  char next_path[1150];
 
   gsp_in_agent++;
   gsp_io_resolve();
@@ -1113,9 +1080,17 @@ gsp_init(void)
     }
   /* GNUstep caches the environment before this constructor runs, so
      processes it launches (gdnc, gpbs, NSTask children) inherit the agent
-     even though LD_PRELOAD is scrubbed below.  When the recorder says who
+     including their recording settings.  When the recorder says who
      it is, only its direct child records unless children are followed.  */
   {
+    const char *target = getenv("GSP_TARGET_PID");
+    if (target && *target && !env_flag("GSP_FOLLOW_CHILDREN", false)
+        && (pid_t)strtol(target, NULL, 10) != getpid())
+      {
+        gsp_alloc_stop_live();
+        gsp_in_agent--;
+        return;
+      }
     const char *rec = getenv("GSP_RECORDER_PID");
     if (rec != NULL && *rec && !env_flag("GSP_FOLLOW_CHILDREN", false)
         && (pid_t)strtol(rec, NULL, 10) != getppid())
@@ -1125,7 +1100,7 @@ gsp_init(void)
         return;
       }
   }
-  scrub_environment();
+  preserve_exec_environment();
   traced_pid = getpid();
   gsp_real_pthread_create = dlsym(RTLD_NEXT, "pthread_create");
   find_agent_text();
@@ -1133,7 +1108,10 @@ gsp_init(void)
   mkdir(gsp_cfg.output, 0755);
   snprintf(events_path, sizeof(events_path), "%s/events-%d.bin",
            gsp_cfg.output, (int)traced_pid);
-  out_fd = gsp_sys_open(events_path, O_CREAT | O_WRONLY | O_TRUNC | O_CLOEXEC, 0644);
+  /* Publish a complete new header atomically. Never truncate an inode that
+     a live reader may have mapped before exec (that could cause SIGBUS). */
+  snprintf(next_path, sizeof(next_path), "%s.next", events_path);
+  out_fd = gsp_sys_open(next_path, O_CREAT | O_WRONLY | O_TRUNC | O_CLOEXEC, 0644);
   if (out_fd < 0 || pipe2(wake_pipe, O_CLOEXEC | O_NONBLOCK) != 0)
     {
       fprintf(stderr, "gsperf: cannot write %s: %s\n", events_path,
@@ -1166,6 +1144,21 @@ gsp_init(void)
     exe[n] = '\0';
   memcpy(hdr.exe, exe, sizeof(hdr.exe));
   write_all(&hdr, sizeof(hdr));
+  if (bytes_written != sizeof(hdr) || rename(next_path, events_path) != 0)
+    {
+      fprintf(stderr, "gsperf: cannot publish %s: %s\n", events_path, strerror(errno));
+      gsp_sys_close(out_fd);
+      out_fd = -1;
+      unlink(next_path);
+      gsp_alloc_stop_live();
+      gsp_in_agent--;
+      return;
+    }
+  /* An exec starts a new epoch for this PID, not a finished old stream. */
+  char done_path[1150];
+  snprintf(done_path, sizeof(done_path), "%s/events-%d.done", gsp_cfg.output,
+           (int)traced_pid);
+  unlink(done_path);
 
   pthread_key_create(&thread_key, thread_key_destructor);
   gsp_unwind_init();
