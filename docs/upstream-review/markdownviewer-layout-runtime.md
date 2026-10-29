@@ -157,3 +157,91 @@ the unrecognized `updates.enabled` fixture key, suppresses that background
 activity in the accepted capture. No running owner instance or installed app
 was touched. Evidence: `out/markdown-published-v025/Adwaita/` and
 `out/mv-published/published-workflow-receipt.json`.
+
+## Separate GSTextStorage attribute-cache diagnosis
+
+The follow-up source inspection establishes a collision mechanism in the
+shipped GUI cache, separate from the package's existing libs-base
+`GSAttributedString` hash patch. At GUI revision
+`549f639137a600936acde4cd618f0e4b858d883d`, `GSTextStorage.m` defines
+`GSI_MAP_EQUAL` using `cacheEqual` but leaves `GSI_MAP_HASH` at its default
+of the key object's `-hash`. At base revision
+`68f3d75694f0a7edf9fb1c6c7f19582e8cff1b5f`, `NSDictionary -hash`
+returns its count. `GSIMapNodeForKeyInBucket` walks a linked bucket and calls
+the equality callback for each candidate. During insertion/lookup,
+`cacheEqual` calls `isEqualToDictionary:`. Thus distinct dictionaries with
+the same attribute count share one bucket and trigger repeated deep
+comparisons; accumulating distinct same-count dictionaries can require
+quadratic total comparisons. This does not mean every document or every
+cache lookup has linear cost.
+
+An isolated diagnostic clone at that exact GUI revision retained MV's
+existing glyph sanity-check guard. It was built twice in the v0.2.5 public
+CI image, digest
+`9bacf4e27f77aaff5a2a2d920ee674b5e602a16b9b4ca1fe780945a53d059c48`,
+with the same configure arguments above and compiler flags retained in
+`out/linux-development-20261029/mv-cache-prototype/objc-flags.txt`.
+The prototype hashes each key/value pair and sums those hashes, independent
+of dictionary enumeration order. Both libraries count lookups and equality
+calls for diagnosis. Control GUI SHA-256 is
+`df2ce3fff1e07349f20ca03f7e7f842b3181e155975a95d5836668e89df6cdc5`;
+prototype is `b8e2ffe9f1f160c8b1797bf796ec7c9e600c7dd286a4661aec7ef7d037decaa2`.
+
+The source's mutable-value warning matters: attribute dictionaries are
+shallow copies. If a nested value changes its hash after insertion, looking
+in only the newly computed bucket can miss the old entry. GUI cache keys
+are not retained by the map, so failing to remove that entry can leave a
+dangling pointer after the storage releases its dictionary. This prototype
+uses the original identity comparison on removal and scans the remaining
+buckets if the normal removal lookup misses. It is an experimental fallback,
+not an established production design; mutable values can also cause missed
+canonicalization and duplicate equal cache entries until a rehash.
+
+Targeted checks passed for **both** libraries in private container Xvfb:
+3,000 distinct same-count runs retained their exact custom values; releasing
+them restored the warmed cache-node count. A custom mutable-hash value
+remained accessible after mutation and its storage's release again restored
+the node count. The prototype exercised one identity-removal fallback.
+The same 9,007 cache lookups caused 9,000,002 deep comparisons in the
+control and 12,482 in the prototype. Early harness attempts requiring
+backend initialization and a warmed global baseline are excluded; final
+successful logs are `mv-cache-semantics-v3.log` and the two
+`semantic-test.log` files. These checks do not cover arbitrary concurrent
+mutation, every attribute class or the full GNUstep regression suite.
+
+The published native MV executable then ran the identical Read/scroll,
+Edit/save and Split/scroll sequence in separate private homes/displays,
+substituting only the respective diagnostic GUI library. `/proc` maps verify
+that overlay and the unchanged bundled base, Objective-C runtime and backend.
+Both inputs hash to
+`38846406c525580b327ac17d2e052ba7bdb7813e76341155406ba4ecaaf937e2`;
+both saved edits hash to
+`707894108dda281278935d6b6779e19c48a6a3b5a04b71d975a2488cef04880f`.
+Both traces finished cleanly with no quality warnings; both Adwaita Split
+screenshots were inspected and show matching document content with no dialog.
+
+| One diagnostic pair | Control | Content-hash prototype |
+| --- | ---: | ---: |
+| Cache lookups | 252,704 | 253,617 |
+| Deep comparisons | 44,346,951 | 521,717 |
+| Sampled CPU | 19.767 s | 13.828 s |
+| Longest Split stall | 8.960 s | 6.890 s |
+| Removal fallbacks | 0 | 0 |
+
+These are instrumented, sequential observations on a loaded host. The
+counters themselves add work proportional to comparisons, the lookup
+totals differ slightly, and this pair is not a production speedup estimate.
+Multi-second stalls remain. No uninstrumented comparison, Sombre workflow
+for this overlay, full GUI suite or current-master upstream regression was
+run. This is a concrete prepared-only diagnosis/prototype, not release
+acceptance, an upstream-ready patch or authorization to change MV's runtime.
+
+The retained diagnostic diff SHA-256 is
+`dd3cbd5bb97504416e94cdc6d5c4448fcd8091bf39c063a9d04ffe06eb54b5d7`.
+It includes the existing glyph guard and this experiment, so it must not be
+presented as a new standalone upstream patch. Source clone, diff, semantic
+test and scripts are under root `out/linux-development-20261029/`; raw
+profiles/maps and results are in this worktree's
+`out/markdown-cache-{control,prototype}/Adwaita/`. The combined machine receipt
+is root `out/linux-development-20261029/mv-cache-prototype/comparison.json`.
+Nothing from this cache work has been sent to an owner or installed on the host.
