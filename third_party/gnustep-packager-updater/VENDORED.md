@@ -10,10 +10,12 @@ with one local change:
   twice, in libdispatch's `os/generic_win_base.h` and in the CRT. Re-apply
   it after a sync until the packager has it.
 
-- Source commit: `211d9136ca2359fdb91af8245b5c86b497e07220` (gnustep-packager
-  v0.1.4, 2026-10-22)
+- Source commit: `a79076895e8e1cba25ad4447f932098e4cb21690` (gnustep-packager
+  v0.1.6, 2026-10-29)
 
-This sync includes the install-failed alert punctuation fix. The three local
+The updater source tree is byte-identical to v0.1.4, so this pin migration
+requires no updater code change. It includes the install-failed alert
+punctuation fix. The three local
 compatibility lines above remain for the currently pinned Windows toolchain;
 remove them only after validating the replacement input.
 
