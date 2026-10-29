@@ -162,6 +162,13 @@ most five seconds; fork children turn all tracking off.
 
 ## PerformanceDashboard.app
 
+Existing trace opens use an unpublished worker-owned reader and renderer to
+parse/index records, prepare initial analyses, embedded symbols and the first
+CPU tree. The main thread shows standard progress controls and then adopts
+the completed model; workers do not mutate a model already used by AppKit.
+Closing a loading window discards the eventual result. Live recording reloads
+remain incremental and are a separate path.
+
 Programmatic AppKit UI (no nibs), standard controls everywhere so the theme
 applies; custom drawing (timeline, tracks) uses the theme's system colours
 plus fixed data-series hues. `PDTimelineView` (ruler, tracks, inspection

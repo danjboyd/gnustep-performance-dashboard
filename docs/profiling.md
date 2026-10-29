@@ -71,3 +71,39 @@ Embedding names does not bundle source or debug files. Preserve those
 separately if source locations are needed. Inspect recordings before sharing:
 they may contain file paths, peer addresses, log text and application data
 included in signpost messages.
+
+## Choose instruments and account for their cost
+
+Start with Time Profiler for a CPU question, then make a separate memory
+recording. Enabling more recording types changes the work done by the target.
+There is no fixed overhead percentage: it depends on event volume, stack
+depth, live heap size, number of threads, and scan frequency.
+
+| Recording type | Expected cost and effect on interpretation |
+|---|---|
+| Time Profiler | A CPU-time timer per thread, normally every 1 ms of CPU, interrupts it to unwind a stack. More active threads and deeper stacks cost more. Libunwind and frame-pointer fallback have different coverage and cost. |
+| Hangs | Main-thread wall samples, normally every 10 ms, plus run-loop observations. Distinguish main-loop stalls from CPU consumption and background loading. |
+| Allocations | Hooks every allocation/free, captures allocation stacks, interns definitions, and writes events through rings. Allocation-heavy workloads can incur substantial CPU, memory and trace-size costs; sampled CPU can include work induced by these hooks. |
+| Leaks | Enables allocation/live-block tracking and periodically stops threads to scan roots and the heap. Larger live heaps and more frequent scans increase memory and pause costs. A scan-induced pause is not evidence of the same pause without recording. |
+| Zombies | Retains deallocated objects and records reference-count history. Memory growth is intentional and changes object lifetimes; use a short targeted reproduction. |
+| File Activity / Network | Interposes I/O calls, captures stacks and emits records. Cost scales with call count, especially many tiny operations, rather than just transferred bytes. |
+| Points of Interest / os_log | Emits strings and events for enabled annotations. Usually sparse, but high-volume logging still allocates/buffers/writes; unrecorded signposts are no-ops. |
+| System Time Profiler | Kernel perf sampling avoids target preload hooks. Sampling frequency and stack capture still cost resources; it is a different recording mode, not a zero-cost control. |
+
+For example, the same local Arlen API-reference workload completed 900
+successful requests in each of two recordings. CPU-only sampled CPU was
+1.134 s; combined CPU/allocations/leaks was 1.831 s. RSS after the third batch
+was 34,324 versus 58,108 KiB. These observations explain why combined totals
+should not be read as app-only cost. They are one pair, with scheduling,
+background work and scans, **not a calibrated slowdown factor**. The combined
+run's latest conservative scan reported zero leaked blocks; that does not
+remove its tracking cost. See [the workload and limits](v0.1.3-dogfood.md).
+
+To measure recording overhead, repeat a fixed workload unrecorded, CPU-only,
+and with one additional recording type at a time. Compare externally measured
+elapsed time, throughput/latency and peak resident memory; keep input, build,
+warm-up, hardware and background load consistent. Repeat runs and report
+variation. Preserve scan intervals, sample periods, event counts, dropped
+records and exact target/recorder identities. Sample weights and a signpost
+interval answer different questions from elapsed performance of an
+uninstrumented application.
