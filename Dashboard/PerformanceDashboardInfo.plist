@@ -1,8 +1,8 @@
 {
   ApplicationName = "Performance Dashboard";
   ApplicationDescription = "Performance analysis for GNUstep applications";
-  ApplicationRelease = "0.1.2";
-  FullVersionID = "0.1.2";
+  ApplicationRelease = "0.1.3";
+  FullVersionID = "0.1.3";
   CFBundleIdentifier = "io.github.danjboyd.PerformanceDashboard";
   NSExecutable = "PerformanceDashboard";
   NSIcon = "PerformanceDashboard.png";

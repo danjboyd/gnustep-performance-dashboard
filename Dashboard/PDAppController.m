@@ -343,7 +343,7 @@ termination_signal(int sig)
 - (void) showAbout: (id)sender
 {
   NSRunAlertPanel(@"Performance Dashboard",
-    @"Version 0.1.2\n\nA performance analysis tool for GNUstep applications: Time Profiler, Hangs, Points of Interest, os_log, Allocations, Leaks and Zombies.\n\nAgent: %@",
+    @"Version 0.1.3\n\nA performance analysis tool for GNUstep applications: Time Profiler, Hangs, Points of Interest, os_log, Allocations, Leaks and Zombies.\n\nAgent: %@",
     @"OK", nil, nil, [GSPRecorder agentLibraryPath] ?: @"not found");
 }
 
