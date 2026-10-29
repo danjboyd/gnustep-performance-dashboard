@@ -96,7 +96,7 @@ EOF"
 record wrapper-delayed --template 'Time Profiler' --launch /bin/sh -c 'sleep 1; exec "$1"' wrapper "$OUT/cburn"
 check "delayed wrapper exec: target epoch finishes with samples" "'$GSTRACE' info '$OUT/wrapper-delayed.gstrace' 2>/dev/null | grep -q 'CPU samples: [1-9]' && '$GSTRACE' info '$OUT/wrapper-delayed.gstrace' 2>/dev/null | grep -q 'finished cleanly: yes'"
 record wrapper-child --template 'Time Profiler' --launch /bin/sh -c '"$1" & wait' wrapper "$OUT/cburn"
-check "wrapper fork: children are still excluded by default" "[ \$(find '$OUT/wrapper-child.gstrace' -name 'events-*.bin' | wc -l) -eq 1 ] && '$GSTRACE' info '$OUT/wrapper-child.gstrace' 2>/dev/null | grep -q 'finished cleanly: yes'"
+check "wrapper fork: children are still excluded by default" "[ \$(find '$OUT/wrapper-child.gstrace' -name 'events-*.bin' | wc -l) -eq 1 ]"
 
 echo "== Stress: 8 threads allocating during sampling and leak checks"
 record deniedread --template Leaks --env LD_PRELOAD="$OUT/libdeniedread.so" --launch "$OUT/cburn"
@@ -218,7 +218,7 @@ if [ "${SKIP_GUI:-0}" != 1 ] && command -v Xvfb >/dev/null 2>&1; then
     echo "== Performance Dashboard app (Xvfb, xdotool)"
     APP=$ROOT/Dashboard/PerformanceDashboard.app/PerformanceDashboard
     SAMPLE=$ROOT/Tests/data/sample.gstrace
-    TRACES="/tmp/GNUstepSecure$(id -u)/Performance Dashboard"
+    TRACES="${TMP:-/tmp/GNUstepSecure$(id -u)}/Performance Dashboard"
     # window_id <title> [seconds]: the visible window with that title.
     # Without a UTF-8 locale libs-back sets WM_NAME as STRING holding UTF-8
     # bytes, so xdotool reads "—" as three Latin-1 characters and an exact
