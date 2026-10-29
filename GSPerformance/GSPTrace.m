@@ -679,9 +679,18 @@ compare_refs(const void *a, const void *b)
       /* Pending indices point into the unsorted array; resolve first,
          unresolved references (rare) are dropped.  */
       _pendingCount = 0;
-      GSPAllocationEvent *tmp = malloc(_allocCount * sizeof(GSPAllocationEvent));
-      /* bottom-up merge sort, stable */
-      GSPAllocationEvent *src = _allocs, *dst = tmp;
+      /* Sort indices, then permute records in place. A second full event
+         array costs 48 bytes per event; two index arrays cost 16 on 64-bit. */
+      NSUInteger *indices = malloc(_allocCount * sizeof(NSUInteger));
+      NSUInteger *scratch = malloc(_allocCount * sizeof(NSUInteger));
+      if (indices == NULL || scratch == NULL)
+        {
+          free(indices);
+          free(scratch);
+          [NSException raise: NSMallocException format: @"Cannot sort allocation events"];
+        }
+      for (NSUInteger i = 0; i < _allocCount; i++) indices[i] = i;
+      NSUInteger *src = indices, *dst = scratch;
       for (NSUInteger width = 1; width < _allocCount; width *= 2)
         {
           for (NSUInteger lo = 0; lo < _allocCount; lo += 2 * width)
@@ -690,19 +699,37 @@ compare_refs(const void *a, const void *b)
               NSUInteger hi = MIN(lo + 2 * width, _allocCount);
               NSUInteger a = lo, b = mid, k = lo;
               while (a < mid && b < hi)
-                dst[k++] = (src[b].time < src[a].time) ? src[b++] : src[a++];
-              while (a < mid)
-                dst[k++] = src[a++];
-              while (b < hi)
-                dst[k++] = src[b++];
+                dst[k++] = (_allocs[src[b]].time < _allocs[src[a]].time)
+                  ? src[b++] : src[a++];
+              while (a < mid) dst[k++] = src[a++];
+              while (b < hi) dst[k++] = src[b++];
             }
-          GSPAllocationEvent *swap = src;
-          src = dst;
-          dst = swap;
+          NSUInteger *swap = src; src = dst; dst = swap;
         }
-      if (src != _allocs)
-        memcpy(_allocs, src, _allocCount * sizeof(GSPAllocationEvent));
-      free(tmp);
+      for (NSUInteger i = 0; i < _allocCount; i++)
+        {
+          if (src[i] == i) continue;
+          GSPAllocationEvent saved = _allocs[i];
+          NSUInteger at = i;
+          while (src[at] != i)
+            {
+              NSUInteger from = src[at];
+              _allocs[at] = _allocs[from];
+              src[at] = at;
+              at = from;
+            }
+          _allocs[at] = saved;
+          src[at] = at;
+        }
+      free(indices);
+      free(scratch);
+      /* Finished streams will not grow again. Drop geometric spare capacity. */
+      if (_clean && _allocCount < _allocCap)
+        {
+          GSPAllocationEvent *compact = realloc(_allocs,
+            _allocCount * sizeof(GSPAllocationEvent));
+          if (compact) { _allocs = compact; _allocCap = _allocCount; }
+        }
     }
   if (_tagCount > 1)
     qsort(_tags, _tagCount, sizeof(GSPTagEvent), compare_tags);

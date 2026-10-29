@@ -66,6 +66,34 @@ child(GSPCallTreeNode *n, NSString *name)
   return t;
 }
 
+- (void) testStableAllocationSortKeepsEqualTimeFreeOrder
+{
+  TraceBuilder *b = named_builder();
+  for (NSUInteger i = 0; i < 2048; i++)
+    {
+      uint64_t address = 0x10000 + i * 32;
+      [b allocAt: b.start + 2 * MS address: address size: 32 stack: 0];
+      [b freeAt: b.start + 2 * MS address: address];
+    }
+  [b allocAt: b.start + MS address: 0x900000 size: 64 stack: 0];
+  [b end: b.start + 3 * MS];
+  GSPTrace *trace = [self traceFrom: b name: @"stable-allocation-sort" instruments: nil];
+  const GSPAllocationEvent *events = trace.targetProcess.allocationEvents;
+  XCTAssertEqual(trace.targetProcess.allocationEventCount, (NSUInteger)4097);
+  XCTAssertEqual(events[0].address, (uint64_t)0x900000);
+  for (NSUInteger i = 0; i < 2048; i++)
+    {
+      XCTAssertFalse(events[2 * i + 1].isFree);
+      XCTAssertTrue(events[2 * i + 2].isFree);
+      XCTAssertEqual(events[2 * i + 1].address, events[2 * i + 2].address);
+    }
+  GSPAllocationAnalysis *analysis = [[GSPAllocationAnalysis alloc]
+    initWithProcess: trace.targetProcess];
+  GSPAllocationCategory *all = [[analysis categoriesFrom: 0 to: 0] objectAtIndex: 0];
+  XCTAssertEqual(all.persistentBytes, (uint64_t)64);
+  XCTAssertEqual(analysis.recordCount, (NSUInteger)2049);
+}
+
 - (void) testAllocationStacksResolveBeforeAndAfterTheirDefinitions
 {
   TraceBuilder *b = named_builder();

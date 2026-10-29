@@ -352,7 +352,9 @@ slot_for(addr_slot *slots, uint64_t mask, uint64_t address)
   uint64_t live = 0;
   NSUInteger ti = 0;
 
-  _cap = ne + 1;
+  _cap = 1;
+  for (NSUInteger i = 0; i < ne; i++)
+    if (!ev[i].isFree) _cap++;
   _records = malloc(_cap * sizeof(GSPAllocationRecord));
 
   /* Category numbers for malloc sizes and for class name IDs, so each
