@@ -121,6 +121,13 @@
   [self layoutStackColumns];
 }
 
+- (CGFloat) minimumWidth
+{
+  CGFloat width = _frames.intercellSpacing.width * _frames.tableColumns.count;
+  for (NSTableColumn *column in _frames.tableColumns) width += column.minWidth;
+  return ceil(width + NSWidth(self.bounds) - NSWidth(_framesScroll.contentView.bounds));
+}
+
 - (void) clear
 {
   [_title setStringValue: @"Extended Detail"];

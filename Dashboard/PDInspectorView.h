@@ -12,5 +12,6 @@
              stack: (uint32_t)stack
            process: (GSPProcess *)process;
 - (void) clear;
+- (CGFloat) minimumWidth;
 
 @end

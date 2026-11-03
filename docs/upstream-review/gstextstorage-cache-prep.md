@@ -29,6 +29,28 @@ speedup estimate. No Sombre overlay workflow or full GNUstep suite was run.
 
 ## Rebase and design gate
 
+### November 3 inventory of the unfinished master port
+
+The retained October 29 clone at
+`out/linux-development-20261029/libs-gui-cache-master` is based on
+`19dae207a3be9fb42a48d61ce856404295b62a06`. Its ChangeLog and
+`Source/GSTextStorage.m` changes are uncommitted, and
+`Tests/gui/NSTextStorage/attributeCache.m` is untracked. This is not a new
+check of November 3 upstream master.
+
+The retained control run reports **22 passed and one failed test**: doubling
+distinct same-count runs violates the equality-growth bound at line 164.
+The subsequent fixed build stopped in TextConverters after the test harness
+leaked `GNUSTEP_LOCAL_ADDITIONAL_MAKEFILES=/src/gui.make` into the build.
+There are no fixed test results, full-suite results, GCC check or fix commit.
+The raw log is `out/linux-development-20261029/mv-cache-master-build.log`;
+the control log and exit status are under `mv-cache-master/control/`.
+Repair the harness scope and finish the gates below before preparing any
+exact-hash upstream review. Repeated uninstrumented MV measurements under
+both themes are still pending; nothing has been submitted.
+
+### Required implementation gates
+
 1. Fetch libs-gui `master` into a new owned clone/worktree and record its
    full commit, remote and retrieval date. Leave the host installation and
    other agents' checkouts alone. Check current source/history and existing

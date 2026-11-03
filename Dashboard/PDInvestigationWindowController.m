@@ -236,16 +236,22 @@ button(NSView *view, NSString *title, NSRect rect, id target, SEL action)
   NSScrollView *scroll = _table.enclosingScrollView;
   NSView *content = self.window.contentView;
   CGFloat contentWidth = NSWidth(content.bounds);
+  CGFloat spacing = _table.intercellSpacing.width * columns.count;
+  CGFloat minimum = spacing;
+  for (NSTableColumn *column in columns) minimum += column.minWidth;
   NSRect inspectorFrame = _inspector.frame;
-  inspectorFrame.size.width = MIN(350, MAX(300, floor(contentWidth * .30)));
+  CGFloat preferredInspector = MIN(350, MAX(300, floor(contentWidth * .30)));
+  /* Font metrics can make the table's readable minimum wider than its
+     usual share. Give it space from the inspector, retaining the inspector's
+     own headings and accounting for the table's borders and scroller. */
+  CGFloat scrollTrim = NSWidth(scroll.frame) - NSWidth(scroll.contentView.bounds);
+  CGFloat availableInspector = contentWidth - 30 - minimum - scrollTrim;
+  inspectorFrame.size.width = MAX([_inspector minimumWidth], MIN(preferredInspector, availableInspector));
   inspectorFrame.origin.x = contentWidth - 10 - inspectorFrame.size.width;
   [_inspector setFrame: inspectorFrame];
   NSRect tableFrame = scroll.frame;
   tableFrame.size.width = inspectorFrame.origin.x - 20;
   [scroll setFrame: tableFrame];
-  CGFloat spacing = _table.intercellSpacing.width * columns.count;
-  CGFloat minimum = spacing;
-  for (NSTableColumn *column in columns) minimum += column.minWidth;
   CGFloat width = MAX(minimum, floor(NSWidth(scroll.contentView.bounds)));
   CGFloat extra = width - minimum;
   for (NSUInteger i = 0; i < columns.count; i++)

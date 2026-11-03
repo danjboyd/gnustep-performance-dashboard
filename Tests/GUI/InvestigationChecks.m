@@ -73,6 +73,14 @@ static void checkLayout(NSWindowController *controller, NSString *output, NSStri
       check(contained, [label stringByAppendingString: @" controls remain within the content view"]);
       NSTableView *table = [controller valueForKey: @"table"];
       NSRect last = [table rectOfColumn: table.tableColumns.count - 1];
+      if (NSMaxX(last) > NSWidth(table.enclosingScrollView.contentView.bounds) + 1)
+        {
+          NSLog(@"%@: last column %@, clip %@", label, NSStringFromRect(last),
+            NSStringFromRect(table.enclosingScrollView.contentView.bounds));
+          for (NSTableColumn *column in table.tableColumns)
+            NSLog(@"Column %@: width %.3f, minimum %.3f, font %@",
+              column.headerCell.stringValue, column.width, column.minWidth, column.headerCell.font);
+        }
       check(NSMaxX(last) <= NSWidth(table.enclosingScrollView.contentView.bounds) + 1,
         [label stringByAppendingString: @" all column headings are visible without scrolling"]);
       BOOL readable = YES;
