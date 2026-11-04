@@ -18,22 +18,26 @@ It has three parts:
   `<os/log.h>`), so applications can mark intervals that show up as Points of
   Interest.
 
-**[v0.1.0 for Debian 13 amd64](https://github.com/danjboyd/gnustep-performance-dashboard/releases/tag/v0.1.0)** is the first Linux release. Windows recording code remains experimental; Windows packages
-are deferred. See [the v0.1.0 gates](docs/v0.1.0-plan.md),
+**[v0.1.4 for Debian 13 amd64](https://github.com/danjboyd/gnustep-performance-dashboard/releases/tag/v0.1.4)**
+is the Linux release documented here, for **x86_64** hosts. It adds native
+exec-wrapper recording, responsive large-trace loading, lower allocation-trace
+memory use and improved investigation-window layout. Allocation generations,
+recording comparisons, hang evidence and source navigation are included from
+v0.1.3. v0.1.1 and v0.1.2 were unpublished internal milestones.
+
+Windows recording remains experimental; Windows packages are deferred.
+Other architectures and distributions are unverified. See the
+[v0.1.4 release notes](docs/releases/v0.1.4.md),
 [release process](docs/release.md), and [Windows notes](docs/windows.md).
 
-The next planned release is **v0.1.3 for Debian 13 amd64**, Linux-only.
-It includes allocation generations, in-app recording comparisons, richer hang
-evidence, source navigation and investigation-window layout improvements.
-**v0.1.1 and v0.1.2 were unpublished internal milestones**; v0.1.3 includes their
-changes. Windows packages remain deferred. See the
-[v0.1.3 release notes](docs/releases/v0.1.3.md) and
-[release process](docs/release.md). v0.1.0 remains the published release until
-v0.1.3 publication is separately approved.
+Publication checkpoint, November 4, 2026, before release approval: v0.1.4
+qualification is complete; its tag, release assets and stable-feed deployment
+await approval. v0.1.3 is the preceding published release. This dated
+checkpoint records preparation, not confirmation of publication.
 
 ## Installing
 
-The release provides `PerformanceDashboard-0.1.0-x86_64.AppImage`.
+The v0.1.4 release asset is `PerformanceDashboard-0.1.4-x86_64.AppImage`.
 It bundles GNUstep and the Adwaita theme. The supported host is Debian 13
 amd64 with an X11 desktop (or XWayland); other distributions are unverified.
 For a minimal installation, install the desktop runtime and recording tools:
@@ -45,8 +49,8 @@ sudo apt install libxft2 libxt6t64 libcairo2 libglib2.0-0t64 libdbus-1-3 libunwi
 Make the AppImage executable and run it:
 
 ```sh
-chmod +x PerformanceDashboard-*-x86_64.AppImage
-./PerformanceDashboard-*-x86_64.AppImage
+chmod +x PerformanceDashboard-0.1.4-x86_64.AppImage
+./PerformanceDashboard-0.1.4-x86_64.AppImage
 ```
 
 If FUSE is unavailable, run with `APPIMAGE_EXTRACT_AND_RUN=1` in the
