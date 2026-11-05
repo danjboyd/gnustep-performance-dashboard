@@ -10,7 +10,7 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#define GSTRACE_VERSION "0.1.4"
+#define GSTRACE_VERSION "0.1.5"
 
 static volatile sig_atomic_t interrupted;
 

@@ -8,7 +8,7 @@
     "id": "io.github.danjboyd.PerformanceDashboard",
     "name": "PerformanceDashboard",
     "displayName": "Performance Dashboard",
-    "version": "0.1.4",
+    "version": "0.1.5",
     "manufacturer": "Daniel Boyd",
     "summary": "Performance analysis for GNUstep applications.",
     "description": "Performance Dashboard records a GNUstep program and shows where its time and memory go: Time Profiler, Hangs, Allocations, Leaks, Zombies, File Activity, Network and signposts, on a timeline with call trees.",
@@ -150,7 +150,7 @@
     "runtimeNotices": [
       {
         "name": "Performance Dashboard",
-        "version": "0.1.4",
+        "version": "0.1.5",
         "license": "GPL-3.0-or-later",
         "source": "Dashboard, gstrace and gstrace-helper",
         "homepage": "https://github.com/danjboyd/gnustep-performance-dashboard",

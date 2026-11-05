@@ -37,6 +37,8 @@ clang $OBJCFLAGS -g -O0 -Wno-unused-but-set-variable -I"$ROOT/Runtime/include" \
   -L"$ROOT/Runtime/obj" -lgsperf -Wl,-rpath,"$ROOT/Runtime/obj" || exit 1
 clang $OBJCFLAGS -O0 "$ROOT/docs/upstream-issues/jpeg_probe_leak.m" \
   -o "$OUT/jpeg_probe_leak" $(gnustep-config --gui-libs) || exit 1
+clang $OBJCFLAGS -O0 "$ROOT/Tests/fixtures/jpeg-gate.m" \
+  -o "$OUT/jpeg-gate" $(gnustep-config --gui-libs) || exit 1
 clang $OBJCFLAGS -O0 -I"$ROOT/Runtime/include" "$ROOT/Tests/fixtures/hangapp.m" \
   -o "$OUT/hangapp" $(gnustep-config --gui-libs) \
   -L"$ROOT/Runtime/obj" -lgsperf -Wl,-rpath,"$ROOT/Runtime/obj" || exit 1
@@ -162,6 +164,13 @@ if grep -q '_bitmapIsJPEG' "$OUT/jpegleak.txt"; then
 else
   echo "     (this libs-gui does not leak in the JPEG check; nothing to label)"
 fi
+
+echo "== Test-only live JPEG label/hide fixture (deliberate decode-path leaks)"
+record jpeg-gate --template Leaks --launch "$OUT/jpeg-gate"
+"$GSTRACE" report "$OUT/jpeg-gate.gstrace" leaks >"$OUT/jpeg-gate.txt" 2>/dev/null
+"$GSTRACE" report "$OUT/jpeg-gate.gstrace" leaks --hide-known >"$OUT/jpeg-gate-hidden.txt" 2>/dev/null
+check "live JPEG fixture: probe leaks labelled; unrelated leaks retained" "grep -q '_bitmapIsJPEG' '$OUT/jpeg-gate.txt' && grep -q 'known: libs-gui#1010' '$OUT/jpeg-gate.txt' && grep -q jpeg_gate_unrelated_leak '$OUT/jpeg-gate.txt'"
+check "live JPEG fixture: --hide-known removes only labelled leaks" "! grep -q '_bitmapIsJPEG' '$OUT/jpeg-gate-hidden.txt' && grep -q jpeg_gate_unrelated_leak '$OUT/jpeg-gate-hidden.txt'"
 
 echo "== Zombies"
 record zombie --template Zombies --launch "$OUT/objcwork" zombie

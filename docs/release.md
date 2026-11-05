@@ -97,6 +97,11 @@ Linux feeds are at
 Suffix versions use the prerelease channel through `prerelease-manifest.py`.
 The release artifact holds feeds under `site/updates/linux/`.
 
+For v0.1.5 local signing preparation and Dan's manual key provisioning, see
+[the key procedure](update-signing-keys.md) and [local readiness plan](v0.1.5-plan.md).
+The released v0.1.4 client's first update remains on its legacy trust path;
+the new plumbing has not yet been provisioned or qualified on a candidate.
+
 Publish approved assets first, then the approved feed. Test an RC1-to-RC2
 update against a local feed, restart and record with RC2 before candidate
 publication. The v0.1.0 validation ledger records local replacement/relaunch and
