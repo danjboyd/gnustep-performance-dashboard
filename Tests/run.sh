@@ -65,6 +65,16 @@ record() {   # record <name> <args...>
   "$GSTRACE" record --output "$OUT/$name.gstrace" "$@" >"$OUT/$name.log" 2>&1
 }
 
+if [ "$(uname -s)" = Linux ] && [ "$(uname -m)" = x86_64 ]; then
+  echo "== Sampling while the unwinder allocates"
+  if python3 "$ROOT/Tests/sampler-reentry-check.py" >"$OUT/sampler-reentry.log" 2>&1; then
+    pass "signal unwinder: CPU, allocations, combined and wall/allocations modes"
+  else
+    cat "$OUT/sampler-reentry.log"
+    fail "signal unwinder allocation re-entry"
+  fi
+fi
+
 echo "== C fixture: time profiler, allocations, leaks"
 record cburn --instrument time-profiler --instrument allocations --instrument leaks \
   --launch "$OUT/cburn"

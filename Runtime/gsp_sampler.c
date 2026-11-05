@@ -33,6 +33,10 @@ sample_handler(int sig, siginfo_t *info, void *uc)
       errno = saved;
       return;
     }
+  /* A signal-context unwind can allocate while extending libunwind's cache.
+     Those allocations belong to the agent: tracing them would enter the
+     allocation unwinder recursively, while libunwind is already active.  */
+  gsp_in_agent++;
   n = gsp_unwind_signal(t, uc, buf + 1, gsp_cfg.max_frames);
   fp->count = n;
   fp->kernel_count = 0;
@@ -46,6 +50,7 @@ sample_handler(int sig, siginfo_t *info, void *uc)
                   sig == GSP_SIG_CPU ? GSP_SAMPLE_CPU : GSP_SAMPLE_WALL,
                   n >= gsp_cfg.max_frames ? GSP_FRAMES_TRUNCATED : 0,
                   gsp_now(), buf, sizeof(*fp) + n * 8, NULL, 0);
+  gsp_in_agent--;
   errno = saved;
 }
 
