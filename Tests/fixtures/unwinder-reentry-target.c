@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <time.h>
+#include <dlfcn.h>
+#include <signal.h>
 
 static uint64_t
 now_ns(void)
@@ -15,6 +17,16 @@ now_ns(void)
 int
 main(void)
 {
+  const char *mode = getenv("CONTROLLED_INVALID_FP");
+  if (mode)
+    {
+      void *library = dlopen("libunwind.so.8", RTLD_NOW | RTLD_NOLOAD);
+      void (*arm)(int) = library
+        ? dlsym(library, "controlled_invalid_fp_sample") : NULL;
+      if (!arm)
+        return 88;
+      arm(mode[0] == 'w' ? SIGRTMIN + 3 : SIGPROF);
+    }
   uint64_t end = now_ns() + 250000000ull;
   volatile uint64_t burn = 1;
   while (now_ns() < end)

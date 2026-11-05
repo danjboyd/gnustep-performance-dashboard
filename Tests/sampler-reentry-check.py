@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""End-to-end signal-unwinder allocation regression, Linux x86-64 only.
+"""End-to-end signal-unwinder safety regressions, Linux x86-64 only.
 
 The controlled libunwind fixture allocates while creating a signal cursor and
 rejects recursive unwinding. It tests the interposition boundary; it does not
-pretend to reproduce any particular GUI application's crash.
+pretend to reproduce any particular GUI application's crash. Separate bad-FP
+cases reproduce the overflowing register value identified in the native core.
 """
 import argparse
 import os
@@ -19,6 +20,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--gstrace', type=Path, default=ROOT / 'Tools/gstrace/obj/gstrace')
 parser.add_argument('--agent', type=Path, default=ROOT / 'Runtime/obj/libgsperf-agent.so')
 parser.add_argument('--output', type=Path, default=ROOT / 'Tests/out/sampler-reentry')
+parser.add_argument('--case', choices=['all', 'reentry', 'invalid-fp'], default='all')
 args = parser.parse_args()
 if os.uname().sysname != 'Linux' or os.uname().machine != 'x86_64':
     raise SystemExit('This controlled libunwind ABI fixture requires Linux x86-64.')
@@ -33,14 +35,21 @@ subprocess.run(['cc', '-shared', '-fPIC', '-O2', '-g', '-fno-omit-frame-pointer'
                 '-o', str(shim / 'libunwind.so.8')], check=True)
 subprocess.run(['cc', '-O2', '-g', '-fno-omit-frame-pointer',
                 str(ROOT / 'Tests/fixtures/unwinder-reentry-target.c'),
-                '-o', str(out / 'target')], check=True)
+                '-o', str(out / 'target'), '-ldl'], check=True)
 env = dict(os.environ, GSP_AGENT_PATH=str(args.agent.resolve()))
-for mode, instruments in [('cpu', ['time-profiler']), ('alloc', ['allocations']),
+scenarios = [('cpu', ['time-profiler']), ('alloc', ['allocations']),
                           ('combined', ['time-profiler', 'allocations']),
-                          ('wall-alloc', ['hangs', 'allocations'])]:
+                          ('wall-alloc', ['hangs', 'allocations'])]
+invalid_scenarios = [('invalid-fp-cpu', ['time-profiler', 'allocations']),
+                     ('invalid-fp-wall', ['hangs', 'allocations'])]
+scenarios = (scenarios if args.case == 'reentry' else invalid_scenarios
+             if args.case == 'invalid-fp' else scenarios + invalid_scenarios)
+for mode, instruments in scenarios:
     trace = out / (mode + '.gstrace')
     command = [str(args.gstrace.resolve()), 'record', '--output', str(trace),
                '--sample-interval', '4ms', '--env', 'LD_LIBRARY_PATH=' + str(shim)]
+    if mode.startswith('invalid-fp-'):
+        command += ['--env', 'CONTROLLED_INVALID_FP=' + mode.removeprefix('invalid-fp-')]
     for instrument in instruments:
         command += ['--instrument', instrument]
     command += ['--launch', str(out / 'target')]
@@ -51,6 +60,8 @@ for mode, instruments in [('cpu', ['time-profiler']), ('alloc', ['allocations'])
     info = (trace / 'Info.plist').read_text()
     status = re.search(r'ExitStatus\s*=\s*<\*I(-?\d+)>', info)
     assert status and int(status[1]) == 0, (mode, 'target did not exit normally')
+    if mode.startswith('invalid-fp-'):
+        assert 'CONTROLLED_INVALID_FP_SAMPLE_RETURNED' in result.stderr, mode
     cpu = wall = allocations = ended = 0
     allocation_sizes = set()
     streams = list(trace.glob('events-*.bin'))
@@ -75,7 +86,7 @@ for mode, instruments in [('cpu', ['time-profiler']), ('alloc', ['allocations'])
                 allocations += 1
                 allocation_sizes.add(struct.unpack_from('<Q', payload, 8)[0])
                 # The fixture's distinctive 7897-byte allocations are internal.
-                if mode in ('combined', 'wall-alloc'):
+                if 'allocations' in instruments:
                     assert struct.unpack_from('<Q', payload, 8)[0] != 7897, mode
             elif kind == 17:
                 assert struct.unpack_from('<Q', payload)[0] == 0, (mode, 'dropped events')
@@ -88,4 +99,4 @@ for mode, instruments in [('cpu', ['time-profiler']), ('alloc', ['allocations'])
     if 'allocations' in instruments:
         assert 12345 in allocation_sizes, (mode, 'ordinary allocations disabled after sampling')
     print(f'{mode}: target exited0; CPU={cpu} wall={wall} allocations={allocations}; no unwinder re-entry')
-print('All 4 sampler re-entry scenarios passed.')
+print(f'All {len(scenarios)} sampler safety scenarios passed.')

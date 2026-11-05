@@ -73,8 +73,11 @@ gsp_loader_busy(void)
 static inline bool
 in_stack(gsp_thread *t, uintptr_t p, uintptr_t sp)
 {
+  /* Functions built without frame pointers can leave arbitrary chain values.
+     Check the upper bound before subtracting: p + frame_size can wrap.  */
   if (t->stack_hi)
-    return p >= sp && p + 16 <= t->stack_hi && p >= t->stack_lo;
+    return p >= sp && p >= t->stack_lo && p <= t->stack_hi
+      && t->stack_hi - p >= 2 * sizeof(uintptr_t);
   return p >= sp && p - sp < (64u << 20);
 }
 
