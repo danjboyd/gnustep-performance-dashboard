@@ -13,6 +13,8 @@ import io
 import json
 from pathlib import Path
 import re
+import os
+import runpy
 import shutil
 import tempfile
 import tarfile
@@ -52,7 +54,8 @@ def check_sources(path, commit):
     raise ValueError(f"Corresponding sources have no git application archive: {path.name}")
 
 
-def assemble(inputs, output, version, commit, backends):
+def assemble(inputs, output, version, commit, backends, require_signatures=False):
+    signing = runpy.run_path(str(Path(__file__).with_name("sign-update-feed.py"))) if require_signatures else None
     require(re.fullmatch(r"\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?", version), "Invalid release version")
     require(re.fullmatch(r"[0-9a-f]{40}", commit), "A full source commit is required")
     require(not output.exists(), f"Output already exists: {output}")
@@ -108,11 +111,16 @@ def assemble(inputs, output, version, commit, backends):
         require(feed.get("feedUrl") == f"{PAGES}/updates/{platform}/{channel}.json", f"Wrong feed URL: {name}")
         binary = check_payload(asset)
         checked.add(binary)
+        if signing is not None:
+            signing["verify_asset"](assets[0], files[binary])
         expected_suffix = ".AppImage" if backend == "appimage" else ".msi"
         require(binary.endswith(expected_suffix), f"Wrong binary extension: {binary}")
         provenance_name = binary[:-len(expected_suffix)] + ".provenance.json"
         require(provenance_name in files, f"Missing provenance: {provenance_name}")
         provenance = load(files[provenance_name])
+        if signing is not None and backend == "appimage":
+            require(provenance.get("updatesPublicEDKey") == os.environ.get("UPDATE_ED_PUBLIC_KEY"),
+                    "Packaged public key differs from the signing public key")
         if backend == "appimage":
             require(provenance.get("version") == version, "Wrong Linux provenance version")
             require(provenance.get("commit") == commit and provenance.get("sourceDirty") is False,
@@ -171,9 +179,10 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--version", required=True)
     parser.add_argument("--commit", required=True)
+    parser.add_argument("--require-signatures", action="store_true", help="require Ed25519 payload verification using UPDATE_ED_PUBLIC_KEY")
     parser.add_argument("--require-backend", choices=PLATFORMS, action="append", required=True)
     args = parser.parse_args()
-    assemble(args.input, args.output, args.version, args.commit, args.require_backend)
+    assemble(args.input, args.output, args.version, args.commit, args.require_backend, args.require_signatures)
 
 
 if __name__ == "__main__":

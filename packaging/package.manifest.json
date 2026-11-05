@@ -135,7 +135,8 @@
       "repo": "gnustep-performance-dashboard",
       "tagPattern": "v{version}",
       "releaseNotesUrlPattern": "https://github.com/{owner}/{repo}/releases/tag/{tag}"
-    }
+    },
+    "publicEDKey": null
   },
   "integrations": {
     "shortcutName": "Performance Dashboard",
