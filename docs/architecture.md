@@ -87,6 +87,52 @@ image while retaining recording. `GSP_TARGET_PID` also excludes fork/exec
 children. An exec atomically replaces this PID's event-stream epoch; readers
 discard the prior epoch's definitions and samples on the next reload.
 
+## Conservative leak detection limits
+
+The Leaks recorder treats pointer-like machine words as references. Stale
+stack, register, TLS or heap words can therefore keep a semantically leaked
+block reachable. A clean recording and zero dropped records do not guarantee
+that every leak was detected.
+
+The unchanged `Tests/fixtures/stress.c` uses eight workers, each performing
+150,000 iterations: 1–512-byte allocations, a 200,000-byte allocation every
+5,000 iterations, `realloc` every third iteration and 64 retained slots per
+worker. Each worker then deliberately loses one 4,000-byte block. Built with
+GCC `-O0 -g -fno-omit-frame-pointer`, two native x86_64 recordings with the
+unchanged released v0.1.4 AppImage recorder, Time Profiler, Allocations and
+Leaks (one-second interval) each found only two of those eight leaks: six
+misses (75%). Both captured 1,600,017 allocation events, nine threads, eight
+worker exits, a clean end and zero dropped records or scan diagnostics. They
+had one/two scans and lasted 0.91/1.30 seconds; every reported leak was 4,000
+bytes. The released agent SHA256 is
+`d07b8f44d58358ead317d1a3c8caf51f814d8c112639d89e7837178f5727386d`.
+
+The existing `GSP_LEAK_EXPLAIN=4000` diagnostic isolated the cause in two
+additional runs of that same shipped recorder. Raw allocation events confirm
+eight deliberate blocks, one per worker, all still allocated at the final
+scan. Two/three were reported; each of the six/five missed blocks was reached
+through an interior pointer-like word in another live malloc/realloc block.
+Those words were 112–328 bytes into their source blocks, beyond the fixture's
+initialized first 64 bytes, and pointed 128–3,232 bytes into a deliberate
+4,000-byte leak. The fixture never writes object pointers into these payloads:
+stale or uninitialized heap-tail contents create conservative false edges.
+The final-scan diagnostic accounts for every missed block in both runs.
+
+This evidence isolates retained-heap false edges in these recordings; it does
+not establish a stack/register cause or an absent final scan. Diagnostic I/O
+can change scheduling and its 2/3-of-8 counts are not pooled with the normal
+runs. No detector semantics have changed. Interior C pointers can be valid in
+real applications, so changing that policy requires separate design/review.
+
+Two local port x86_64 runs also found two of eight, and two arm64 QEMU/TCG
+runs found three/four. Runtime and scan opportunities differ, so these small
+batches do not estimate comparative architecture-specific recall rates. Raw
+local evidence is under `out/linux-development-20261105/x86-stress-released/`
+and `x86-stress-released-explain/`, including validated root offsets. A
+sandbox scan-denied pilot and an overly strict two-scan diagnostic harness
+assertion are retained separately; corrected diagnostics require a completed
+final scan. Treat these numbers as a reproducible general recorder limitation.
+
 ## The Windows agent (gsperf-agent.dll)
 
 `Runtime/win/`; the trace format is the same. There is no `LD_PRELOAD` and
