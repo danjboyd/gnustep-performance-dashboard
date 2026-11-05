@@ -81,10 +81,12 @@ Do not rotate the public key casually: already installed clients trust the
 key embedded when they were packaged. A change needs a migration plan.
 
 The released v0.1.4 client contains no public key. Its initial update follows
-the legacy HTTPS/SHA-256 path; the new signature cannot enforce trust on that
-old client. Dan must choose and communicate the first trust-anchor delivery
-before release. Provisioning keys alone does not finish update acceptance
-or authorize a push, tag, publication or feed deployment.
+the legacy path; the new signature cannot enforce trust on that old client.
+The key-configured v0.1.5 in-app updater verifies payload signatures.
+Independent AppImageUpdate/zsync updates do not use that verification.
+Dan must choose and communicate the first trust-anchor delivery before release.
+Provisioning keys alone does not finish update acceptance or authorize a push,
+tag, publication or feed deployment.
 
 Command references: [OpenSSL key generation](https://docs.openssl.org/3.0/man1/openssl-genpkey/),
 [GitHub secret input](https://cli.github.com/manual/gh_secret_set) and
