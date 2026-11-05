@@ -136,7 +136,7 @@
       "tagPattern": "v{version}",
       "releaseNotesUrlPattern": "https://github.com/{owner}/{repo}/releases/tag/{tag}"
     },
-    "publicEDKey": null
+    "publicEDKey": "td/jTpFLAyCFY4VNM4dfxYE13hEygzDnIf6vgfK0hhY="
   },
   "integrations": {
     "shortcutName": "Performance Dashboard",
