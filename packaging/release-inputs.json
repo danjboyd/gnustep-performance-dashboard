@@ -6,10 +6,10 @@
     "revision": "b74231f84bc139a50ad50459acfaed10a07a4642"
   },
   "gnustep-packager": {
-    "comment": "Stable packager v0.1.6; tag and peeled commit verified against the public repository. Its updater sources are byte-identical to v0.1.4; the existing HAVE_MODE_T compatibility additions remain.",
+    "comment": "Stable packager v0.1.7; public release, annotated tag and peeled commit verified. Existing vendored updater compatibility changes remain; this pin change does not refresh or sign release assets.",
     "url": "https://github.com/danjboyd/gnustep-packager.git",
-    "tag": "v0.1.6",
-    "revision": "a79076895e8e1cba25ad4447f932098e4cb21690"
+    "tag": "v0.1.7",
+    "revision": "6f361b8aaa08aeb7d1048e2f5b80218223c469fa"
   },
   "appimagetool": {
     "comment": "gnustep-packager's default is appimagetool's moving continuous build; 0.1.3 was made with build 295 (8c8c91f). Release 1.9.1 is build 296 from the same commit. scripts/fetch-appimagetool.sh installs it where the packager looks, and the packager takes the AppImage runtime from it.",

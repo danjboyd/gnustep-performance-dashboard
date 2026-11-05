@@ -30,11 +30,6 @@ Other architectures and distributions are unverified. See the
 [v0.1.4 release notes](docs/releases/v0.1.4.md),
 [release process](docs/release.md), and [Windows notes](docs/windows.md).
 
-Publication checkpoint, November 4, 2026, before release approval: v0.1.4
-qualification is complete; its tag, release assets and stable-feed deployment
-await approval. v0.1.3 is the preceding published release. This dated
-checkpoint records preparation, not confirmation of publication.
-
 ## Installing
 
 The v0.1.4 release asset is `PerformanceDashboard-0.1.4-x86_64.AppImage`.
