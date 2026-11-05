@@ -1,0 +1,75 @@
+{
+  "rehearsalOnly": true,
+  "neverUpload": true,
+  "baseCommit": "68367d438cda1ded7d4c4fcf6462644f336c5d14",
+  "sourceDirty": true,
+  "network": "Docker network none; file URL feeds only",
+  "published014SHA256": "7e4dabd8ccc8cacd7d429ca0d4a854da7f4b68f2c7b61b978a334456166ea098",
+  "artifacts": {
+    "0.1.5": {
+      "PerformanceDashboard-0.1.5-x86_64.AppImage.zsync": {
+        "sha256": "0c8328004473be49a7703d59ab375fca70baaf38663801b6ca821f15896ccc2e",
+        "bytes": 99361
+      },
+      "PerformanceDashboard-0.1.5-x86_64.provenance.json": {
+        "sha256": "0aa5bdd043a1a378b2233bf3e25316daff06ed4dda70d4c4ed5151497c7c2b0d",
+        "bytes": 23835
+      },
+      "PerformanceDashboard-0.1.5-x86_64.update-feed.json": {
+        "sha256": "f80ddabf18bc36dfcec47c046f2f5455b7bcfb7cb8b8f477b057ef0648306211",
+        "bytes": 1881
+      },
+      "PerformanceDashboard-0.1.5-x86_64.metadata.json": {
+        "sha256": "fc22a2e88f126541ade865b57695d13f324311ca1055bf6c57c328e83af6361f",
+        "bytes": 11954
+      },
+      "PerformanceDashboard-0.1.5-x86_64.AppImage": {
+        "sha256": "f09a5dbd9a7c16776fb580287a63922466723ead1a0fa92531b333e6935082aa",
+        "bytes": 28994040
+      }
+    },
+    "0.1.6": {
+      "PerformanceDashboard-0.1.6-x86_64.AppImage": {
+        "sha256": "ce4b79e287b5adaa66841035246e60c6e90a42f4f51b0252f2f69e78cdaa2b27",
+        "bytes": 28994040
+      },
+      "PerformanceDashboard-0.1.6-x86_64.provenance.json": {
+        "sha256": "f3b3301604e5eea883e1c0f6c136e9e4fc552bf572d753e43a1d6dad4857fe1f",
+        "bytes": 23835
+      },
+      "PerformanceDashboard-0.1.6-x86_64.metadata.json": {
+        "sha256": "7d182726bd1a6501aace9d17e3670eac8d71e1de88e4caf7d6eaf5a36cb271c2",
+        "bytes": 11954
+      },
+      "PerformanceDashboard-0.1.6-x86_64.update-feed.json": {
+        "sha256": "d1102826a61162cc65bbc749b87d9271c180a6f9069446786bd3af41b90a368b",
+        "bytes": 1881
+      },
+      "PerformanceDashboard-0.1.6-x86_64.AppImage.zsync": {
+        "sha256": "9895774260ef77f1656dc0df35e4a840bb458c19d528d3cc1fb1b4208bb3a52e",
+        "bytes": 99361
+      }
+    }
+  },
+  "checks": {
+    "published014ToRehearsal015": "applied exactnewbytes/relaunched/metadata0.1.5;EXIT0",
+    "about015": "sameverifiedbytes displayed0.1.5 REHEARSAL in separateprivate sampletrace process",
+    "signed015To016": "applied exactnewbytes/relaunched/metadata0.1.6;EXIT0",
+    "tampered016WithRecomputedSHA": "signature refused; installed015unchanged;EXIT0",
+    "realAlternateTool": "NOT RUN: no locally cached appimageupdatetool; source+stub evidence only"
+  },
+  "throwawayPrivateKey": {
+    "status": "destroyed",
+    "temporaryDirectoryRemoved": true,
+    "destroyedAtUTC": "2026-11-05T18:51:00.566149+00:00"
+  },
+  "logs": {
+    "0.1.5-build.log": "ed3447c47874f00f06244d8227df72b205658de49f9810bba6c7aeafd2a19e64",
+    "0.1.6-build.log": "664cd65cdcb52476e6d741e5463135a94fddd9b42366ec4f70481b057925d4ca",
+    "gui-v014-to-015.log": "6a0cbca33b89dd116fa1fcb92bca3d5274b9b1f716b78eb8f56156b181df5d31",
+    "gui-v015-to-016.log": "f7f71212735528c8dee4e9dd9de8a93791f872c14341269ea38615d561947410",
+    "gui-update-rehearsal.sh": "0ddeffba19758a26a5365c9b2e2d633279183f24a488c1e4ab02907931ca5246",
+    "build-one.sh": "be6007d6d339be6ca2f1d0b75a3bcce5e68aa253a4caee57ee12efd37f6e1a6a",
+    "about-v015/about-version.png": "56a7f34e2e6ed08d27b0b33a8c7474f6319441cd1638b41093bbec7413d939f9"
+  }
+}
