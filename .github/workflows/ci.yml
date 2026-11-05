@@ -58,6 +58,7 @@ jobs:
           export LD_LIBRARY_PATH="$PREFIX/System/Library/Libraries${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
           PD_TEST_UPDATE_HELPER="$PWD/Dashboard/PerformanceDashboard.app/gp-update-helper" \
             python3 Tests/update-signing-checks.py
+          python3 Tests/update-chain-checks.py
 
       - name: Install pinned investigation themes
         run: |

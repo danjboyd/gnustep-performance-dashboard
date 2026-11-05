@@ -1,0 +1,74 @@
+{
+  "scope": "local shell fixtures, actual GPUpdaterCore feed parser and v0.1.5-built helper",
+  "helperSHA256": "3c608e71b7ef5d5df186bd692c23576868b7e09a7728c99eb5a39af0b1ea7235",
+  "helperSourceSHA256": "f0abfdc089e14e86a894fbbf74b7a01c91d7896a06938c03cf76bfab2cca3e7e",
+  "coreArchiveSHA256": "606db4d6afdf8e5a0fc10b79370acc33319a9bc552d6a43df47807fe3b51272e",
+  "testScriptSHA256": "0a37f10e5730077b2f0eeef2a6f050581b5d55393c131cb7063746f5cef23e53",
+  "feedAdapterSHA256": "d9d23c12f1b617cae8dcb448f5a0157dfd8d8f8799ab03019052f011b72340ec",
+  "cases": [
+    {
+      "case": "valid",
+      "selectedVersion": "0.1.6",
+      "prepare": "readyToApply",
+      "installedUnchangedAfterPrepare": true,
+      "apply": "completed",
+      "installedSHA256": "18f90ab86196107e89495c15f74988b65356a991c7ac37776220a866d81794a9",
+      "payloadFixtureVersion": "0.1.6-test"
+    },
+    {
+      "case": "tampered-asset",
+      "selectedVersion": "0.1.6",
+      "prepare": "failed",
+      "installedUnchangedAfterPrepare": true,
+      "rejectedDownloadRemoved": false
+    },
+    {
+      "case": "tampered-feed-signature",
+      "selectedVersion": "0.1.6",
+      "prepare": "failed",
+      "installedUnchangedAfterPrepare": true,
+      "rejectedDownloadRemoved": true
+    },
+    {
+      "case": "tampered-asset-and-feed-hash",
+      "selectedVersion": "0.1.6",
+      "prepare": "failed",
+      "installedUnchangedAfterPrepare": true,
+      "rejectedDownloadRemoved": true
+    },
+    {
+      "case": "missing-feed-signature",
+      "selectedVersion": "0.1.6",
+      "prepare": "failed",
+      "installedUnchangedAfterPrepare": true,
+      "rejectedDownloadRemoved": true
+    },
+    {
+      "case": "metadata-only-edit",
+      "selectedVersion": "0.1.6.1",
+      "prepare": "readyToApply",
+      "installedUnchangedAfterPrepare": true
+    },
+    {
+      "case": "signed-older-payload",
+      "selectedVersion": "0.1.6",
+      "prepare": "readyToApply",
+      "installedUnchangedAfterPrepare": true,
+      "apply": "completed",
+      "installedSHA256": "1df3a56a0107c446259cdda21df38ac3e453e7790ab2db57f996cc02282ec454",
+      "payloadFixtureVersion": "0.1.4-test"
+    },
+    {
+      "case": "legacy-no-key-tool",
+      "selectedVersion": "0.1.6",
+      "prepare": "readyToApply",
+      "installedUnchangedAfterPrepare": true,
+      "apply": "tool failed; installed unchanged; no download fallback"
+    }
+  ],
+  "limits": [
+    "Asset bytes are signed; feed metadata is not authenticated.",
+    "A correctly signed older fixture advertised as new was installed; no payload-version comparison observed.",
+    "Synthetic shell fixtures, not an actual candidate AppImage or GUI relaunch acceptance."
+  ]
+}
