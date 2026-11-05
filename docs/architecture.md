@@ -124,6 +124,12 @@ can change scheduling and its 2/3-of-8 counts are not pooled with the normal
 runs. No detector semantics have changed. Interior C pointers can be valid in
 real applications, so changing that policy requires separate design/review.
 
+A possible future reporting improvement is to distinguish allocations that
+are possibly retained by pointer-like heap words from the ordinary leak list.
+This is an unimplemented idea, not a new classification or detector behavior.
+It would need a measured design that preserves valid interior pointers and
+explains the uncertainty to users before any implementation decision.
+
 Two local port x86_64 runs also found two of eight, and two arm64 QEMU/TCG
 runs found three/four. Runtime and scan opportunities differ, so these small
 batches do not estimate comparative architecture-specific recall rates. Raw
