@@ -2,6 +2,11 @@
 """Release-assembly failure cases use disposable synthetic artifact bytes."""
 
 import hashlib
+import base64
+import os
+import subprocess
+import sys
+from unittest.mock import patch
 import importlib.util
 import io
 import json
@@ -92,6 +97,54 @@ class AssemblyChecks(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, message):
             self.assemble()
         self.assertFalse(self.output.exists(), "Failed validation must not leave a releasable directory")
+
+    def sign_linux(self):
+        private = self.root / "throwaway.pem"
+        subprocess.run(["openssl", "genpkey", "-algorithm", "ED25519", "-out", str(private)],
+                       check=True, capture_output=True)
+        os.chmod(private, 0o600)
+        seed = subprocess.check_output(["openssl", "pkey", "-in", str(private), "-outform", "DER"])[-32:]
+        public = subprocess.check_output(["openssl", "pkey", "-in", str(private), "-pubout", "-outform", "DER"])[-32:]
+        env = {"UPDATE_ED_PRIVATE_KEY": base64.b64encode(seed).decode(),
+               "UPDATE_ED_PUBLIC_KEY": base64.b64encode(public).decode()}
+        subprocess.run([sys.executable, str(ROOT/"scripts/sign-update-feed.py"),
+                        str(self.feeds["appimage"]), str(self.linux)],
+                       env=dict(os.environ, **env), check=True, capture_output=True)
+        p = assembly.load(self.provenance["appimage"])
+        p["updatesPublicEDKey"] = env["UPDATE_ED_PUBLIC_KEY"]
+        write_json(self.provenance["appimage"], p)
+        return env
+
+    def test_signed_distribution_feed_and_checksums(self):
+        env = self.sign_linux()
+        with patch.dict(os.environ, env):
+            assembly.assemble([self.linux], self.output, VERSION, COMMIT, ["appimage"], True)
+        final = assembly.load(self.output/"site/updates/linux/prerelease.json")
+        self.assertIn("edSignature", final["releases"][0]["assets"][0])
+        self.assertEqual(final, assembly.load(self.feeds["appimage"]))
+        self.assertIn(assembly.digest(self.output/self.feeds["appimage"].name),
+                      (self.output/"SHA256SUMS").read_text())
+
+    def test_required_signatures_reject_missing_bad_and_mismatched_build_key(self):
+        env = self.sign_linux()
+        good = assembly.load(self.feeds["appimage"])
+        with patch.dict(os.environ, env):
+            for signature in [None, base64.b64encode(bytes(64)).decode()]:
+                feed = json.loads(json.dumps(good))
+                asset = feed["releases"][0]["assets"][0]
+                if signature is None: asset.pop("edSignature")
+                else: asset["edSignature"] = signature
+                write_json(self.feeds["appimage"], feed)
+                with self.assertRaises(ValueError):
+                    assembly.assemble([self.linux], self.output, VERSION, COMMIT, ["appimage"], True)
+                self.assertFalse(self.output.exists())
+            write_json(self.feeds["appimage"], good)
+            p = assembly.load(self.provenance["appimage"])
+            p["updatesPublicEDKey"] = base64.b64encode(bytes(32)).decode()
+            write_json(self.provenance["appimage"], p)
+            with self.assertRaisesRegex(ValueError, "Packaged public key"):
+                assembly.assemble([self.linux], self.output, VERSION, COMMIT, ["appimage"], True)
+            self.assertFalse(self.output.exists())
 
     def test_combined_release_and_all_checksums(self):
         self.assemble()

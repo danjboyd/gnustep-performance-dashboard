@@ -75,6 +75,24 @@ source_diff_sha256="$(git diff --binary HEAD | sha256sum | cut -d' ' -f1)"
 version="${version_override:-$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["package"]["version"])' "$manifest")}"
 version_args=()
 [ -n "$version_override" ] && version_args=(-PackageVersion "$version_override")
+signing_manifest=""
+work="$(mktemp -d "${TMPDIR:-/tmp}/pd-package.XXXXXX")"
+xvfb_pid=""
+cleanup() {
+  [ -n "$xvfb_pid" ] && kill "$xvfb_pid" 2>/dev/null || true
+  rm -rf "$work"
+  [ -z "$signing_manifest" ] || rm -f "$signing_manifest"
+}
+trap cleanup EXIT
+
+# The public trust anchor is embedded before staging. The real private key
+# is used only by the separate release-assembly job, never by this build.
+if [ "$release" = 1 ]; then
+  candidate=packaging/package.manifest.signing.json
+  python3 scripts/sign-update-feed.py --prepare-manifest "$manifest" "$candidate"
+  signing_manifest="$candidate"
+  manifest="$signing_manifest"
+fi
 # A prerelease (0.1.0-rc1) checks the prerelease update feed, from a copy of
 # the manifest beside it (its relative paths still resolve).
 case "$version" in
@@ -84,14 +102,6 @@ case "$version" in
 esac
 packager_commit="$(git -C "$packager_root" rev-parse HEAD)"
 echo "package-linux: Performance Dashboard $version from ${commit:0:7}, gnustep-packager ${packager_commit:0:7}"
-
-work="$(mktemp -d "${TMPDIR:-/tmp}/pd-package.XXXXXX")"
-xvfb_pid=""
-cleanup() {
-  [ -n "$xvfb_pid" ] && kill "$xvfb_pid" 2>/dev/null || true
-  rm -rf "$work"
-}
-trap cleanup EXIT
 
 # Package and validate. The smoke launch runs on a private display with a
 # private GNUstep home.
@@ -125,6 +135,14 @@ build_id() { # file
   readelf -n "$1" 2>/dev/null | sed -n 's/^ *Build ID: *//p' | head -1
 }
 root="$work/squashfs-root/usr"
+if [ "$release" = 1 ]; then
+  python3 - "$work/squashfs-root" <<'PYKEY'
+import json, os, pathlib, sys
+configs = list(pathlib.Path(sys.argv[1]).rglob("gnustep-packager-update.json"))
+if len(configs) != 1 or json.loads(configs[0].read_text(encoding="utf-8-sig")).get("updates", {}).get("publicEDKey") != os.environ["UPDATE_ED_PUBLIC_KEY"]:
+    raise SystemExit("package-linux: packaged update public key does not match the build input")
+PYKEY
+fi
 theme_id="$(build_id "$root/runtime/System/Library/Themes/Adwaita.theme/Adwaita")"
 back_id="$(build_id "$root/runtime/System/Library/Bundles/libgnustep-back-032.bundle/libgnustep-back-032")"
 app_id="$(build_id "$root/app/PerformanceDashboard.app/PerformanceDashboard")"
@@ -150,6 +168,7 @@ json.dump({
     "commit": "$commit",
     "sourceDirty": "$source_dirty" == "true",
     "trackedDiffSha256": "$source_diff_sha256",
+    "updatesPublicEDKey": os.environ.get("UPDATE_ED_PUBLIC_KEY") or None,
     "builtBy": "${GITHUB_ACTIONS:+github-actions}" or "local",
     "inputs": {
         "adwaita": pin("adwaita"),

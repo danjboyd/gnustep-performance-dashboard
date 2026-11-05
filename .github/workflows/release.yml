@@ -58,7 +58,7 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends \
-            ca-certificates curl git make gcc libc6-dev pkg-config python3 sudo file binutils libunwind8 \
+            ca-certificates curl git make gcc libc6-dev pkg-config python3 sudo file binutils openssl libunwind8 \
             libx11-dev libxext-dev libxft-dev libxrender-dev libfreetype-dev \
             libfontconfig-dev libcairo2-dev libglib2.0-dev \
             xvfb xauth x11-utils fonts-dejavu-core \
@@ -74,6 +74,7 @@ jobs:
       - name: Package and check
         env:
           VERSION: ${{ needs.version.outputs.version }}
+          UPDATE_ED_PUBLIC_KEY: ${{ vars.UPDATE_ED_PUBLIC_KEY }}
         run: scripts/ci-release-linux.sh "$VERSION"
 
       - name: Check results
@@ -111,13 +112,32 @@ jobs:
           name: linux
           path: dist/ci/linux
 
+      - name: Check signing and assembly failure paths with disposable keys
+        run: |
+          python3 Tests/update-signing-checks.py
+          python3 Tests/release-assembly-checks.py
+
+      # These inputs must be provisioned separately by Dan. This workflow
+      # names them; it never creates/rotates a key or repository secret.
+      - name: Sign payloads before distribution-feed assembly
+        env:
+          UPDATE_ED_PRIVATE_KEY: ${{ secrets.UPDATE_ED_PRIVATE_KEY }}
+          UPDATE_ED_PUBLIC_KEY: ${{ vars.UPDATE_ED_PUBLIC_KEY }}
+        run: |
+          set -eu
+          set -- dist/ci/linux/*.update-feed.json
+          [ "$#" -eq 1 ] && [ -f "$1" ]
+          python3 scripts/sign-update-feed.py "$1" dist/ci/linux
+          python3 scripts/sign-update-feed.py --verify "$1" dist/ci/linux
+
       - name: Validate and assemble release artifacts
         env:
           VERSION: ${{ needs.version.outputs.version }}
+          UPDATE_ED_PUBLIC_KEY: ${{ vars.UPDATE_ED_PUBLIC_KEY }}
         run: |
           python3 scripts/assemble-release.py --input dist/ci/linux \
             --output dist/ci/release --version "$VERSION" --commit "$GITHUB_SHA" \
-            --require-backend appimage
+            --require-backend appimage --require-signatures
           cat dist/ci/release/SHA256SUMS >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4

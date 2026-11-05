@@ -18,3 +18,6 @@ packaging/package.manifest.prerelease.json
 .codex/
 
 __pycache__/
+
+# Generated public-key build input (never a private key).
+/packaging/package.manifest.signing.json
