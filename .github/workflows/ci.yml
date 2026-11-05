@@ -52,6 +52,13 @@ jobs:
           export LD_LIBRARY_PATH="$PREFIX/System/Library/Libraries${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
           make CC=clang
 
+      - name: Signed update refusal and local replacement (throwaway keys)
+        run: |
+          . "$PREFIX/System/Library/Makefiles/GNUstep.sh"
+          export LD_LIBRARY_PATH="$PREFIX/System/Library/Libraries${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+          PD_TEST_UPDATE_HELPER="$PWD/Dashboard/PerformanceDashboard.app/gp-update-helper" \
+            python3 Tests/update-signing-checks.py
+
       - name: Install pinned investigation themes
         run: |
           . "$PREFIX/System/Library/Makefiles/GNUstep.sh"
