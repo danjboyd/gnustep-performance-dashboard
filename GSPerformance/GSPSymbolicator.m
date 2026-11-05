@@ -4,6 +4,7 @@
 #import "GSPStackTable.h"
 
 #include "GSPELF.h"
+#include <GSPerformance/gsp_format.h>
 #if defined(_WIN32)
 #  include <windows.h>
 #else
@@ -708,6 +709,32 @@ static char *(*cxa_demangle)(const char *, char *, size_t *, int *);
   return objc ? objc : name;
 }
 
+/* Legacy embedded snapshots store display names, including reserved raw
+ * address/image+offset labels, without a separate unknown-state flag. Match
+ * that full format against this address/image, never a generic +0x suffix. */
+static BOOL
+embeddedFallback(NSString *name, uint64_t address, GSPImage *image)
+{
+  if ([name isEqual: [NSString stringWithFormat: @"0x%llx",
+                      (unsigned long long)address]])
+    return YES;
+  if (image == nil || address < image.base)
+    return NO;
+  NSString *prefix = [image.name stringByAppendingString: @"+0x"];
+  if (![name hasPrefix: prefix])
+    return NO;
+  NSString *tail = [name substringFromIndex: [prefix length]];
+  if ([tail length] == 0 || [tail rangeOfCharacterFromSet:
+      [[NSCharacterSet characterSetWithCharactersInString: @"0123456789abcdefABCDEF"] invertedSet]].location != NSNotFound)
+    return NO;
+  unsigned long long offset = 0;
+  NSScanner *scan = [NSScanner scannerWithString: tail];
+  return [scan scanHexLongLong: &offset] && [scan isAtEnd]
+    && offset <= address - image.base
+    && (offset == address - image.base ||
+        (image.start >= image.base && offset >= image.start - image.base));
+}
+
 - (GSPSymbol *) symbolForAddress: (uint64_t)address
 {
   NSNumber *key = [NSNumber numberWithUnsignedLongLong: address];
@@ -725,8 +752,15 @@ static char *(*cxa_demangle)(const char *, char *, size_t *, int *);
   uint64_t start = 0;
 
   if (_embedded != nil)
-    name = [_embedded objectForKey: [NSString stringWithFormat: @"%llx",
-                                     (unsigned long long)address]];
+    {
+      id saved = [_embedded objectForKey: [NSString stringWithFormat: @"%llx",
+                                          (unsigned long long)address]];
+      if ([saved isKindOfClass: [NSString class]])
+        {
+          name = saved;
+          sym.isUnknown = embeddedFallback(name, address, image);
+        }
+    }
 
   if (name == nil)
     {
@@ -861,7 +895,7 @@ is_agent(GSPSymbol *s)
         continue;   /* interposer trampoline */
       [syms addObject: s];
       /* return addresses point after the call; report the call itself */
-      [addrs addObject: [NSNumber numberWithUnsignedLongLong: i > 0 ? f[i] - 1 : f[i]]];
+      [addrs addObject: [NSNumber numberWithUnsignedLongLong: i > 0 && f[i] > 0 ? f[i] - 1 : f[i]]];
     }
   if (sawAgent && [syms count] == 0)
     {
@@ -1014,6 +1048,84 @@ is_agent(GSPSymbol *s)
     }
   [_lines setObject: result ? (id)result : (id)[NSNull null] forKey: key];
   return result;
+}
+
+- (NSDictionary *) resolutionSummary
+{
+  NSMutableIndexSet *referenced = [NSMutableIndexSet indexSet];
+  NSUInteger available = [_process.stacks count];
+  void (^reference)(uint32_t) = ^(uint32_t stack) {
+    if (stack > 0 && stack < available)
+      [referenced addIndex: stack];
+  };
+  const GSPSample *samples = _process.samples;
+  for (NSUInteger i = 0; i < _process.sampleCount; i++)
+    reference(samples[i].stack);
+  const GSPAllocationEvent *allocs = _process.allocationEvents;
+  for (NSUInteger i = 0; i < _process.allocationEventCount; i++)
+    reference(allocs[i].stack);
+  const GSPRefCountEvent *refs = _process.refCountEvents;
+  for (NSUInteger i = 0; i < _process.refCountEventCount; i++)
+    reference(refs[i].stack);
+  const GSPIOEvent *io = _process.ioEvents;
+  for (NSUInteger i = 0; i < _process.ioEventCount; i++)
+    reference(io[i].stack);
+  for (GSPLeakSnapshot *snapshot in _process.leakSnapshots)
+    for (GSPLeak *leak in snapshot.leaks)
+      reference(leak.stack);
+  for (GSPZombieEvent *zombie in _process.zombies)
+    reference(zombie.stack);
+
+  uint64_t frames = 0, unknown = 0;
+  NSMutableDictionary *modules = [NSMutableDictionary dictionary];
+  NSMutableDictionary *stackCounts = [NSMutableDictionary dictionary];
+  for (NSUInteger sid = [referenced firstIndex]; sid != NSNotFound;
+       sid = [referenced indexGreaterThanIndex: sid])
+    {
+      @autoreleasepool
+        {
+          NSArray *symbols = [self symbolsForStack: (uint32_t)sid];
+          uint64_t unnamed = 0;
+          for (GSPSymbol *symbol in symbols)
+            {
+              NSString *path = symbol.imagePath ?: @"[unknown image]";
+              NSMutableDictionary *row = [modules objectForKey: path];
+              if (row == nil)
+                {
+                  row = [NSMutableDictionary dictionaryWithObjectsAndKeys:
+                    path, @"path", @0, @"frames", @0, @"unresolved", nil];
+                  [modules setObject: row forKey: path];
+                }
+              [row setObject: @([[row objectForKey: @"frames"] unsignedLongLongValue] + 1)
+                      forKey: @"frames"];
+              if (symbol.isUnknown)
+                {
+                  unnamed++;
+                  [row setObject: @([[row objectForKey: @"unresolved"] unsignedLongLongValue] + 1)
+                          forKey: @"unresolved"];
+                }
+            }
+          frames += [symbols count]; unknown += unnamed;
+          [stackCounts setObject: @[@([symbols count]), @(unnamed)] forKey: @(sid)];
+        }
+    }
+  uint64_t cpuFrames = 0, cpuUnknown = 0, cpuWeight = 0;
+  for (NSUInteger i = 0; i < _process.sampleCount; i++)
+    if (samples[i].kind != GSP_SAMPLE_WALL)
+      {
+        NSArray *counts = [stackCounts objectForKey: @(samples[i].stack)];
+        uint64_t weight = samples[i].weight ?: 1;
+        cpuWeight += weight;
+        cpuFrames += [[counts objectAtIndex: 0] unsignedLongLongValue] * weight;
+        cpuUnknown += [[counts objectAtIndex: 1] unsignedLongLongValue] * weight;
+      }
+  NSMutableArray *rows = [NSMutableArray array];
+  for (NSString *path in [[modules allKeys] sortedArrayUsingSelector: @selector(compare:)])
+    [rows addObject: [modules objectForKey: path]];
+  return @{ @"frames": @(frames), @"unresolved": @(unknown),
+            @"stacks": @([referenced count]), @"modules": rows,
+            @"cpuFrames": @(cpuFrames), @"cpuUnresolved": @(cpuUnknown),
+            @"cpuSampleWeight": @(cpuWeight) };
 }
 
 - (NSDictionary *) symbolTableForAllStacks

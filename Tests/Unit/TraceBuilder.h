@@ -12,6 +12,7 @@
 
 @property (nonatomic, readonly) uint64_t start;   /* stream start time (ns) */
 
+- (void) image: (const char *)path base: (uint64_t)base start: (uint64_t)start end: (uint64_t)end;
 - (void) string: (uint32_t)identifier value: (const char *)value;
 - (void) name: (uint64_t)address as: (NSString *)name;   /* METHOD record */
 - (void) thread: (uint32_t)tid name: (const char *)name main: (BOOL)isMain at: (uint64_t)t;
