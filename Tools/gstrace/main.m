@@ -59,6 +59,7 @@ usage(void)
       @"    --invert  --separate-threads  --hide-system  --flatten-recursion\n"
       @"    --charge-to-caller <symbol>  --prune <symbol>  --focus <symbol>\n"
       @"    --depth <n>  --min-percent <p>  --limit <n>  --by-stack  --persistent  --lines  --events\n"
+      @"    --symbol-summary   show unresolved display frames by module\n"
       @"    --hide-known   leave out leaks GNUstep is known to have (leaks report)\n"
       @"  export <trace> --format <json|chrome|speedscope|collapsed|csv> [--table <name>]\n"
       @"         [--output <file>] [--pid <pid>]\n"
@@ -297,7 +298,7 @@ typedef struct report_opts
   NSUInteger depth;
   double minPercent;
   NSUInteger limit;
-  BOOL byStack, persistent, lines, events, hideKnown;
+  BOOL byStack, persistent, lines, events, hideKnown, symbolSummary;
 } report_opts;
 
 static GSPTrace *
@@ -381,6 +382,45 @@ configured(GSPCallTree *tree, report_opts *o)
 
 /* ------------------------------------------------------------------ */
 
+static void
+report_symbols(GSPProcess *process)
+{
+  NSDictionary *summary = [process.symbolicator resolutionSummary];
+  uint64_t frames = [[summary objectForKey: @"frames"] unsignedLongLongValue];
+  if (frames == 0)
+    {
+      out(@"  Symbols: no frames in referenced stacks.\n");
+      return;
+    }
+  out([NSString stringWithFormat:
+    @"  Symbols: %llu of %llu frames unresolved across %lu distinct referenced stacks (whole process)\n",
+    [[summary objectForKey: @"unresolved"] unsignedLongLongValue],
+    (unsigned long long)frames, (unsigned long)[[summary objectForKey: @"stacks"] unsignedIntegerValue]]);
+  NSArray *modules = [summary objectForKey: @"modules"];
+  NSMutableDictionary *basenameCounts = [NSMutableDictionary dictionary];
+  for (NSDictionary *row in modules)
+    {
+      NSString *name = [[row objectForKey: @"path"] lastPathComponent];
+      [basenameCounts setObject: @([[basenameCounts objectForKey: name] unsignedIntegerValue] + 1) forKey: name];
+    }
+  for (NSDictionary *row in modules)
+    if ([[row objectForKey: @"unresolved"] unsignedLongLongValue] > 0)
+      {
+        NSString *path = [row objectForKey: @"path"];
+        NSString *name = [path lastPathComponent];
+        if ([[basenameCounts objectForKey: name] unsignedIntegerValue] > 1) name = path;
+        out([NSString stringWithFormat: @"    %@: %llu of %llu unresolved\n", name,
+          [[row objectForKey: @"unresolved"] unsignedLongLongValue],
+          [[row objectForKey: @"frames"] unsignedLongLongValue]]);
+      }
+  uint64_t cpuFrames = [[summary objectForKey: @"cpuFrames"] unsignedLongLongValue];
+  if (cpuFrames > 0)
+    out([NSString stringWithFormat: @"  CPU-sample-weighted frames: %llu of %llu unresolved (weight %llu; wall samples excluded)\n",
+      [[summary objectForKey: @"cpuUnresolved"] unsignedLongLongValue],
+      (unsigned long long)cpuFrames,
+      [[summary objectForKey: @"cpuSampleWeight"] unsignedLongLongValue]]);
+}
+
 static int
 cmd_info(NSArray *args)
 {
@@ -428,6 +468,7 @@ cmd_info(NSArray *args)
            (unsigned long)[p.signposts count], (unsigned long)[p.logMessages count],
            (unsigned long)[p.leakSnapshots count], (unsigned long)[p.zombies count],
            (unsigned long)[p.methodNames count]]);
+      report_symbols(p);
     }
   return 0;
 }
@@ -798,6 +839,7 @@ cmd_report(NSArray *args)
       else if ([a isEqual: @"--separate-threads"]) { o.treeOptions |= GSPCallTreeSeparateByThread; takes = NO; }
       else if ([a isEqual: @"--hide-system"]) { o.treeOptions |= GSPCallTreeHideSystemLibraries; takes = NO; }
       else if ([a isEqual: @"--flatten-recursion"]) { o.treeOptions |= GSPCallTreeFlattenRecursion; takes = NO; }
+      else if ([a isEqual: @"--symbol-summary"]) { o.symbolSummary = YES; takes = NO; }
       else if ([a isEqual: @"--by-stack"]) { o.byStack = YES; takes = NO; }
       else if ([a isEqual: @"--persistent"]) { o.persistent = YES; takes = NO; }
       else if ([a isEqual: @"--hide-known"]) { o.hideKnown = YES; takes = NO; }
@@ -844,6 +886,7 @@ cmd_report(NSArray *args)
   GSPProcess *p = pick_process(t, o.pid);
   if (p == nil)
     return 1;
+  if (o.symbolSummary) report_symbols(p);
   if ([kind isEqual: @"calltree"])
     return report_calltree(t, p, &o, NO);
   if ([kind isEqual: @"top"])

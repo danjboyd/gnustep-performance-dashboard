@@ -43,6 +43,14 @@
    it and already adjusted to point at the call (use index 0 with them). */
 - (NSArray *) addressesForStack: (uint32_t)stack;
 
+/* Counts display-frame entries across distinct stacks referenced by recorded
+   samples/allocations/refcounts/I/O/leaks/zombies. Repeated PCs in different
+   stacks count again; unused definitions and transparent agent frames do not.
+   Also returns separately labelled CPU-sample-weighted totals (no wall weight).
+   Keys: frames, unresolved, stacks, modules (path/frames/unresolved),
+   cpuFrames, cpuUnresolved, cpuSampleWeight. This resolves symbols lazily. */
+- (NSDictionary *) resolutionSummary;
+
 /* "file.m:42" via addr2line (llvm-addr2line on Windows), or nil.  Slow;
    cached. */
 - (NSString *) sourceLocationForFrame: (uint64_t)address index: (NSUInteger)index;

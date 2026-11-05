@@ -107,3 +107,27 @@ variation. Preserve scan intervals, sample periods, event counts, dropped
 records and exact target/recorder identities. Sample weights and a signpost
 interval answer different questions from elapsed performance of an
 uninstrumented application.
+
+
+## Inspect unresolved function names
+
+`gstrace info TRACE` reports how many display-frame entries remain unresolved
+across distinct stacks referenced by the process's recorded events, with a
+breakdown for modules containing unnamed frames. Repeated addresses in two
+stacks count twice; repeating one stack in many events does not increase this
+primary denominator. Unused stack definitions and transparent agent frames
+are excluded. The summary is process-wide, even when requested alongside a
+filtered report with `gstrace report TRACE allocations --symbol-summary`.
+
+For traces with CPU samples, a separate CPU-sample-weighted line counts those
+frame entries using each sample's overrun weight (zero means one); wall samples
+are excluded. It is omitted for Allocations-only traces. CSV export and normal
+report output do not acquire these extra lines.
+
+An image can contain both named and unnamed functions. Raw image+offset labels
+can reflect stripped or missing exact images/debug files; they are not a claim
+of broken unwinding or missing allocations. Embedded name snapshots retain
+raw fallback labels too. The summary recognizes the exact legacy raw-address
+and image-name/hex-offset label forms against the recorded image/address,
+including a zero return address, without treating an arbitrary function-name
+`+0x` suffix as unresolved. It does not fetch symbols or rewrite trace files.

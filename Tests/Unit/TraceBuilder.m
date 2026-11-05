@@ -66,6 +66,13 @@
   [_data appendBytes: zeros length: total - raw];
 }
 
+- (void) image: (const char *)path base: (uint64_t)base start: (uint64_t)start end: (uint64_t)end
+{
+  gsp_image_payload image = { base, start, end };
+  [self record: GSP_REC_IMAGE aux: 0 time: _start tid: (uint32_t)_pid
+             a: &image alen: sizeof(image) b: path blen: strlen(path) + 1];
+}
+
 - (void) string: (uint32_t)identifier value: (const char *)value
 {
   [self record: GSP_REC_STRING aux: identifier time: _start tid: (uint32_t)_pid

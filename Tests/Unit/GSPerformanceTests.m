@@ -738,8 +738,65 @@ child(GSPCallTreeNode *n, NSString *name)
   XCTAssertTrue([table writeToFile: file atomically: YES]);
   GSPTrace *reopened = [GSPTrace traceWithPath: t.path error: NULL];
   for (NSUInteger i = 0; i < 3; i++)
-    XCTAssertEqualObjects([symbols symbolForFrame: frames[i] index: i].name,
-      [reopened.targetProcess.symbolicator symbolForFrame: frames[i] index: i].name);
+    {
+      XCTAssertEqualObjects([symbols symbolForFrame: frames[i] index: i].name,
+        [reopened.targetProcess.symbolicator symbolForFrame: frames[i] index: i].name);
+      XCTAssertTrue([reopened.targetProcess.symbolicator symbolForFrame: frames[i] index: i].isUnknown);
+    }
+}
+
+- (void) testResolutionSummaryCountsReferencedStacksAndCPUWeights
+{
+  TraceBuilder *b = [[TraceBuilder alloc] initWithPID: 4242];
+  [b image: "/missing/libpartial.so" base: 0x1000000 start: 0x1000100 end: 0x1001000];
+  uint64_t sampled[] = { 0x1000100, 0x1000201, 0 };
+  uint64_t allocated[] = { 0x1000200, 0x1000301 };
+  uint64_t unused[] = { 0xdeadbeef };
+  [b sampleAt: b.start+MS tid: 4242 kind: GSP_SAMPLE_CPU weight: 3 frames: sampled count: 3];
+  [b sampleAt: b.start+2*MS tid: 4242 kind: GSP_SAMPLE_CPU weight: 2 frames: sampled count: 3];
+  [b sampleAt: b.start+3*MS tid: 4242 kind: GSP_SAMPLE_WALL weight: 99 frames: sampled count: 3];
+  [b stack: 42 frames: allocated count: 2];
+  [b allocAt: b.start+4*MS address: 0x1234 size: 16 stack: 42];
+  [b stack: 43 frames: unused count: 1];
+  [b end: b.start+5*MS];
+  GSPTrace *trace = [self traceFrom: b name: @"coverage" instruments: nil];
+  NSDictionary *names = @{ @"1000100": @"resolved_function", @"1000200": @"libpartial.so+0x200",
+                           @"1000300": @"real_function+0x300", @"0": @"0x0" };
+  [names writeToFile: [trace.path stringByAppendingPathComponent: @"symbols-4242.plist"] atomically: YES];
+  trace = [GSPTrace traceWithPath: trace.path error: NULL];
+  NSDictionary *coverage = [trace.targetProcess.symbolicator resolutionSummary];
+  XCTAssertEqual([[coverage objectForKey: @"stacks"] unsignedIntegerValue], (NSUInteger)2);
+  XCTAssertEqual([[coverage objectForKey: @"frames"] unsignedLongLongValue], (uint64_t)5);
+  XCTAssertEqual([[coverage objectForKey: @"unresolved"] unsignedLongLongValue], (uint64_t)3);
+  XCTAssertEqual([[coverage objectForKey: @"cpuFrames"] unsignedLongLongValue], (uint64_t)15);
+  XCTAssertEqual([[coverage objectForKey: @"cpuUnresolved"] unsignedLongLongValue], (uint64_t)10);
+  XCTAssertEqual([[coverage objectForKey: @"cpuSampleWeight"] unsignedLongLongValue], (uint64_t)5);
+  NSArray *addresses = [trace.targetProcess.symbolicator addressesForStack: trace.targetProcess.samples[0].stack];
+  XCTAssertEqual([[addresses lastObject] unsignedLongLongValue], (uint64_t)0);
+  NSArray *modules = [coverage objectForKey: @"modules"];
+  XCTAssertEqual([modules count], (NSUInteger)2);
+  for (NSDictionary *row in modules)
+    if ([[row objectForKey: @"path"] isEqual: @"/missing/libpartial.so"])
+      {
+        XCTAssertEqual([[row objectForKey: @"frames"] unsignedIntegerValue], (NSUInteger)4);
+        XCTAssertEqual([[row objectForKey: @"unresolved"] unsignedIntegerValue], (NSUInteger)2);
+      }
+}
+
+- (void) testResolutionSummaryAllocationsAndAgentFiltering
+{
+  TraceBuilder *b = [[TraceBuilder alloc] initWithPID: 4242];
+  [b image: "/missing/libgsperf-agent.so" base: 0x2000000 start: 0x2000100 end: 0x2001000];
+  uint64_t frames[] = { 0x2000100, 0x3000201 };
+  [b stack: 10 frames: frames count: 2];
+  [b allocAt: b.start+MS address: 0x1234 size: 8 stack: 10];
+  [b end: b.start+2*MS];
+  GSPTrace *trace = [self traceFrom: b name: @"coverage-alloc" instruments: nil];
+  NSDictionary *coverage = [trace.targetProcess.symbolicator resolutionSummary];
+  XCTAssertEqual([[coverage objectForKey: @"frames"] unsignedIntegerValue], (NSUInteger)1);
+  XCTAssertEqual([[coverage objectForKey: @"unresolved"] unsignedIntegerValue], (NSUInteger)1);
+  XCTAssertEqual([[coverage objectForKey: @"cpuFrames"] unsignedIntegerValue], (NSUInteger)0);
+  XCTAssertEqual([[coverage objectForKey: @"cpuSampleWeight"] unsignedIntegerValue], (NSUInteger)0);
 }
 
 - (void) testExporters
