@@ -49,6 +49,14 @@ else
   fail "unit tests"
 fi
 
+echo "== Symbol coverage CLI scenarios"
+if python3 "$ROOT/Tests/symbol-summary-checks.py" >"$OUT/symbol-summary.log" 2>&1; then
+  pass "symbol coverage: allocation-only, CPU-weighted, embedding and CSV scenarios"
+else
+  cat "$OUT/symbol-summary.log"
+  fail "symbol coverage CLI scenarios"
+fi
+
 record() {   # record <name> <args...>
   name=$1; shift
   rm -rf "$OUT/$name.gstrace"
