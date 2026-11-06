@@ -97,16 +97,26 @@ Linux feeds are at
 Suffix versions use the prerelease channel through `prerelease-manifest.py`.
 The release artifact holds feeds under `site/updates/linux/`.
 
-For v0.1.5 local signing preparation and Dan's manual key provisioning, see
-[the key procedure](update-signing-keys.md) and [local readiness plan](v0.1.5-plan.md).
-The released v0.1.4 client's first update remains on its legacy trust path;
-the new plumbing has not yet been provisioned or qualified on a candidate.
+Since v0.1.5, the package embeds an Ed25519 public key and its in-app updater
+requires a matching signature over downloaded payload bytes. Release assembly
+verifies the signatures before producing the final feed. See the
+[key procedure](update-signing-keys.md) and
+[v0.1.5 release ledger](v0.1.5-validation.md#published-v015--2026-11-06)
+for provisioning guidance and the released artifact identities.
+
+The v0.1.4 client has no public key, so its first update to v0.1.5 follows
+the legacy path and cannot enforce the new signature. Independent
+AppImageUpdate/zsync updates also bypass the in-app signature verification.
+Signatures cover payload bytes, not feed metadata or the advertised version:
+v0.1.5 can accept an older signed payload advertised as a newer release.
+Rollback protection is planned for v0.1.6; it is not present in v0.1.5.
 
 Publish approved assets first, then the approved feed. Test an RC1-to-RC2
 update against a local feed, restart and record with RC2 before candidate
 publication. The v0.1.0 validation ledger records local replacement/relaunch and
-failed-download acceptance. No package or feed signing is configured;
-SHA-256 validation trusts the HTTPS feed. Document that limitation honestly.
+failed-download acceptance; the v0.1.5 ledger records the exact hosted
+AppImage's old-client update/relaunch and recovery checks. Keep the legacy,
+zsync and metadata/rollback limits distinct from payload authentication.
 
 ## Packaging boundaries
 
