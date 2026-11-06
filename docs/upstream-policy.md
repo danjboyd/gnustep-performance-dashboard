@@ -34,15 +34,15 @@ comments, design proposals, and merge request content". It says:
 
 What individual maintainers have added:
 
-- **libobjc2 (David Chisnall): no AI-generated code at all.** Bug reports
-  are welcome, and he writes the fix himself. So for libobjc2 we send
-  issue reports only: no patches or pull requests, and no code of ours in
-  the report (no suggested fix, diff or rewritten function). The report
-  says in prose what goes wrong: the call and its arguments, what happens,
-  what was expected, and where in libobjc2's source it happens (quoting
-  libobjc2's own lines is fine). We still write and run a reproducer to
-  back every claim (rule 5), but keep it here; it goes with the report
-  only if Dan decides it should.
+- **libobjc2 (David Chisnall): no AI-generated code.** The standard policy
+  applies, with one exception: we send no patches, pull requests or
+  suggested fixes, because David writes the fix himself. Issue reports and
+  comments are welcome, with the usual disclosure line. Code of ours
+  appears only where it explains the problem, such as a short reproducer,
+  and it's labelled as an illustration, not a proposed change. Quoting
+  libobjc2's own source is fine. Every claim still comes from a run
+  (rule 5). (Changed 2026-11-06 on Dan's ruling: previously no code of
+  ours could appear in a libobjc2 report at all.)
 - **libs-base (Richard Frith-Macdonald):** one patch per issue, each with
   the code change, its test in GNUstep's regression framework, and a
   ChangeLog entry. Others on the list asked for one pull request per
@@ -114,9 +114,9 @@ What individual maintainers have added:
       Performance Dashboard to show the bug, even when our tool found it.
 - [ ] Checked that it isn't already reported or fixed (open and closed
       issues, open pull requests, master's log).
-- [ ] For libobjc2: no code of ours in the report; the reproduction steps
-      in prose; the reproducer kept next to the draft, marked not to send
-      unless Dan decides otherwise.
+- [ ] For libobjc2: no patch, pull request or suggested fix. Any code of
+      ours (such as the reproducer) is there only to explain the problem
+      and is labelled as an illustration, not a proposed change.
 
 **A comment** on an upstream issue, pull request or list thread: drafted in
 the conversation or in a file, with the disclosure line, and every claim in
