@@ -402,7 +402,37 @@ under(NSString *value, NSString *root)
       for (NSString *key in [NSArray arrayWithObjects: @"APPDIR", @"APPIMAGE",
                              @"ARGV0", @"OWD", nil])
         [env removeObjectForKey: key];
+
+      /* Packager v0.1.9+ preserves the first caller, including nested launches.
+         GP_HOST_UNSET wins over a saved empty value. Contract:
+         https://github.com/danjboyd/gnustep-packager/blob/57163d21e63734d5484e0eaab5cca1544ad01124/docs/launch-contract.md
+         Use that snapshot before the CLI wrapper's fallback snapshot. */
+      NSCharacterSet *space = [NSCharacterSet whitespaceAndNewlineCharacterSet];
+      NSArray *hostVars = [[environment objectForKey: @"GP_HOST_VARS"]
+        componentsSeparatedByCharactersInSet: space];
+      NSArray *hostUnset = [[environment objectForKey: @"GP_HOST_UNSET"]
+        componentsSeparatedByCharactersInSet: space];
+      NSString *state = [environment objectForKey: @"PD_TARGET_GNUSTEP_CONFIG_FILE_SET"];
+      NSString *config = [environment objectForKey: @"PD_TARGET_GNUSTEP_CONFIG_FILE"];
+      if ([hostVars containsObject: @"GNUSTEP_CONFIG_FILE"])
+        {
+          NSString *hostConfig = [environment objectForKey: @"GP_HOST_GNUSTEP_CONFIG_FILE"];
+          if ([hostUnset containsObject: @"GNUSTEP_CONFIG_FILE"] || hostConfig == nil)
+            [env removeObjectForKey: @"GNUSTEP_CONFIG_FILE"];
+          else
+            [env setObject: hostConfig forKey: @"GNUSTEP_CONFIG_FILE"];
+        }
+      else if ([state isEqual: @"1"] && config != nil)
+        [env setObject: config forKey: @"GNUSTEP_CONFIG_FILE"];
+      else if ([state isEqual: @"0"])
+        [env removeObjectForKey: @"GNUSTEP_CONFIG_FILE"];
+      /* A target that is another AppImage must capture its own caller. */
+      for (NSString *key in [env allKeys])
+        if ([key hasPrefix: @"GP_HOST_"])
+          [env removeObjectForKey: key];
     }
+  [env removeObjectForKey: @"PD_TARGET_GNUSTEP_CONFIG_FILE_SET"];
+  [env removeObjectForKey: @"PD_TARGET_GNUSTEP_CONFIG_FILE"];
   for (NSString *key in [env allKeys])
     if ([key hasPrefix: @"GSP_"])
       [env removeObjectForKey: key];

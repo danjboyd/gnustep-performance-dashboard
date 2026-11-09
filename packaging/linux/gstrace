@@ -3,6 +3,17 @@
 # Relocatable entry point for the CLI extracted from the AppImage. APPDIR
 # lets GSPRecorder remove this runtime's paths from the target environment.
 set -eu
+# Capture the first caller, including an explicitly empty value. A nested
+# packaged launch must not replace an earlier snapshot with its runtime config.
+if [ "${PD_TARGET_GNUSTEP_CONFIG_FILE_SET+x}" != x ]; then
+  if [ "${GNUSTEP_CONFIG_FILE+x}" = x ]; then
+    export PD_TARGET_GNUSTEP_CONFIG_FILE_SET=1
+    export PD_TARGET_GNUSTEP_CONFIG_FILE="$GNUSTEP_CONFIG_FILE"
+  else
+    export PD_TARGET_GNUSTEP_CONFIG_FILE_SET=0
+    unset PD_TARGET_GNUSTEP_CONFIG_FILE
+  fi
+fi
 appdir=$(CDPATH= cd -- "$(dirname -- "$0")/../../.." && pwd)
 export APPDIR="$appdir"
 export GNUSTEP_CONFIG_FILE="$appdir/usr/runtime/etc/GNUstep/GNUstep.conf"

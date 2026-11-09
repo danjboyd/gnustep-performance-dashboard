@@ -42,6 +42,15 @@ inputs; `pinned-checkout.sh` checks them out under `out/`.
 
 `check-appimage-record.sh` launches a private Xvfb and verifies that the app
 and its bundled gstrace record a fixture's ten known leaks and finish cleanly.
+It also inspects the actual CLI-launched target's `/proc/PID/environ` for
+caller config set, unset and empty values, explicit overrides, nested launches
+and packager host-snapshot precedence, with no transport markers left behind.
+Known v0.1.6 preparation limitation: the legacy packager AppRun does not save
+the caller's original `GNUSTEP_CONFIG_FILE` before replacing it. The CLI wrapper
+saves its caller's value, but cannot recover a value already lost by AppRun.
+The GUI-packaged restoration regression belongs to the planned packager
+v0.1.10 adoption, whose host snapshot takes precedence over the CLI fallback;
+this local fix does not change the packager pin or claim that GUI gate passed.
 AppImage smoke and update checks require `bwrap`. The shared
 `scripts/with-private-home.py` helper binds a scratch directory over the
 passwd home and isolates its runtime directory. A private `HOME` or caller

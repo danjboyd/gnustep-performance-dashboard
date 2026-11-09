@@ -862,6 +862,62 @@ child(GSPCallTreeNode *n, NSString *name)
 }
 #endif
 
+- (void) testPackagedRecorderRestoresCallerConfig
+{
+  NSMutableDictionary *in = [NSMutableDictionary dictionaryWithObjectsAndKeys:
+    @"/tmp/image", @"APPDIR",
+    @"/tmp/image/usr/runtime/etc/GNUstep/GNUstep.conf", @"GNUSTEP_CONFIG_FILE",
+    @"1", @"PD_TARGET_GNUSTEP_CONFIG_FILE_SET",
+    @"/tmp/private caller/GNUstep.conf", @"PD_TARGET_GNUSTEP_CONFIG_FILE", nil];
+  NSDictionary *out = [GSPRecorder targetEnvironmentFrom: in additions: [NSDictionary dictionary]];
+  XCTAssertEqualObjects([out objectForKey: @"GNUSTEP_CONFIG_FILE"],
+    @"/tmp/private caller/GNUstep.conf");
+  XCTAssertNil([out objectForKey: @"PD_TARGET_GNUSTEP_CONFIG_FILE"]);
+  XCTAssertNil([out objectForKey: @"PD_TARGET_GNUSTEP_CONFIG_FILE_SET"]);
+  [in setObject: @"" forKey: @"PD_TARGET_GNUSTEP_CONFIG_FILE"];
+  out = [GSPRecorder targetEnvironmentFrom: in additions: [NSDictionary dictionary]];
+  XCTAssertEqualObjects([out objectForKey: @"GNUSTEP_CONFIG_FILE"], @"");
+  [in setObject: @"0" forKey: @"PD_TARGET_GNUSTEP_CONFIG_FILE_SET"];
+  [in removeObjectForKey: @"PD_TARGET_GNUSTEP_CONFIG_FILE"];
+  out = [GSPRecorder targetEnvironmentFrom: in additions: [NSDictionary dictionary]];
+  XCTAssertNil([out objectForKey: @"GNUSTEP_CONFIG_FILE"]);
+  out = [GSPRecorder targetEnvironmentFrom: in additions:
+    [NSDictionary dictionaryWithObject: @"/tmp/explicit.conf" forKey: @"GNUSTEP_CONFIG_FILE"]];
+  XCTAssertEqualObjects([out objectForKey: @"GNUSTEP_CONFIG_FILE"], @"/tmp/explicit.conf");
+}
+
+- (void) testPackagerHostConfigPrecedesWrapperFallback
+{
+  NSMutableDictionary *in = [NSMutableDictionary dictionaryWithObjectsAndKeys:
+    @"/tmp/image", @"APPDIR",
+    @"/tmp/image/runtime.conf", @"GNUSTEP_CONFIG_FILE",
+    @"1", @"PD_TARGET_GNUSTEP_CONFIG_FILE_SET",
+    @"/tmp/wrapper.conf", @"PD_TARGET_GNUSTEP_CONFIG_FILE",
+    @"PATH GNUSTEP_CONFIG_FILE", @"GP_HOST_VARS",
+    @"", @"GP_HOST_UNSET",
+    @"/tmp/first-caller.conf", @"GP_HOST_GNUSTEP_CONFIG_FILE",
+    @"/tmp/caller", @"GP_HOST_PWD", nil];
+  NSDictionary *empty = [NSDictionary dictionary];
+  NSDictionary *out = [GSPRecorder targetEnvironmentFrom: in additions: empty];
+  XCTAssertEqualObjects([out objectForKey: @"GNUSTEP_CONFIG_FILE"], @"/tmp/first-caller.conf");
+  for (NSString *key in out)
+    XCTAssertFalse([key hasPrefix: @"GP_HOST_"]);
+  XCTAssertNil([out objectForKey: @"PD_TARGET_GNUSTEP_CONFIG_FILE"]);
+  [in setObject: @"GNUSTEP_CONFIG_FILE" forKey: @"GP_HOST_UNSET"];
+  [in setObject: @"" forKey: @"GP_HOST_GNUSTEP_CONFIG_FILE"];
+  out = [GSPRecorder targetEnvironmentFrom: in additions: empty];
+  XCTAssertNil([out objectForKey: @"GNUSTEP_CONFIG_FILE"]);
+  [in setObject: @"" forKey: @"GP_HOST_UNSET"];
+  out = [GSPRecorder targetEnvironmentFrom: in additions: empty];
+  XCTAssertEqualObjects([out objectForKey: @"GNUSTEP_CONFIG_FILE"], @"");
+  out = [GSPRecorder targetEnvironmentFrom: in additions:
+    [NSDictionary dictionaryWithObject: @"/tmp/explicit.conf" forKey: @"GNUSTEP_CONFIG_FILE"]];
+  XCTAssertEqualObjects([out objectForKey: @"GNUSTEP_CONFIG_FILE"], @"/tmp/explicit.conf");
+  [in setObject: @"PATH" forKey: @"GP_HOST_VARS"];
+  out = [GSPRecorder targetEnvironmentFrom: in additions: empty];
+  XCTAssertEqualObjects([out objectForKey: @"GNUSTEP_CONFIG_FILE"], @"/tmp/wrapper.conf");
+}
+
 - (void) testAppImageEnvironmentIsScrubbed
 {
   NSDictionary *in = [NSDictionary dictionaryWithObjectsAndKeys:

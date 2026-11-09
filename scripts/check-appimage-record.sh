@@ -88,6 +88,8 @@ app_pid=""
 
 (cd "$work" && "$appimage" --appimage-extract usr/runtime >/dev/null 2>&1) || die "cannot extract the AppImage"
 runtime="$work/squashfs-root/usr/runtime"
+python3 "$repo_root/Tests/target-config-checks.py" "$work/squashfs-root" "$work/target-config" \
+  || die "the bundled gstrace did not preserve the target's caller config"
 info="$(LD_LIBRARY_PATH="$runtime/lib" GNUSTEP_CONFIG_FILE="$runtime/etc/GNUstep/GNUstep.conf" \
   HOME="$work/home" "$runtime/bin/gstrace" info "$trace" 2>/dev/null)"
 leaks="$(LD_LIBRARY_PATH="$runtime/lib" GNUSTEP_CONFIG_FILE="$runtime/etc/GNUstep/GNUstep.conf" \
