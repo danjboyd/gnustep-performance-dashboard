@@ -58,7 +58,8 @@ program exits successfully or terminates from the requested SIGTERM. If it
 ignores SIGTERM for three seconds and the recorder kills it, the command
 returns 137 and reports the escalation. Other signals return 128 plus the
 signal number. `gstrace info` shows the raw `ExitStatus` and the `StopReason`
-(`exited`, `requested-terminate`, `escalated-kill`, or `signal`). A complete
+(`exited`, `requested-terminate`, `escalated-kill`, `signal`, or `unknown`
+when a wait status is unavailable or unexpected). A complete
 trace stream can survive an abnormal target exit: “finished cleanly” describes
 the stream's final record, not a successful program shutdown. Attach and
 Windows exit policies are unchanged.
