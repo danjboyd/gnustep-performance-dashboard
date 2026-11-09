@@ -59,6 +59,15 @@ else
   fail "symbol coverage CLI scenarios"
 fi
 
+if [ "$(uname -s)" = Linux ]; then
+  echo "== Linux CLI target exit status"
+  if python3 "$ROOT/Tests/cli-exit-checks.py" "$GSTRACE" "$OUT/cli-exit"; then
+    pass "CLI: target exit codes, requested stop and SIGKILL escalation"
+  else
+    fail "CLI target exit status"
+  fi
+fi
+
 record() {   # record <name> <args...>
   name=$1; shift
   rm -rf "$OUT/$name.gstrace"

@@ -41,6 +41,9 @@
 @property (nonatomic, readonly) BOOL isRecording;
 @property (nonatomic, readonly) NSDate *startDate;
 @property (nonatomic, readonly) int exitStatus;    /* wait status, -1 unknown */
+/* Linux launch outcome; nil for attach and other platforms.  The raw wait
+   status still distinguishes a normal exit from a signal. */
+@property (nonatomic, readonly, copy) NSString *stopReason;
 @property (nonatomic, readonly, copy) NSString *tracePath;
 
 - (BOOL) start: (NSError **)error;

@@ -9,6 +9,9 @@
 #include <signal.h>
 #include <stdio.h>
 #include <unistd.h>
+#if defined(__linux__)
+#  include <sys/wait.h>
+#endif
 
 #define GSTRACE_VERSION "0.1.5"
 
@@ -124,6 +127,38 @@ parse_duration(NSString *s, double *seconds)
   self.finished = YES;
 }
 @end
+
+#if defined(__linux__)
+static int
+launch_exit_code(GSPRecorder *recorder)
+{
+  int status = recorder.exitStatus;
+  NSString *reason = recorder.stopReason;
+
+  if ([reason isEqual: @"escalated-kill"])
+    {
+      err(@"target did not exit within 3 s of SIGTERM; killed");
+      return 128 + SIGKILL;
+    }
+  if (status >= 0 && WIFEXITED(status))
+    {
+      int code = WEXITSTATUS(status);
+      if (code != 0)
+        err([NSString stringWithFormat: @"target exited with status %d", code]);
+      return code;
+    }
+  if (status >= 0 && WIFSIGNALED(status))
+    {
+      int sig = WTERMSIG(status);
+      if (sig == SIGTERM && [reason isEqual: @"requested-terminate"])
+        return 0;
+      err([NSString stringWithFormat: @"target terminated by signal %d", sig]);
+      return 128 + sig;
+    }
+  err(@"target exit status is unavailable");
+  return 1;
+}
+#endif
 
 static int
 cmd_record(NSArray *args)
@@ -277,9 +312,21 @@ cmd_record(NSArray *args)
   if (waiter.error)
     {
       err([waiter.error localizedDescription]);
+#if defined(__linux__)
+      if (!opts.attachPID)
+        {
+          int code = launch_exit_code(rec);
+          if (code != 0)
+            return code;
+        }
+#endif
       return 1;
     }
   fprintf(stderr, "Trace saved to %s\n", [rec.tracePath UTF8String]);
+#if defined(__linux__)
+  if (!opts.attachPID)
+    return launch_exit_code(rec);
+#endif
   return 0;
 }
 
@@ -441,6 +488,12 @@ cmd_info(NSArray *args)
   id host = [t.info objectForKey: @"Host"];
   if (host)
     out([NSString stringWithFormat: @"Host:        %@\n", host]);
+  id exitStatus = [t.info objectForKey: @"ExitStatus"];
+  if (exitStatus)
+    out([NSString stringWithFormat: @"Exit status: %@\n", exitStatus]);
+  id stopReason = [t.info objectForKey: @"StopReason"];
+  if (stopReason)
+    out([NSString stringWithFormat: @"Stop reason: %@\n", stopReason]);
   for (GSPProcess *p in t.processes)
     {
       uint64_t cpu = 0, wall = 0;

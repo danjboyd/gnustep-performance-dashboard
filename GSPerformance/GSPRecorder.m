@@ -69,6 +69,7 @@ make_error(NSInteger code, NSString *message)
   NSCondition *_done;
   BOOL _finished;
   int _exitStatus;
+  NSString *_stopReason;
   void *_process;   /* Windows process handle */
 }
 
@@ -88,6 +89,7 @@ make_error(NSInteger code, NSString *message)
 - (BOOL) isRecording { return _recording; }
 - (NSDate *) startDate { return _startDate; }
 - (int) exitStatus { return _exitStatus; }
+- (NSString *) stopReason { return _stopReason; }
 - (NSString *) tracePath { return _tracePath; }
 
 /* ------------------------------------------------------------------ */
@@ -477,6 +479,8 @@ under(NSString *value, NSString *root)
     {
       [info setObject: [NSDate date] forKey: @"EndDate"];
       [info setObject: [NSNumber numberWithInt: _exitStatus] forKey: @"ExitStatus"];
+      if (_stopReason)
+        [info setObject: _stopReason forKey: @"StopReason"];
     }
   else
     [info setObject: [NSNumber numberWithBool: YES] forKey: @"Recording"];
@@ -710,10 +714,34 @@ send_control(int pid, int request)
           if (r == waitFor)
             {
               _exitStatus = status;
+#if defined(__linux__)
+              if (!_options.attachPID)
+                {
+                  if (killSent && WIFSIGNALED(status)
+                      && WTERMSIG(status) == SIGKILL)
+                    _stopReason = @"escalated-kill";
+                  else if (termSent && (WIFEXITED(status)
+                           || (WIFSIGNALED(status)
+                               && WTERMSIG(status) == SIGTERM)))
+                    _stopReason = @"requested-terminate";
+                  else if (WIFSIGNALED(status))
+                    _stopReason = @"signal";
+                  else if (WIFEXITED(status))
+                    _stopReason = @"exited";
+                  else
+                    _stopReason = @"unknown";
+                }
+#endif
               break;
             }
           if (r < 0 && errno != EINTR)
-            break;
+            {
+#if defined(__linux__)
+              if (!_options.attachPID)
+                _stopReason = @"unknown";
+#endif
+              break;
+            }
 
           BOOL wantStop = _stopRequested
             || (deadline && [deadline timeIntervalSinceNow] <= 0);

@@ -52,6 +52,17 @@ regression. CPU samples, wall-clock hangs and allocation bytes measure different
 things. Conservative leaks are candidates: hidden pointers can cause false
 reports and stale pointer values can hide real leaks.
 
+On Linux, `gstrace record --launch` propagates a program's normal exit code.
+A recorder-requested time limit or user stop remains successful when the
+program exits successfully or terminates from the requested SIGTERM. If it
+ignores SIGTERM for three seconds and the recorder kills it, the command
+returns 137 and reports the escalation. Other signals return 128 plus the
+signal number. `gstrace info` shows the raw `ExitStatus` and the `StopReason`
+(`exited`, `requested-terminate`, `escalated-kill`, or `signal`). A complete
+trace stream can survive an abnormal target exit: “finished cleanly” describes
+the stream's final record, not a successful program shutdown. Attach and
+Windows exit policies are unchanged.
+
 ## Read warnings and preserve evidence
 
 Recording warnings disclose dropped samples, incomplete recordings,
