@@ -11,6 +11,7 @@
 #include <unistd.h>
 #if defined(__linux__)
 #  include <sys/wait.h>
+#  include <GSPerformance/gsp_capture.h>
 #endif
 
 #define GSTRACE_VERSION "0.1.5"
@@ -48,6 +49,11 @@ usage(void)
       @"    --instrument <id>        add an instrument (repeatable; replaces the template's)\n"
       @"    --output <path>          trace bundle to create (.gstrace)\n"
       @"    --time-limit <duration>  stop after e.g. 10s, 500ms, 2m\n"
+#if defined(__linux__)
+      @"    --max-size <bytes|K|M|G> graceful size threshold (default: none)\n"
+      @"    --min-free <bytes|K|M|G> free-space floor; 0 disables it\n"
+      @"                            default: max(1 GiB, 5% capacity); units 1024\n"
+#endif
       @"    --sample-interval <dur>  Time Profiler interval (default 1ms)\n"
       @"    --leak-interval <secs>   seconds between leak checks (default 10)\n"
       @"    --follow-children        also record processes the target launches\n"
@@ -185,6 +191,21 @@ cmd_record(NSArray *args)
           if (!parse_duration(v, &d)) { err(@"bad --time-limit"); return 2; }
           opts.timeLimit = d;
         }
+#if defined(__linux__)
+      else if ([a isEqual: @"--max-size"] || [a isEqual: @"--min-free"])
+        {
+          uint64_t size;
+          NEED_VALUE();
+          if (!gsp_parse_byte_size([v UTF8String], &size))
+            { err([NSString stringWithFormat: @"bad %@: use bytes or uppercase K/M/G (1024-based)", a]); return 2; }
+          if ([a isEqual: @"--max-size"]) opts.maximumTraceBytes = size;
+          else
+            {
+              opts.automaticMinimumFreeSpace = NO;
+              opts.minimumFreeBytes = size;
+            }
+        }
+#endif
       else if ([a isEqual: @"--sample-interval"])
         {
           double d;
@@ -298,6 +319,14 @@ cmd_record(NSArray *args)
     fprintf(stderr, "Time limit %.1fs. Press Ctrl-C to stop early.\n", opts.timeLimit);
 
   BOOL stopSent = NO;
+#if defined(__linux__)
+  if (!opts.attachPID)
+    fprintf(stderr, "Storage: size threshold %s; free-space floor %llu bytes. "
+                    "Graceful stop may overshoot; --min-free 0 disables the floor.\n",
+      opts.maximumTraceBytes ? [[NSString stringWithFormat: @"%llu bytes",
+        (unsigned long long)opts.maximumTraceBytes] UTF8String] : "none",
+      (unsigned long long)rec.effectiveMinimumFreeBytes);
+#endif
   while (!waiter.finished)
     {
       [[NSRunLoop currentRunLoop] runMode: NSDefaultRunLoopMode
@@ -309,6 +338,11 @@ cmd_record(NSArray *args)
           [rec stop];
         }
     }
+#if defined(__linux__)
+  if (!opts.attachPID)
+    fprintf(stderr, "Recording stopped: %s; capture %s.\n",
+      [rec.stopTrigger UTF8String], rec.recordingError ? "incomplete" : "complete");
+#endif
   if (waiter.error)
     {
       err([waiter.error localizedDescription]);
@@ -494,6 +528,13 @@ cmd_info(NSArray *args)
   id stopReason = [t.info objectForKey: @"StopReason"];
   if (stopReason)
     out([NSString stringWithFormat: @"Stop reason: %@\n", stopReason]);
+  for (NSString *key in @[@"StopTrigger", @"CaptureStatus", @"CaptureError",
+                          @"MaximumTraceBytes", @"TimeLimitSeconds", @"MinimumFreeBytes",
+                          @"ObservedTraceBytes", @"ObservedAvailableBytes"])
+    if ([t.info objectForKey: key])
+      out([NSString stringWithFormat: @"%@: %@\n", key, [t.info objectForKey: key]]);
+  if ([t.info objectForKey: @"MinimumFreeBytes"] && [[t.info objectForKey: @"Recording"] boolValue])
+    out(@"CaptureStatus: unverified (trace metadata was not finalized)\n");
   for (GSPProcess *p in t.processes)
     {
       uint64_t cpu = 0, wall = 0;

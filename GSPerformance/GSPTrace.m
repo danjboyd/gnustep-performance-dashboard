@@ -1154,6 +1154,11 @@ compare_raw_signposts(const void *a, const void *b)
 - (NSArray *) qualityWarningsIncludingIncomplete: (BOOL)includeIncomplete
 {
   NSMutableArray *warnings = [NSMutableArray array];
+  if (includeIncomplete && [[_info objectForKey: @"CaptureStatus"] isEqual: @"incomplete"])
+    [warnings addObject: [_info objectForKey: @"CaptureError"] ?: @"Recording incomplete."];
+  else if (includeIncomplete && [_info objectForKey: @"MinimumFreeBytes"]
+           && [[_info objectForKey: @"Recording"] boolValue])
+    [warnings addObject: @"Recorder completion was not verified: trace metadata was not finalized."];
   for (GSPProcess *p in self.processes)
     {
       if (includeIncomplete && !p.finishedCleanly)

@@ -15,6 +15,12 @@
 @property (nonatomic, copy) NSString *workingDirectory;
 @property (nonatomic, copy) NSString *outputPath;       /* .gstrace bundle */
 @property (nonatomic) NSTimeInterval timeLimit;         /* 0 = until exit/stop */
+/* Linux launch only. Graceful stop thresholds, not hard quotas. Byte sizes
+   count regular files in the bundle. Explicit minimumFreeBytes=0 disables
+   the floor only when automaticMinimumFreeSpace is NO. */
+@property (nonatomic) uint64_t maximumTraceBytes;         /* 0 = no size cap */
+@property (nonatomic) BOOL automaticMinimumFreeSpace;     /* default YES */
+@property (nonatomic) uint64_t minimumFreeBytes;
 @property (nonatomic) unsigned sampleIntervalMicroseconds;
 @property (nonatomic) unsigned leakIntervalSeconds;
 @property (nonatomic) BOOL followChildren;
@@ -46,6 +52,10 @@
 /* Linux launch outcome; nil for attach and other platforms.  The raw wait
    status still distinguishes a normal exit from a signal. */
 @property (nonatomic, readonly, copy) NSString *stopReason;
+/* Separate cause of stopping and capture validity; Linux launch only. */
+@property (nonatomic, readonly, copy) NSString *stopTrigger;
+@property (nonatomic, readonly) uint64_t effectiveMinimumFreeBytes;
+@property (nonatomic, readonly, strong) NSError *recordingError;
 @property (nonatomic, readonly, copy) NSString *tracePath;
 
 - (BOOL) start: (NSError **)error;

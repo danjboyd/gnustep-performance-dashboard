@@ -393,6 +393,30 @@ child(GSPCallTreeNode *n, NSString *name)
   XCTAssertEqual([t qualityWarningsIncludingIncomplete: YES].count, (NSUInteger)2);
 }
 
+- (void) testCaptureErrorOverridesSuccessfulEndWarning
+{
+  TraceBuilder *b = [self cpuBuilder];
+  [b end: b.start + 80 * MS];
+  GSPTrace *t = [self traceFrom: b name: @"sync-failure" instruments: nil];
+  NSString *path = [t.path stringByAppendingPathComponent: @"Info.plist"];
+  NSMutableDictionary *info = [[NSDictionary dictionaryWithContentsOfFile: path] mutableCopy];
+  [info setObject: @"incomplete" forKey: @"CaptureStatus"];
+  [info setObject: @"fsync failed: ENOSPC" forKey: @"CaptureError"];
+  XCTAssertTrue([info writeToFile: path atomically: YES]);
+  XCTAssertTrue([t reload: NULL]);
+  XCTAssertTrue(t.targetProcess.finishedCleanly); /* END was written before fsync failed */
+  XCTAssertTrue([[t qualityWarningsIncludingIncomplete: YES] containsObject: @"fsync failed: ENOSPC"]);
+  XCTAssertEqual([t qualityWarningsIncludingIncomplete: NO].count, (NSUInteger)0);
+  [info removeObjectForKey: @"CaptureStatus"];
+  [info removeObjectForKey: @"CaptureError"];
+  [info setObject: @0 forKey: @"MinimumFreeBytes"];
+  [info setObject: @YES forKey: @"Recording"];
+  XCTAssertTrue([info writeToFile: path atomically: YES]);
+  XCTAssertTrue([t reload: NULL]);
+  XCTAssertTrue([[t qualityWarningsIncludingIncomplete: YES] containsObject:
+    @"Recorder completion was not verified: trace metadata was not finalized."]);
+}
+
 - (void) testSavingPreservesSourceAndDestination
 {
   GSPTrace *source = [self traceFrom: [self cpuBuilder] name: @"save-source" instruments: nil];

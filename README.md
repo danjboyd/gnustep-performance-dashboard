@@ -156,6 +156,23 @@ gstrace diff before.gstrace after.gstrace --kind allocations --fail-above 10
 
 `--range 1.5-3.0` (seconds) and `--thread <tid>` restrict reports.
 
+Linux launch recordings have no default size or duration cap. They request
+a graceful stop if available space on the trace filesystem falls below
+the larger of 1 GiB and 5% of its capacity. `--min-free 2G` overrides this
+floor; `--min-free 0` disables it. `--max-size 128M` adds an optional size
+threshold. Bare values are bytes; uppercase K, M and G mean powers of 1024.
+The size counts regular bundle files, including streams, temporary streams,
+metadata and captured output, without following symlinks. Buffered data and
+finalization can exceed a threshold: these settings are stop requests, not
+disk reservations or strict quotas. Size thresholds with `--follow-children`
+are currently refused. Explicit storage thresholds are unavailable for attach.
+
+`gstrace info` separates the stop trigger, the child's exit disposition and
+capture completion. A writer error makes the capture incomplete even when
+an END record was written; recoverable data is retained. Recording failures
+return 1 if the child otherwise succeeded. A nonzero child exit or signal
+keeps its original exit code, including 137 after forced SIGKILL.
+
 ## Signposts
 
 ```objc

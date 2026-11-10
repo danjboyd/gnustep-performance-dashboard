@@ -2,6 +2,7 @@
 /* gsp_runtime.c - agent lifecycle, rings, thread registry and writer.  */
 
 #include "gsp_internal.h"
+#include "gsp_writer_io.h"
 
 #include <dlfcn.h>
 #include <errno.h>
@@ -17,6 +18,7 @@
 #include <sys/stat.h>
 #include <sys/syscall.h>
 #include <sys/uio.h>
+#include <sys/socket.h>
 
 gsp_config gsp_cfg;
 atomic_int gsp_recording;
@@ -52,6 +54,41 @@ static atomic_int gave_up_waiting;
 static pid_t traced_pid;
 static uint64_t start_ns;
 static char events_path[1100];
+static int status_fd = -1;
+static gsp_output_state output_state;
+
+static void
+report_output_status(void)
+{
+  int saved = errno;
+  gsp_writer_status status = { GSP_WRITER_STATUS_MAGIC,
+    GSP_WRITER_STATUS_VERSION, (uint32_t)traced_pid,
+    (uint32_t)output_state.operation, output_state.error, 0,
+    start_ns, output_state.bytes };
+  if (status_fd >= 0)
+    {
+      ssize_t n;
+      do n = syscall(SYS_sendto, status_fd, &status, sizeof(status),
+                     MSG_DONTWAIT | MSG_NOSIGNAL, NULL, 0);
+      while (n < 0 && errno == EINTR);
+      /* A lost datagram cannot manufacture success: the recorder also
+         requires a matching completion status for every stream epoch. */
+    }
+  errno = saved;
+}
+
+static void
+output_failed(int operation, int error)
+{
+  bool first = !output_state.error;
+  gsp_output_fail(&output_state, operation, error);
+  atomic_store(&gsp_recording, 0);
+  atomic_store(&gsp_alloc_on, 0);
+  atomic_store(&finished, 1);
+  atomic_store(&stop_requested, 1);
+  if (first)
+    report_output_status();
+}
 
 pid_t
 gsp_gettid(void)
@@ -307,7 +344,8 @@ ring_put(gsp_ring *r, bool may_block, uint16_t type, uint32_t aux,
       tail = atomic_load_explicit(&r->tail, memory_order_acquire);
       if (r->cap - (head - tail) >= total)
         break;
-      if (!may_block || !atomic_load(&writer_running) || spins > 50000)
+      if (!may_block || atomic_load(&finished)
+          || !atomic_load(&writer_running) || spins > 50000)
         return false;
       gsp_writer_wake();
       struct timespec ts = { 0, 20000 };
@@ -363,24 +401,21 @@ gsp_emit_signal(gsp_thread *t, uint16_t type, uint32_t aux, uint16_t flags,
 
 static uint8_t wbuf[256 * 1024];
 static size_t wbuf_used;
-static uint64_t bytes_written;
 
 static void
 write_all(const void *p, size_t len)
 {
-  const uint8_t *c = p;
-  while (len > 0 && out_fd >= 0)
+  bool failed_before = output_state.error != 0;
+  if (out_fd >= 0
+      && !gsp_output_write(&output_state, out_fd, p, len, gsp_sys_write)
+      && !failed_before)
     {
-      ssize_t n = gsp_sys_write(out_fd, c, len);
-      if (n < 0)
-        {
-          if (errno == EINTR)
-            continue;
-          return;
-        }
-      c += n;
-      len -= (size_t)n;
-      bytes_written += (uint64_t)n;
+      /* The helper has latched the first errno already. */
+      atomic_store(&gsp_recording, 0);
+      atomic_store(&gsp_alloc_on, 0);
+      atomic_store(&finished, 1);
+      atomic_store(&stop_requested, 1);
+      report_output_status();
     }
 }
 
@@ -402,6 +437,9 @@ gsp_writer_emit(uint16_t type, uint32_t aux, uint64_t time, uint32_t tid,
   size_t total = GSP_RECORD_ALIGN(raw);
   gsp_record h = { type, 0, (uint32_t)total, time, tid, aux };
   static const uint8_t zeros[8];
+
+  if (output_state.error)
+    return;
 
   if (total > sizeof(wbuf) - wbuf_used)
     wbuf_flush();
@@ -748,11 +786,12 @@ finish_recording(void)
   gsp_sampler_stop();
   gsp_io_stop();
   drain_all();
-  if (!from_signal)
+  if (!from_signal && !output_state.error)
     {
       gsp_images_emit_new_writer();
-      gsp_objc_dump_methods();
-      if (gsp_cfg.leaks)
+      if (!output_state.error)
+        gsp_objc_dump_methods();
+      if (!output_state.error && gsp_cfg.leaks)
         gsp_leaks_snapshot();
     }
   /* samples dropped by threads that are still alive */
@@ -780,16 +819,27 @@ finish_recording(void)
                   NULL, 0, NULL, 0);
   wbuf_flush();
   atomic_store(&gsp_recording, 0);
-  gsp_sys_fsync(out_fd);
-  gsp_sys_close(out_fd);
+  gsp_output_finish(&output_state, out_fd, gsp_sys_fsync, gsp_sys_close);
   out_fd = -1;
+
+  if (output_state.error)
+    {
+      report_output_status();
+      return;
+    }
 
   char done[1200];
   snprintf(done, sizeof(done), "%s/events-%d.done", gsp_cfg.output,
            (int)traced_pid);
   int fd = gsp_sys_open(done, O_CREAT | O_WRONLY | O_TRUNC | O_CLOEXEC, 0644);
-  if (fd >= 0)
-    gsp_sys_close(fd);
+  if (fd < 0)
+    output_failed(GSP_OUTPUT_MARKER, errno);
+  else if (gsp_sys_close(fd) < 0)
+    {
+      output_failed(GSP_OUTPUT_MARKER, errno);
+      unlink(done);
+    }
+  report_output_status();
 }
 
 static void *
@@ -840,6 +890,8 @@ writer_main(void *arg)
       while (gsp_sys_read(wake_pipe[0], junk, sizeof(junk)) > 0)
         ;
       drain_all();
+      if (output_state.error)
+        break;
       gsp_objc_poll();
       now = gsp_now();
       if (now >= next_images || gsp_images_changed())
@@ -847,6 +899,8 @@ writer_main(void *arg)
           gsp_images_emit_new_writer();
           next_images = now + 1000000000ull;
         }
+      if (output_state.error)
+        break;
       if (atomic_exchange(&mark_requested, 0))
         gsp_writer_emit(GSP_REC_MARK, GSP_MARK_USER, now,
                         (uint32_t)traced_pid, NULL, 0, NULL, 0);
@@ -1102,6 +1156,17 @@ gsp_init(void)
   }
   preserve_exec_environment();
   traced_pid = getpid();
+  {
+    const char *text = getenv("GSP_STATUS_FD");
+    char *end = NULL;
+    long fd = text ? strtol(text, &end, 10) : -1;
+    int type = 0;
+    socklen_t length = sizeof(type);
+    if (text && end != text && !*end && fd >= 3 && fd <= INT32_MAX
+        && getsockopt((int)fd, SOL_SOCKET, SO_TYPE, &type, &length) == 0
+        && type == SOCK_DGRAM)
+      status_fd = (int)fd;
+  }
   gsp_real_pthread_create = dlsym(RTLD_NEXT, "pthread_create");
   find_agent_text();
 
@@ -1114,6 +1179,7 @@ gsp_init(void)
   out_fd = gsp_sys_open(next_path, O_CREAT | O_WRONLY | O_TRUNC | O_CLOEXEC, 0644);
   if (out_fd < 0 || pipe2(wake_pipe, O_CLOEXEC | O_NONBLOCK) != 0)
     {
+      output_failed(GSP_OUTPUT_OPEN, errno);
       fprintf(stderr, "gsperf: cannot write %s: %s\n", events_path,
               strerror(errno));
       if (out_fd >= 0)
@@ -1144,9 +1210,12 @@ gsp_init(void)
     exe[n] = '\0';
   memcpy(hdr.exe, exe, sizeof(hdr.exe));
   write_all(&hdr, sizeof(hdr));
-  if (bytes_written != sizeof(hdr) || rename(next_path, events_path) != 0)
+  if (output_state.error || output_state.bytes != sizeof(hdr)
+      || rename(next_path, events_path) != 0)
     {
-      fprintf(stderr, "gsperf: cannot publish %s: %s\n", events_path, strerror(errno));
+      output_failed(GSP_OUTPUT_RENAME, errno);
+      fprintf(stderr, "gsperf: cannot publish %s: %s\n", events_path,
+              strerror(output_state.error));
       gsp_sys_close(out_fd);
       out_fd = -1;
       unlink(next_path);
@@ -1181,8 +1250,10 @@ gsp_init(void)
   gsp_images_emit_new(main_thread);
 
   atomic_store(&writer_running, 1);
-  if (gsp_real_pthread_create(&writer_thread, NULL, writer_main, NULL) != 0)
+  int thread_error = gsp_real_pthread_create(&writer_thread, NULL, writer_main, NULL);
+  if (thread_error != 0)
     {
+      output_failed(GSP_OUTPUT_THREAD, thread_error);
       atomic_store(&writer_running, 0);
       atomic_store(&gsp_recording, 0);
       gsp_in_agent--;

@@ -154,6 +154,14 @@ make_button(NSString *title, NSRect frame, id target, SEL action)
   [_warning setFont: [PDTheme smallFont]];
   [c addSubview: _warning];
 
+#if defined(__linux__)
+  NSTextField *storage = make_label(
+    @"Storage: no size cap; stop below max(1 GiB, 5% capacity) free. Finalization may overshoot.",
+    NSMakeRect(16, 47, 688, 22));
+  [storage setFont: [PDTheme smallFont]];
+  [c addSubview: storage];
+#endif
+
   NSButton *cancel = make_button(@"Cancel", NSMakeRect(500, 14, 96, 30), self, @selector(cancel:));
   [cancel setKeyEquivalent: @"\e"];
   [c addSubview: cancel];

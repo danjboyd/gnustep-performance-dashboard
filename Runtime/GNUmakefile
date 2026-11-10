@@ -58,7 +58,8 @@ else
 all: $(OBJDIR)/libgsperf-agent.so $(OBJDIR)/libgsperf.so
 
 $(OBJDIR)/%.o: %.c gsp_internal.h include/GSPerformance/gsp_format.h \
-               include/GSPerformance/gsp_signpost.h | $(OBJDIR)
+               include/GSPerformance/gsp_signpost.h gsp_writer_io.h \
+               include/GSPerformance/gsp_capture.h | $(OBJDIR)
 	$(CC) $(ALL_CFLAGS) -c $< -o $@
 
 $(OBJDIR)/libgsperf-agent.so: $(AGENT_OBJS)
