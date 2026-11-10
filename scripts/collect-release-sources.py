@@ -20,6 +20,10 @@ work.mkdir(parents=True, exist_ok=True)
 toolchain = Path.home() / ".local/share/gnustep-cli"
 lock = json.loads((toolchain / "source-lock.json").read_text())
 inputs = json.loads((root / "packaging/release-inputs.json").read_text())
+fallback = json.loads((root / "packaging/linux/robin-map-source.json").read_text())
+libobjc = next(c for c in lock["components"] if c["name"] == "libobjc2")
+if libobjc["revision"] != fallback["upstreamBuildDescription"]["libobjc2Revision"]:
+    raise ValueError("libobjc2 changed; audit its fallback source before collecting")
 records = []
 
 for component in lock["components"] + [dict(inputs["adwaita"], name="adwaita"),
@@ -27,15 +31,21 @@ for component in lock["components"] + [dict(inputs["adwaita"], name="adwaita"),
         dict(name="gnustep-cli-new", url="https://github.com/danjboyd/gnustep-cli-new.git",
              revision="e7915a3984f851a4137591899b047f40ee1f7713"),
         dict(name="appimage-runtime", url="https://github.com/AppImage/type2-runtime.git", revision="caf24f9f712084686bfc24a70b75e50df0aefb9c"),
-        dict(name="robin-map-fallback", url="https://github.com/Tessil/robin-map.git", revision="v1.2.1")]:
+        fallback]:
     repository = component["url"].removesuffix(".git").removeprefix("https://github.com/")
     revision = component["revision"]
-    url = f"https://codeload.github.com/{repository}/tar.gz/{revision}"
+    url = component.get("archiveURL") or f"https://codeload.github.com/{repository}/tar.gz/{revision}"
     path = work / f"{component['name']}-{revision}.tar.gz"
     if not path.exists():
         with urllib.request.urlopen(url) as source, path.open("wb") as dest:
             shutil.copyfileobj(source, dest)
-    records.append(dict(name=component["name"], revision=revision, url=url))
+    expected = component.get("archiveSHA256")
+    if expected and hashlib.sha256(path.read_bytes()).hexdigest() != expected:
+        raise ValueError("Corresponding source archive digest mismatch: " + path.name)
+    record = dict(name=component["name"], revision=revision, url=url)
+    if expected:
+        record.update(tag=component["tag"], sha256=expected)
+    records.append(record)
     print("Collected", path.name, flush=True)
 
 debian = work / "debian"
