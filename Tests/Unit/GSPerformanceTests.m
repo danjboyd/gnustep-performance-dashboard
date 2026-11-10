@@ -5,6 +5,15 @@
 #import <GSPerformance/GSPerformance.h>
 #import "TraceBuilder.h"
 
+/* Exercise path generation at an identical instant, without changing the
+   process clock or requiring a recording target. */
+@interface GSPRecorder (DefaultPathTests)
++ (NSString *) defaultTracePathForExecutable: (NSString *)path
+                                    template: (NSString *)templateName
+                                        date: (NSDate *)date;
+- (BOOL) prepareBundle: (NSError **)error;
+@end
+
 #define MS 1000000ull
 
 enum
@@ -884,6 +893,54 @@ child(GSPCallTreeNode *n, NSString *name)
   out = [GSPRecorder targetEnvironmentFrom: in additions:
     [NSDictionary dictionaryWithObject: @"/tmp/explicit.conf" forKey: @"GNUSTEP_CONFIG_FILE"]];
   XCTAssertEqualObjects([out objectForKey: @"GNUSTEP_CONFIG_FILE"], @"/tmp/explicit.conf");
+}
+
+- (void) testDefaultTracePathsAtSameInstantAreDistinct
+{
+  NSDate *date = [NSDate dateWithTimeIntervalSince1970: 1700000000];
+  NSString *first = [GSPRecorder defaultTracePathForExecutable: @"/tmp/target"
+                                                   template: @"Time Profiler" date: date];
+  NSString *second = [GSPRecorder defaultTracePathForExecutable: @"/tmp/target"
+                                                    template: @"Time Profiler" date: date];
+  XCTAssertNotEqualObjects(first, second);
+  XCTAssertEqualObjects([first stringByDeletingLastPathComponent],
+    [[NSFileManager defaultManager] currentDirectoryPath]);
+  for (NSString *path in @[first, second])
+    {
+      XCTAssertTrue([[path lastPathComponent] hasPrefix: @"target Time Profiler "]);
+      XCTAssertEqualObjects([path pathExtension], @"gstrace");
+      XCTAssertFalse([[NSFileManager defaultManager] fileExistsAtPath: path]);
+    }
+}
+
+- (void) testExistingExplicitRecordingPathIsPreserved
+{
+  NSFileManager *fm = [NSFileManager defaultManager];
+  NSString *path = [NSTemporaryDirectory() stringByAppendingPathComponent:
+    [NSString stringWithFormat: @"pd-explicit-%@.gstrace", [[NSUUID UUID] UUIDString]]];
+  XCTAssertTrue([fm createDirectoryAtPath: path withIntermediateDirectories: NO
+                              attributes: nil error: NULL]);
+  NSString *sentinel = [path stringByAppendingPathComponent: @"preserve.txt"];
+  @try
+    {
+      XCTAssertTrue([@"preserve" writeToFile: sentinel atomically: YES
+                                   encoding: NSUTF8StringEncoding error: NULL]);
+      GSPRecordingOptions *options = [GSPRecordingOptions new];
+      options.executablePath = @"/bin/true";
+      options.outputPath = path;
+      GSPRecorder *recorder = [[GSPRecorder alloc] initWithOptions: options];
+      NSError *error = nil;
+      XCTAssertFalse([recorder prepareBundle: &error]);
+      XCTAssertNotNil(error);
+      XCTAssertTrue([[error localizedDescription] rangeOfString: @"already exists"].location != NSNotFound);
+      XCTAssertEqualObjects([NSString stringWithContentsOfFile: sentinel
+        encoding: NSUTF8StringEncoding error: NULL], @"preserve");
+      XCTAssertEqualObjects(recorder.tracePath, path);
+    }
+  @finally
+    {
+      [fm removeItemAtPath: path error: NULL];
+    }
 }
 
 - (void) testPackagerHostConfigPrecedesWrapperFallback

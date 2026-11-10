@@ -428,10 +428,9 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
   NSString *dir = [NSTemporaryDirectory() stringByAppendingPathComponent: @"Performance Dashboard"];
   [[NSFileManager defaultManager] createDirectoryAtPath: dir withIntermediateDirectories: YES
                                              attributes: nil error: NULL];
-  NSDateFormatter *f = [NSDateFormatter new];
-  [f setDateFormat: @"yyyyMMdd-HHmmss"];
-  return [dir stringByAppendingPathComponent: [NSString stringWithFormat: @"%@ %@ %@.gstrace",
-    [self targetName], [self templateName], [f stringFromDate: [NSDate date]]]];
+  NSString *name = [[GSPRecorder defaultTracePathForExecutable: [self targetName]
+                                                   template: [self templateName]] lastPathComponent];
+  return [dir stringByAppendingPathComponent: name];
 }
 
 - (void) startRecording: (id)sender

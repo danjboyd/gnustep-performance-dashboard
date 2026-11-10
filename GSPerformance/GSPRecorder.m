@@ -458,14 +458,24 @@ under(NSString *value, NSString *root)
 
 + (NSString *) defaultTracePathForExecutable: (NSString *)path
                                     template: (NSString *)templateName
+                                        date: (NSDate *)date
 {
   NSDateFormatter *f = [NSDateFormatter new];
   [f setDateFormat: @"yyyy-MM-dd-HHmmss"];
-  NSString *name = [NSString stringWithFormat: @"%@ %@ %@.gstrace",
+  /* Independent recordings can start during the same clock second. Keep a
+     readable timestamp, with a fresh identifier for every suggested path. */
+  NSString *name = [NSString stringWithFormat: @"%@ %@ %@ %@.gstrace",
     [path lastPathComponent] ?: @"Recording", templateName ?: @"Trace",
-    [f stringFromDate: [NSDate date]]];
+    [f stringFromDate: date], [[NSUUID UUID] UUIDString]];
   return [[[NSFileManager defaultManager] currentDirectoryPath]
            stringByAppendingPathComponent: name];
+}
+
++ (NSString *) defaultTracePathForExecutable: (NSString *)path
+                                    template: (NSString *)templateName
+{
+  return [self defaultTracePathForExecutable: path template: templateName
+                                      date: [NSDate date]];
 }
 
 /* ------------------------------------------------------------------ */
