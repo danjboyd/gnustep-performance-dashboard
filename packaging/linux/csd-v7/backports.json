@@ -27,7 +27,7 @@
       "sha256": "04d350cc294fe7fbf67ba7bc2336d07309c773d549223b724cce0fffaae4569f",
       "author": "Daniel Boyd <danieljboyd@icloud.com>",
       "authorDate": "Tue, 06 Oct 2026 11:36:51 -0500",
-      "validation": "Source-only preparation; strict exported-series apply verification next, NO build/runtime test"
+      "validation": "PASS strict exported-series git apply --check + git apply in fresh exact-base tree, without three-way fallback; source/header/test and ChangeLog integrity verified. No build/compiler/runtime tests."
     },
     {
       "component": "back",
@@ -41,7 +41,7 @@
       "sha256": "4313e6a16e0c1d8f4833897c9ec7237e5a866fe362a6bd0cd5a6479e492390c1",
       "author": "Daniel Boyd <danieljboyd@icloud.com>",
       "authorDate": "Tue, 06 Oct 2026 11:23:43 -0500",
-      "validation": "Source-only preparation; strict exported-series apply verification next, NO build/runtime test"
+      "validation": "PASS strict exported-series git apply --check + git apply in fresh exact-base tree, without three-way fallback; source/header/test and ChangeLog integrity verified. No build/compiler/runtime tests."
     },
     {
       "component": "back",
@@ -55,7 +55,7 @@
       "sha256": "d0f9dfd98607399bfe225d88b9ee5320a346b92ad537193f6b07de79e995f68b",
       "author": "Daniel Boyd <danieljboyd@icloud.com>",
       "authorDate": "Thu, 05 Nov 2026 12:02:05 -0600",
-      "validation": "Source-only preparation; strict exported-series apply verification next, NO build/runtime test"
+      "validation": "PASS strict exported-series git apply --check + git apply in fresh exact-base tree, without three-way fallback; source/header/test and ChangeLog integrity verified. No build/compiler/runtime tests."
     },
     {
       "component": "back",
@@ -69,7 +69,7 @@
       "sha256": "bbc4e09d506b17e3759302dde19efee7299b46bf13f725864bd8cdba546d22b3",
       "author": "Daniel Boyd <danieljboyd@icloud.com>",
       "authorDate": "Tue, 06 Oct 2026 11:30:32 -0500",
-      "validation": "Source-only preparation; strict exported-series apply verification next, NO build/runtime test"
+      "validation": "PASS strict exported-series git apply --check + git apply in fresh exact-base tree, without three-way fallback; source/header/test and ChangeLog integrity verified. No build/compiler/runtime tests."
     },
     {
       "component": "back",
@@ -83,7 +83,7 @@
       "sha256": "ed5e4e54d7143836685753fd873b45a6e1e55529f816c6e1a953c9062c90efc7",
       "author": "Daniel Boyd <danieljboyd@icloud.com>",
       "authorDate": "Tue, 06 Oct 2026 11:33:53 -0500",
-      "validation": "Source-only preparation; strict exported-series apply verification next, NO build/runtime test"
+      "validation": "PASS strict exported-series git apply --check + git apply in fresh exact-base tree, without three-way fallback; source/header/test and ChangeLog integrity verified. No build/compiler/runtime tests."
     }
   ],
   "validation": {
