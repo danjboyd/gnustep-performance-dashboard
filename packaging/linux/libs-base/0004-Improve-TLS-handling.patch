@@ -1,0 +1,323 @@
+From 193da175c14fd60f5051c2dfd1a381945745e955 Mon Sep 17 00:00:00 2001
+From: rfm <richardfrithmacdonald@gmail.com>
+Date: Sat, 9 May 2026 13:28:20 +0100
+Subject: [PATCH] Improve TLS handling
+
+---
+ Source/GSSocketStream.m      |  5 +++++
+ Source/GSTLS.m               | 34 +++++++++++++++++++++++-----------
+ Source/NSFileHandle.m        | 21 ++++++++-------------
+ Source/NSURLProtocol.m       | 33 ++++++++++++++++++++-------------
+ Source/unix/NSStream.m       | 13 ++++++++++---
+ Source/win32/NSStream.m      |  9 ++++++++-
+ Tests/base/NSStream/socket.m |  6 +++++-
+ 7 files changed, 79 insertions(+), 42 deletions(-)
+
+diff --git a/Source/GSSocketStream.m b/Source/GSSocketStream.m
+index 75af88726..29a9797c1 100644
+--- a/Source/GSSocketStream.m
++++ b/Source/GSSocketStream.m
+@@ -1810,6 +1810,11 @@ setNonBlocking(SOCKET fd)
+ 	    {
+ 	      result = GSPrivateSockaddrHost((struct sockaddr*)&sin);
+ 	    }
++	  else
++	    {
++	      // Assume we are not yet connected.
++	      result = GSPrivateSockaddrHost((struct sockaddr*)&_address);
++	    }
+ 	}
+       else if ([key isEqualToString: GSStreamRemotePortKey])
+ 	{
+diff --git a/Source/GSTLS.m b/Source/GSTLS.m
+index 3450cacd8..9bd805713 100644
+--- a/Source/GSTLS.m
++++ b/Source/GSTLS.m
+@@ -1524,8 +1524,7 @@ retrieve_callback(gnutls_session_t session,
+       m = [NSMutableString stringWithCapacity: 2000];
+       for (i = 0; i < count; i++)
+         {
+-          [GSTLSCertificateList certInfo: crts[i]
+-                                      to: m];
++          [GSTLSCertificateList certInfo: crts[i] to: m];
+         }
+       if (0 == count)
+         {
+@@ -2319,19 +2318,31 @@ retrieve_callback(gnutls_session_t session,
+     {
+       unsigned int            cert_list_size = 0;
+       const gnutls_datum_t    *cert_list;
+-      gnutls_x509_crt_t       cert;
+ 
+       cert_list = gnutls_certificate_get_peers(session, &cert_list_size);
++      [str appendString: @"- "];
+       if (0 == cert_list_size)
+         {
+-          [str appendString: _(@"- Peer provided no certificate.\n")];
++          [str appendString: _(@"Peer provided no certificate.")];
++          [str appendString: @"\n"];
+         }
+       else
+         {
+           int cert_num;
+       
++          if (cert_list_size > 1)
++            {
++              [str appendString: _(@"Peer certificates")];
++            }
++          else
++            {
++              [str appendString: _(@"Peer certificate")];
++            }
++          [str appendString: @"\n"];
+           for (cert_num = 0; cert_num < cert_list_size; cert_num++)
+             {
++              gnutls_x509_crt_t cert;
++
+               gnutls_x509_crt_init(&cert);
+               /* NB. the list of peer certificate is in memory in native
+                * format (DER) rather than the normal file format (PEM).
+@@ -2373,6 +2384,7 @@ retrieve_callback(gnutls_session_t session,
+ - (int) verify
+ {
+   NSArray               *names;
++  NSString              *nameList;
+   NSString              *str;
+   NSMutableString       *ci;
+   unsigned int          status;
+@@ -2494,16 +2506,16 @@ retrieve_callback(gnutls_session_t session,
+   ci = [NSMutableString stringWithCapacity: 2000];
+   [GSTLSCertificateList certInfo: cert to: ci];
+ 
+-  str = [opts objectForKey: GSTLSRemoteHosts];
+-  if (nil == str)
++  nameList = [opts objectForKey: GSTLSRemoteHosts];
++  if (nil == nameList)
+     {
+       /* If nothing is specified, assume the connection host name
+        * (if any) should be used for verification.
+        */
+-      str = [opts objectForKey: GSTLSServerName];
+-      if ([str length] > 0)
++      nameList = [opts objectForKey: GSTLSServerName];
++      if ([nameList length] > 0)
+         {
+-          names = [NSArray arrayWithObject: str];
++          names = [NSArray arrayWithObject: nameList];
+         }
+       else
+         {
+@@ -2515,7 +2527,7 @@ retrieve_callback(gnutls_session_t session,
+       /* The string is a comma separated list of permitted host names.
+        * If explicitly set to be empty, no host verification is done.
+        */
+-      names = [str componentsSeparatedByString: @","];
++      names = [nameList componentsSeparatedByString: @","];
+       if ([names count] == 0)
+         {
+           names = nil;
+@@ -2540,7 +2552,7 @@ retrieve_callback(gnutls_session_t session,
+         {
+           str = [NSString stringWithFormat:
+             @"TLS verification: hostname does not match '%@' in %@",
+-            names, ci];
++            nameList, ci];
+           ASSIGN(problem, str);
+           gnutls_x509_crt_deinit(cert);
+           if (YES == debug) NSLog(@"%p %@", handle, problem);
+diff --git a/Source/NSFileHandle.m b/Source/NSFileHandle.m
+index 03249c164..600d32173 100644
+--- a/Source/NSFileHandle.m
++++ b/Source/NSFileHandle.m
+@@ -26,6 +26,7 @@
+ 
+ #import "common.h"
+ #define	EXPOSE_NSFileHandle_IVARS	1
++#import "Foundation/NSAutoreleasePool.h"
+ #import "Foundation/NSData.h"
+ #import "Foundation/NSException.h"
+ #import "Foundation/NSHost.h"
+@@ -1137,26 +1138,20 @@ GSTLSHandlePush(gnutls_transport_ptr_t handle, const void *buffer, size_t len)
+    */
+   if (nil == session)
+     {
+-      /* If No value is specified for GSTLSRemoteHosts, make a comma separated
+-       * list of all known names for the remote host and use that.
++      /* If no value is specified for GSTLSServerName, try to use any name of
++       * the remote host in case the remote server requres a name.
+        */
+-      if (nil == [opts objectForKey: GSTLSRemoteHosts])
++      if (nil == [opts objectForKey: GSTLSServerName])
+         {
+           NSHost        *host = [NSHost hostWithAddress: [self socketAddress]];
+-          NSString      *s = [[host names] description];
++          NSString      *name = [host name];
+ 
+-          s = [s stringByReplacingString: @"\"" withString: @""];
+-          if ([s length] > 1)
++          if (name)
+             {
+-              s = [s substringWithRange: NSMakeRange(1, [s length] - 2)];
+-            }
+-          if ([s length] > 0)
+-            {
+-              NSMutableDictionary   *d = [opts mutableCopy];
++              NSMutableDictionary   *d = AUTORELEASE([opts mutableCopy]);
+ 
+-              [d setObject:s forKey: GSTLSRemoteHosts];
++              [d setObject: name forKey: GSTLSRemoteHosts];
+               ASSIGNCOPY(opts, d);
+-              [d release];
+             }
+         }
+       [self setNonBlocking: YES];
+diff --git a/Source/NSURLProtocol.m b/Source/NSURLProtocol.m
+index 4246ccd5c..702c7f936 100644
+--- a/Source/NSURLProtocol.m
++++ b/Source/NSURLProtocol.m
+@@ -987,6 +987,8 @@ typedef struct {
+         {
+           static NSArray        *keys;
+           NSUInteger            count;
++	  NSString		*key;
++	  NSString		*val;
+ 
+           [this->input setProperty: NSStreamSocketSecurityLevelNegotiatedSSL
+                             forKey: NSStreamSocketSecurityLevelKey];
+@@ -1009,21 +1011,11 @@ typedef struct {
+                 GSTLSVerify,
+                 nil];
+             }
+-          count = [keys count];
+-          while (count-- > 0)
+-            {
+-              NSString      *key = [keys objectAtIndex: count];
+-              NSString      *str = [this->request _propertyForKey: key];
+-
+-              if (nil != str)
+-                {
+-                  [this->output setProperty: str forKey: key];
+-                }
+-            }
+           /* If there is no value set for the server name, and the host in the
+            * URL is a domain name rather than an address, we use that.
+            */
+-          if (nil == [this->output propertyForKey: GSTLSServerName])
++	  key = GSTLSServerName;
++	  if (nil == (val = [this->request _propertyForKey: key]))
+             {
+               NSString  *host = [url host];
+               unichar   c;
+@@ -1031,7 +1023,22 @@ typedef struct {
+               c = [host length] == 0 ? 0 : [host characterAtIndex: 0];
+               if (c != 0 && c != ':' && !isdigit(c))
+                 {
+-                  [this->output setProperty: host forKey: GSTLSServerName];
++                  [this->output setProperty: host forKey: key];
++                }
++            }
++	  else
++	    {
++	      [this->output setProperty: val forKey: key];
++	    }
++          count = [keys count];
++          while (count-- > 0)
++            {
++              key = [keys objectAtIndex: count];
++              val = [this->request _propertyForKey: key];
++
++              if (nil != val)
++                {
++                  [this->output setProperty: val forKey: key];
+                 }
+             }
+           if (_debug) [this->output setProperty: @"YES" forKey: GSTLSDebug];
+diff --git a/Source/unix/NSStream.m b/Source/unix/NSStream.m
+index 6cd1ff59d..372372273 100644
+--- a/Source/unix/NSStream.m
++++ b/Source/unix/NSStream.m
+@@ -48,6 +48,7 @@
+ #import "Foundation/NSByteOrder.h"
+ #import "Foundation/NSURL.h"
+ #import "GNUstepBase/NSObject+GNUstepBase.h"
++#import "GNUstepBase/GSTLS.h"
+ 
+ #import "../GSPrivate.h"
+ #import "../GSStream.h"
+@@ -401,9 +402,10 @@
+               inputStream: (NSInputStream **)inputStream 
+              outputStream: (NSOutputStream **)outputStream
+ {
+-  NSString *address = host ? (id)[host address] : (id)@"127.0.0.1";
+-  id ins = nil;
+-  id outs = nil;
++  NSString	*address = host ? (id)[host address] : (id)@"127.0.0.1";
++  NSString	*name = [host name];
++  id 		ins = nil;
++  id 		outs = nil;
+ 
+   // try ipv4 first
+   ins = AUTORELEASE([[GSInetInputStream alloc]
+@@ -419,6 +421,11 @@
+ 	initToAddr: address port: port]);
+ #endif
+     }  
++  if (name)
++    {
++      if (ins) [ins setProperty: name forKey: GSTLSServerName];
++      if (outs) [outs setProperty: name forKey: GSTLSServerName];
++    }
+ 
+   if (inputStream)
+     {
+diff --git a/Source/win32/NSStream.m b/Source/win32/NSStream.m
+index 456d055a9..28b482c48 100644
+--- a/Source/win32/NSStream.m
++++ b/Source/win32/NSStream.m
+@@ -35,6 +35,7 @@
+ #import "Foundation/NSByteOrder.h"
+ #import "Foundation/NSURL.h"
+ #import "GNUstepBase/NSObject+GNUstepBase.h"
++#import "GNUstepBase/GSTLS.h"
+ 
+ #import "../GSPrivate.h"
+ #import "../GSStream.h"
+@@ -939,7 +940,8 @@
+               inputStream: (NSInputStream **)inputStream 
+              outputStream: (NSOutputStream **)outputStream
+ {
+-  NSString *address = host ? (id)[host address] : (id)@"127.0.0.1";
++  NSString	*address = host ? (id)[host address] : (id)@"127.0.0.1";
++  NSString	*name = [host name];
+   GSSocketStream *ins = nil;
+   GSSocketStream *outs = nil;
+   int sock;
+@@ -959,6 +961,11 @@
+         initToAddr: address port: port]);
+ #endif
+     }
++  if (name)
++    {
++      if (ins) [ins setProperty: name forKey: GSTLSServerName];
++      if (outs) [outs setProperty: name forKey: GSTLSServerName];
++    }
+ 
+   /*
+    * Windows only permits a single event to be associated with a socket
+diff --git a/Tests/base/NSStream/socket.m b/Tests/base/NSStream/socket.m
+index bb965cc5a..e5c50bcdb 100644
+--- a/Tests/base/NSStream/socket.m
++++ b/Tests/base/NSStream/socket.m
+@@ -164,7 +164,11 @@ int main()
+     [defaultOutput setProperty: NSStreamSocketSecurityLevelNegotiatedSSL
+ 			forKey: NSStreamSocketSecurityLevelKey];
+ 
+-    [defaultOutput setProperty: name forKey: GSTLSServerName];
++/* Our getStreamsToHost:port:inputStream:outputStream: does this using some
++ * randomly selected name fo the host.  To use a specific name we may want
++ * an override here.
++ * [defaultOutput setProperty: name forKey: GSTLSServerName];
++ */
+     [defaultInput open];
+     [defaultOutput open];
+ 

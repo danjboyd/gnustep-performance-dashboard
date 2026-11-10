@@ -1,0 +1,116 @@
+From 02f2958f177b9b215bc683d4a7f40d8aa943988c Mon Sep 17 00:00:00 2001
+From: rfm <richardfrithmacdonald@gmail.com>
+Date: Sat, 9 May 2026 17:11:04 +0100
+Subject: [PATCH] Add notification for verify failure
+
+---
+ Headers/GNUstepBase/GSTLS.h  | 14 ++++++++++++++
+ Source/GSTLS.m               | 23 +++++++++++++++++++++++
+ Tests/base/NSStream/socket.m |  1 +
+ 3 files changed, 38 insertions(+)
+
+diff --git a/Headers/GNUstepBase/GSTLS.h b/Headers/GNUstepBase/GSTLS.h
+index 6fa61e23e..504ba57e9 100644
+--- a/Headers/GNUstepBase/GSTLS.h
++++ b/Headers/GNUstepBase/GSTLS.h
+@@ -56,6 +56,11 @@ GS_EXPORT NSString * const GSTLSVerify;
+ #endif
+ #undef	id
+ 
++/** Notification posted whenever a connection (handled by a [GSTLSSession]
++ * instance) to a TLS server fails certificate or host name verification.
++ */
++GS_EXPORT NSString* const GSTLSVerifyFailedNotification;
++
+ /* This class is used to ensure that the GNUTLS system is initialised
+  * and thread-safe.  It also provides a mechanism to save certificate
+  * and key information in memory by associating a 'filename' with the
+@@ -254,12 +259,21 @@ GS_EXPORT_CLASS
+  */
+ - (BOOL) handshake;
+ 
++/** Returns the name of the host this session connects to, or nil if it
++ * is not to a named host.
++ */
++- (NSString*) hostName;
++
+ /** If the session verified a certificate from the remote end, returns the
+  * name of the certificate issuer in the form "C=xxxx,O=yyyy,CN=zzzz" as
+  * described in RFC4514.  Otherwise returns nil.
+  */
+ - (NSString*) issuer;
+ 
++/** Returns the configured options for this session.
++ */
++- (NSDictionary*) options;
++
+ /** If the session verified a certificate from the remote end, returns the
+  * name of the certificate owner in the form "C=xxxx,O=yyyy,CN=zzzz" as
+  * described in RFC4514.  Otherwise returns nil.
+diff --git a/Source/GSTLS.m b/Source/GSTLS.m
+index 9bd805713..3e565b327 100644
+--- a/Source/GSTLS.m
++++ b/Source/GSTLS.m
+@@ -43,6 +43,9 @@
+ 
+ #import "GSPrivate.h"
+ 
++NSString* const GSTLSVerifyFailedNotification
++  = @"GSTLSVerifyFailedNotification";
++
+ @interface	NSString(gnutlsFileSystemRepresentation)
+ - (const char*) gnutlsFileSystemRepresentation;
+ @end
+@@ -1648,6 +1651,15 @@ retrieve_callback(gnutls_session_t session,
+   [super finalize];
+ }
+ 
++- (NSString*) hostName
++{
++  if (outgoing)
++    {
++      return [opts objectForKey: GSTLSServerName];
++    }
++  return nil;
++}
++
+ - (id) initWithOptions: (NSDictionary*)options
+              direction: (BOOL)isOutgoing
+              transport: (void*)ioHandle
+@@ -2047,6 +2059,12 @@ retrieve_callback(gnutls_session_t session,
+                 handle, gnutls_strerror(ret));
+               NSLog(@"%p failed verify:\n%@", handle, [self sessionInfo]);
+             }
++	  if (outgoing)
++	    {
++              [[NSNotificationCenter defaultCenter]
++                postNotificationName: GSTLSVerifyFailedNotification
++                  object: self];
++	    }
+           if (requireVerified)
+             {
+               [self disconnect: NO];
+@@ -2068,6 +2086,11 @@ retrieve_callback(gnutls_session_t session,
+   return issuer;
+ }
+ 
++- (NSDictionary*) options
++{
++  return opts;
++}
++
+ - (NSString*) owner
+ {
+   return owner;
+diff --git a/Tests/base/NSStream/socket.m b/Tests/base/NSStream/socket.m
+index e5c50bcdb..30121787c 100644
+--- a/Tests/base/NSStream/socket.m
++++ b/Tests/base/NSStream/socket.m
+@@ -100,6 +100,7 @@ NSLog(@"%@", [defaultInput streamError]);
+       {
+         NSAssert1(1, @"Error! code is %ld",
+           (long int)[[theStream streamError] code]);
++	done = YES;
+         break;
+       }  
+     }

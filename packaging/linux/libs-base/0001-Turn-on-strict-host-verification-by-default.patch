@@ -1,0 +1,275 @@
+From 586eba532afc63cc41757fb1374dd39b6e43174d Mon Sep 17 00:00:00 2001
+From: rfm <richardfrithmacdonald@gmail.com>
+Date: Fri, 8 May 2026 11:10:23 +0100
+Subject: [PATCH] Turn on strict host verification by default
+
+---
+ Documentation/Base.gsdoc | 90 +++++++++++++++++++++++++++++++++++++++-
+ Source/GSTLS.m           | 46 +++++++++++++++-----
+ Source/NSSocketPort.m    | 17 +++++++-
+ 3 files changed, 141 insertions(+), 12 deletions(-)
+
+diff --git a/Documentation/Base.gsdoc b/Documentation/Base.gsdoc
+index dd2a252b6..446882c1f 100644
+--- a/Documentation/Base.gsdoc
++++ b/Documentation/Base.gsdoc
+@@ -8,7 +8,7 @@ notice and this notice are preserved.
+ <gsdoc base="Base">
+   <head>
+     <title>GNUstep Base</title>
+-    <copy>1993-2023 Free Software Foundation, Inc.</copy>
++    <copy>1993-2026 Free Software Foundation, Inc.</copy>
+   </head>
+   <body>
+     <chapter>
+@@ -239,6 +239,74 @@ notice and this notice are preserved.
+ 	        sorting is stable.
+ 	      </p>
+ 	    </desc>
++	    <term>GSTLSCAFile</term>
++	    <desc>
++	      <p>
++		This provides a process-wide setting of the path to the
++		certificate authority file used for TLS connections.<br />
++		This overrides the GS_TLS_CA_FILE environment variable,
++		which in turn overrides the SSL_CERT_FILE environment
++		variable (used by OPENSSL) and the default location.<br />
++		An option of this name set for an individual connection
++		takes precedence over this setting.
++	      </p>
++	    </desc>
++	    <term>GSTLSDebug</term>
++	    <desc>
++	      <p>
++		This sets a process-wide debug level for TLS connections.<br />
++		This overrides the GS_TLS_DEBUG environment variable.<br />
++		which in turn overrides the default of YES.<br />
++		A GSTLSDebug option set for an individual connection
++		takes precedence over this setting.
++	      </p>
++	    </desc>
++	    <term>GSTLSPriority</term>
++	    <desc>
++	      <p>
++		This sets a process-wide GNUTLS priority string.<br /> 
++		This overrides the GS_TLS_PRIORITY environment variable.<br />
++		A GSTLSPriority option set for an individual connection
++		takes precedence over this setting.<br />
++		See the documentation of the GNUTLS project for an
++	        explanation of the priority string.
++	      </p>
++	    </desc>
++	    <term>GSTLSRevokeFile</term>
++	    <desc>
++	      <p>
++		This provides a process-wide setting of the path to the
++		certificate revocation file used for TLS connections.<br />
++		This overrides the GS_TLS_REVOKE_FILE environment variable,
++		which in turn overrides the default location).<br />
++		An option of this name set for an individual connection
++		takes precedence over this setting.
++	      </p>
++	    </desc>
++	    <term>GSTLSVerifyClient</term>
++	    <desc>
++	      <p>
++		This provides a process-wide setting of a boolean controlling
++		whether client certificate verification failures cause the
++		connection to be dropped when a remote client connects.<br />
++		This overrides the GS_TLS_VERIFY_C environment variable,
++		which in turn overrides the default of NO.<br />
++		A GSTLSVerify option set for an individual connection
++		takes precedence over this setting.
++	      </p>
++	    </desc>
++	    <term>GSTLSVerifyServer</term>
++	    <desc>
++	      <p>
++		This provides a process-wide setting of a boolean controlling
++		whether certificate verification failures cause the connection
++		to be dropped when we are connecting to a remote server.<br />
++		This overrides the GS_TLS_VERIFY_S environment variable,
++		which in turn overrides the default of YES.<br />
++		A GSTLSVerify option set for an individual connection
++		takes precedence over this setting.
++	      </p>
++	    </desc>
+ 	    <term>Local Time Zone</term>
+ 	    <desc>
+ 	      <p>
+@@ -473,6 +541,26 @@ notice and this notice are preserved.
+ 	      add/override methods in a class using a list of methods
+ 	      from another class.
+ 	    </desc>
++	    <term>GS_TLS_CA_FILE</term>
++	    <desc>
++	      See the GSTLSCAFile default (takes precedence over this).
++	    </desc>
++	    <term>GS_TLS_DEBUG</term>
++	    <desc>
++	      See the GSTLSDebug default (takes precedence over this).
++	    </desc>
++	    <term>GS_TLS_REVOKE_FIL</term>
++	    <desc>
++	      See the GSTLSRevokeFile default (takes precedence over this).
++	    </desc>
++	    <term>GS_TLS_VERIFY_C</term>
++	    <desc>
++	      See the GSTLSVerifyClient default (takes precedence over this).
++	    </desc>
++	    <term>GS_TLS_VERIFY_S</term>
++	    <desc>
++	      See the GSTLSVerifyServer default (takes precedence over this).
++	    </desc>
+ 	    <term>HOMEDRIVE</term>
+ 	    <desc>
+ 	      <p>
+diff --git a/Source/GSTLS.m b/Source/GSTLS.m
+index 1da59ad77..80890dae5 100644
+--- a/Source/GSTLS.m
++++ b/Source/GSTLS.m
+@@ -165,7 +165,7 @@ static BOOL     verifyClient = NO;
+  * default string.
+  * A GSTLSVerify option set for a specific session overrides this default
+  */
+-static BOOL     verifyServer = NO;
++static BOOL     verifyServer = YES;
+ 
+ /* The globalDebug variable turns on gnutls debug.  The hard-code value is
+  * overridden by GS_TLS_DEBUG, which in turn can be overridden by the
+@@ -279,14 +279,20 @@ static NSMutableDictionary      *privateKeyCache1 = nil;
+     {
+       str = [env objectForKey: @"GS_TLS_VERIFY_C"];
+     }
+-  verifyClient = [str boolValue];
++  if (str)
++    {
++      verifyClient = [str boolValue];
++    }
+ 
+   str = [defs stringForKey: @"GSTLSVerifyServer"];
+   if (nil == str)
+     { 
+       str = [env objectForKey: @"GS_TLS_VERIFY_S"];
+     }
+-  verifyServer = [str boolValue];
++  if (str)
++    {
++      verifyServer = [str boolValue];
++    }
+ 
+   str = [defs stringForKey: GSTLSDebug];
+   if (nil == str)
+@@ -2037,25 +2043,29 @@ retrieve_callback(gnutls_session_t session,
+   else
+     {
+       NSString  *str;
+-      BOOL      shouldVerify = NO;
++      BOOL      requireVerified;
+ 
+       active = YES;     // The TLS session is now active.
+       handshake = NO;   // Handshake is over.
+ 
+       if (YES == outgoing)
+         {
+-          shouldVerify = verifyServer;  // Verify remote server certificate?
++          requireVerified = verifyServer;  // Verify remote server certificate?
+         }
+       else
+         {
+-          shouldVerify = verifyClient;  // Verify remote client certificate?
++          requireVerified = verifyClient;  // Verify remote client certificate?
+         }
+       str = [opts objectForKey: GSTLSVerify];
+       if (nil != str)
+         {
+-          shouldVerify = [str boolValue];
++          requireVerified = [str boolValue];
+         }
+ 
++      /* We always try verification (and can report failure).
++       * The requireVerified flag controls whether a verification failure
++       * results in disconnect.
++       */
+       if (globalDebug > 1)
+         {
+           NSLog(@"%p trying verify:\n%@", handle, [self sessionInfo]);
+@@ -2063,14 +2073,14 @@ retrieve_callback(gnutls_session_t session,
+       ret = [self verify];
+       if (ret < 0)
+         {
+-          if (globalDebug > 1 || (YES == shouldVerify && globalDebug > 0)
++          if (globalDebug > 1 || (requireVerified && globalDebug > 0)
+             || YES == [[opts objectForKey: GSTLSDebug] boolValue])
+             {
+               NSLog(@"%p unable to verify SSL connection - %s",
+                 handle, gnutls_strerror(ret));
+               NSLog(@"%p %@", handle, [self sessionInfo]);
+             }
+-          if (YES == shouldVerify)
++          if (requireVerified)
+             {
+               [self disconnect: NO];
+             }
+@@ -2514,13 +2524,29 @@ retrieve_callback(gnutls_session_t session,
+   str = [opts objectForKey: GSTLSRemoteHosts];
+   if (nil == str)
+     {
+-      names = nil;
++      /* If nothing is specified, assume the connection host name
++       * (if any) should be used for verification.
++       */
++      str = [opts objectForKey: GSTLSServerName];
++      if ([str length] > 0)
++        {
++          names = [NSArray arrayWithObject: str];
++        }
++      else
++        {
++          names = nil;
++        }
+     }
+   else
+     {
+       /* The string is a comma separated list of permitted host names.
++       * If explicitly set to be empty, no host verification is done.
+        */
+       names = [str componentsSeparatedByString: @","];
++      if ([names count] == 0)
++        {
++          names = nil;
++        }
+     }
+ 
+   if (nil != names)
+diff --git a/Source/NSSocketPort.m b/Source/NSSocketPort.m
+index 7f3ccaf2e..93dfe88f4 100644
+--- a/Source/NSSocketPort.m
++++ b/Source/NSSocketPort.m
+@@ -2728,10 +2728,25 @@ static Class		tcpPortClass;
+ }
+ 
+ /** Sets the TLS options for network connections created by this port
+- * acting as a network client.
++ * acting as a network client.<br />
++ * If options is nil, TLS is not used for the network connections.<br />
++ * When options in not nil, if GSTLSVerify is missing a value of NO is set
++ * so that connections to server with self-signed certificates will work
++ * by default.  To require the server to have a trusted certificate
++ * the options must contain GSTLSVerify set to YES.
+  */
+ - (void) setClientOptionsForTLS: (NSDictionary*)options
+ {
++  if (options)
++    {
++      NSMutableDictionary	*m = AUTORELEASE([options mutableCopy]);
++
++      if (nil == [options objectForKey: GSTLSVerify])
++	{
++          [m setObject: @"NO" forKey: GSTLSVerify];
++	}
++      options = m;
++    }
+   M_LOCK(myLock);
+   ASSIGNCOPY(tlscopts, options);
+   M_UNLOCK(myLock);

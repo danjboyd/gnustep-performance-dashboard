@@ -1,0 +1,95 @@
+From a29f803ff8f4725af5aa1524708faf570fd49789 Mon Sep 17 00:00:00 2001
+From: rfm <richardfrithmacdonald@gmail.com>
+Date: Sat, 16 May 2026 11:15:48 +0100
+Subject: [PATCH] Security improvement
+
+---
+ Source/NSURL.m           | 37 ++++++++++++++++++++++++++++++++++---
+ Source/NSURLRequest.m    |  6 +++++-
+ Tests/base/NSURL/basic.m |  5 ++++-
+ 3 files changed, 43 insertions(+), 5 deletions(-)
+
+diff --git a/Source/NSURL.m b/Source/NSURL.m
+index b97b7a960..fc1819062 100644
+--- a/Source/NSURL.m
++++ b/Source/NSURL.m
+@@ -1442,11 +1442,42 @@ static NSUInteger	urlAlign;
+ 
+ - (NSString*) description
+ {
+-  NSString	*dscr = _urlString;
++  NSString	*dscr;
+ 
+-  if (_baseURL != nil)
++  if ([[self password] length] > 0)
+     {
+-      dscr = [dscr stringByAppendingFormat: @" -- %@", _baseURL];
++      NSRange	r0;
++      NSRange	r1;
++      NSRange	rp;
++
++      /* Debug logs should not contain sensiive information like passwords,
++       * so the -description metod for a URL needs to produce output which
++       * hides the password content.  If someone really needs to see the
++       * password they can call the -password method directly.
++       */
++      dscr = [self absoluteString];
++
++      /* Find the range from the username on.
++       */
++      r0 = [dscr rangeOfString: @"://"];
++      r0 = NSMakeRange(NSMaxRange(r0), [dscr length] - NSMaxRange(r0));
++      /* The next colon marks the end of the username
++       */
++      r0 = [dscr rangeOfString: @":" options: 0 range: r0];
++      /* The first '@' marks the end of the password (and start of the host)
++       */
++      r1 = [dscr rangeOfString: @"@"];
++      rp = NSMakeRange(NSMaxRange(r0), r1.location - NSMaxRange(r0));
++      dscr = [dscr stringByReplacingCharactersInRange: rp
++					   withString: @"HIDDEN-PASSWORD"];
++    }
++  else
++    {
++      dscr = _urlString;
++      if (_baseURL != nil)
++	{
++	  dscr = [dscr stringByAppendingFormat: @" -- %@", _baseURL];
++	}
+     }
+   return dscr;
+ }
+diff --git a/Source/NSURLRequest.m b/Source/NSURLRequest.m
+index 2ddc42cdc..eb1b83d79 100644
+--- a/Source/NSURLRequest.m
++++ b/Source/NSURLRequest.m
+@@ -146,8 +146,12 @@ typedef struct {
+ 
+ - (NSString*) description
+ {
++  /* NB. We use NSURL's -description method because we knok that hides
++   * any password in the URL (and passwords are sensitive information
++   * which shoudl not appear in debug logs).
++   */
+   return [NSString stringWithFormat: @"<%@ %@>",
+-    NSStringFromClass([self class]), [[self URL] absoluteString]];
++    NSStringFromClass([self class]), [[self URL] description]];
+ }
+ 
+ - (void) encodeWithCoder: (NSCoder*)aCoder
+diff --git a/Tests/base/NSURL/basic.m b/Tests/base/NSURL/basic.m
+index 8ce6bf6b9..1e3fcb6dc 100644
+--- a/Tests/base/NSURL/basic.m
++++ b/Tests/base/NSURL/basic.m
+@@ -59,7 +59,10 @@ int main()
+ 	  fragment: nil];
+   PASS_EQUAL([url absoluteString],
+     @"http://testing%40free.fr:password@127.0.0.1/dav.php/short/",
+-    "Full -initWithScheme... works");
++    "Full -initWithScheme... works")
++  PASS_EQUAL([url description],
++    @"http://testing%40free.fr:HIDDEN-PASSWORD@127.0.0.1/dav.php/short/",
++    "-description hides the password")
+   DESTROY(url);
+ #endif
+ 
