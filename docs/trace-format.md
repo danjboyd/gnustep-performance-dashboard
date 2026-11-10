@@ -20,6 +20,13 @@ The first stop trigger is retained even if a later error makes the capture
 incomplete. `CaptureError` and `CaptureErrorCode` describe the first recording
 failure. A trace from an older recorder may lack these fields.
 
+A failed process wait is recorded separately as `WaitPIDErrno`, with optional
+`WaitPIDErrorName` and `WaitPIDError` text. `StopTrigger` equal to `error`,
+with `WaitPIDErrno` present but no `CaptureError`, means that the target's
+process status was lost; the recorded stream may still be complete.
+`CaptureStatus` determines capture completeness. A wait error does not supply
+an exit status or establish which code reaped the child.
+
 `MaximumTraceBytes`, `TimeLimitSeconds`, `MinimumFreeBytes` and
 `AutomaticMinimumFreeSpace` record the configured/effective policy.
 `ObservedTraceBytes` counts regular bundle files at the last measurement,
