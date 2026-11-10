@@ -60,6 +60,12 @@ else
 fi
 
 if [ "$(uname -s)" = Linux ]; then
+  echo "== Linux task-launch descriptor handoff"
+  if python3 "$ROOT/Tests/launch-helper-checks.py" "$ROOT/Runtime/obj/gsp-launch"; then
+    pass "task launch: descriptors, environment, startup failures and no leaks"
+  else
+    fail "task launch descriptor handoff"
+  fi
   echo "== Linux CLI target exit status"
   if python3 "$ROOT/Tests/cli-exit-checks.py" "$GSTRACE" "$OUT/cli-exit"; then
     pass "CLI: target exit codes, requested stop and SIGKILL escalation"
