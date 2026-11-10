@@ -29,6 +29,8 @@
 @optional
 - (void) recorderDidStart: (GSPRecorder *)recorder;
 - (void) recorder: (GSPRecorder *)recorder didFinishWithError: (NSError *)error;
+/* Non-fatal notice, after didFinishWithError:nil has delivered the recording. */
+- (void) recorder: (GSPRecorder *)recorder didFinishWithNotice: (NSString *)notice;
 @end
 
 @interface GSPRecorder : NSObject

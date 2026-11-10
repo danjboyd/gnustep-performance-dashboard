@@ -1279,12 +1279,16 @@ remote_agent_export(HANDLE process, NSString *agent, const char *name)
       ? @"The profiling helper did not record anything (authentication cancelled or perf_event unavailable)."
 #endif
       : @"The target did not record anything. It may have exited immediately, been statically linked, or ignored LD_PRELOAD.");
-#if defined(__linux__)
-  else if (!_options.attachPID && _exitStatus < 0)
-    error = make_error(14, @"Recording stopped; the target's exit status couldn't be read.");
-#endif
   if ([_delegate respondsToSelector: @selector(recorder:didFinishWithError:)])
     [_delegate recorder: self didFinishWithError: error];
+#if defined(__linux__)
+  /* Let the GUI attach the recorded trace before presenting a status notice.
+     Missing process status does not make the stream itself unreadable. */
+  if (error == nil && !_options.attachPID && _exitStatus < 0
+      && [_delegate respondsToSelector: @selector(recorder:didFinishWithNotice:)])
+    [_delegate recorder: self didFinishWithNotice:
+      @"The target's exit status couldn't be read."];
+#endif
 }
 
 - (void) stop

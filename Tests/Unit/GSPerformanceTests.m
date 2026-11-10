@@ -24,12 +24,22 @@
 @interface RecorderCompletionObserver : NSObject <GSPRecorderDelegate>
 @property (nonatomic, strong) NSError *error;
 @property (nonatomic) NSUInteger completions;
+@property (nonatomic, strong) GSPTrace *trace;
+@property (nonatomic, copy) NSString *notice;
+@property (nonatomic) BOOL traceLoadedBeforeNotice;
 @end
 @implementation RecorderCompletionObserver
 - (void) recorder: (GSPRecorder *)recorder didFinishWithError: (NSError *)error
 {
   self.error = error;
   self.completions++;
+  if (error == nil)
+    self.trace = [GSPTrace traceWithPath: recorder.tracePath error: NULL];
+}
+- (void) recorder: (GSPRecorder *)recorder didFinishWithNotice: (NSString *)notice
+{
+  self.traceLoadedBeforeNotice = self.trace != nil;
+  self.notice = notice;
 }
 @end
 #endif
@@ -960,7 +970,7 @@ child(GSPCallTreeNode *n, NSString *name)
     }
 }
 
-- (void) testUnavailableExitStatusReportsErrorDespiteRecordedStream
+- (void) testUnavailableExitStatusDeliversTraceBeforeNonfatalNotice
 {
   GSPRecordingOptions *options = [GSPRecordingOptions new];
   options.executablePath = @"/bin/true";
@@ -979,12 +989,13 @@ child(GSPCallTreeNode *n, NSString *name)
   RecorderCompletionObserver *observer = [RecorderCompletionObserver new];
   recorder.delegate = observer;
   [recorder recordWaitFailure: ECHILD];
+  [recorder writeInfo: YES];
   [recorder notifyFinished];
   XCTAssertEqual(observer.completions, (NSUInteger)1);
-  XCTAssertEqualObjects(observer.error.domain, GSPRecorderErrorDomain);
-  XCTAssertEqual(observer.error.code, (NSInteger)14);
-  XCTAssertEqualObjects(observer.error.localizedDescription,
-    @"Recording stopped; the target's exit status couldn't be read.");
+  XCTAssertNil(observer.error);
+  XCTAssertNotNil(observer.trace);
+  XCTAssertTrue(observer.traceLoadedBeforeNotice);
+  XCTAssertEqualObjects(observer.notice, @"The target's exit status couldn't be read.");
   XCTAssertEqual(recorder.exitStatus, -1);
 }
 #endif

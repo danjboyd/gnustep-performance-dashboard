@@ -552,6 +552,12 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
   [_recorder requestLeakCheck];
 }
 
+- (void) recorder: (GSPRecorder *)recorder didFinishWithNotice: (NSString *)notice
+{
+  /* Normal completion has already attached the trace and updated the views. */
+  NSRunAlertPanel(@"Recording Complete", @"%@", @"OK", nil, nil, notice);
+}
+
 /* ------------------------------------------------------------------ */
 /* saving and exporting                                                */
 
