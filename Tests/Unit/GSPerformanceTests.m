@@ -4,6 +4,7 @@
 #import <XCTest/XCTest.h>
 #import <GSPerformance/GSPerformance.h>
 #import "TraceBuilder.h"
+#include <errno.h>
 
 /* Exercise path generation at an identical instant, without changing the
    process clock or requiring a recording target. */
@@ -12,7 +13,26 @@
                                     template: (NSString *)templateName
                                         date: (NSDate *)date;
 - (BOOL) prepareBundle: (NSError **)error;
+#if defined(__linux__)
+- (void) recordWaitFailure: (int)code;
+- (void) writeInfo: (BOOL)final;
+- (void) notifyFinished;
+#endif
 @end
+
+#if defined(__linux__)
+@interface RecorderCompletionObserver : NSObject <GSPRecorderDelegate>
+@property (nonatomic, strong) NSError *error;
+@property (nonatomic) NSUInteger completions;
+@end
+@implementation RecorderCompletionObserver
+- (void) recorder: (GSPRecorder *)recorder didFinishWithError: (NSError *)error
+{
+  self.error = error;
+  self.completions++;
+}
+@end
+#endif
 
 #define MS 1000000ull
 
@@ -912,6 +932,62 @@ child(GSPCallTreeNode *n, NSString *name)
       XCTAssertFalse([[NSFileManager defaultManager] fileExistsAtPath: path]);
     }
 }
+
+#if defined(__linux__)
+- (void) testWaitFailureKeepsErrnoAndUnavailableStatus
+{
+  for (NSNumber *code in @[@ECHILD, @EINVAL])
+    {
+      GSPRecordingOptions *options = [GSPRecordingOptions new];
+      options.executablePath = @"/bin/true";
+      options.outputPath = [NSTemporaryDirectory() stringByAppendingPathComponent:
+        [NSString stringWithFormat: @"pd-wait-error-%@.gstrace", [[NSUUID UUID] UUIDString]]];
+      [_bundles addObject: options.outputPath];
+      GSPRecorder *recorder = [[GSPRecorder alloc] initWithOptions: options];
+      XCTAssertTrue([recorder prepareBundle: NULL]);
+      [recorder recordWaitFailure: [code intValue]];
+      errno = EIO; /* Metadata must use the saved error, not a later errno. */
+      [recorder writeInfo: YES];
+      NSDictionary *info = [NSDictionary dictionaryWithContentsOfFile:
+        [recorder.tracePath stringByAppendingPathComponent: @"Info.plist"]];
+      XCTAssertEqualObjects([info objectForKey: @"WaitPIDErrno"], code);
+      XCTAssertEqualObjects([info objectForKey: @"WaitPIDErrorName"],
+        [code intValue] == ECHILD ? @"ECHILD" : @"EINVAL");
+      XCTAssertTrue([[info objectForKey: @"WaitPIDError"] length] > 0);
+      XCTAssertEqual([[info objectForKey: @"ExitStatus"] intValue], -1);
+      XCTAssertEqualObjects([info objectForKey: @"StopReason"], @"unknown");
+      XCTAssertEqual(recorder.exitStatus, -1);
+    }
+}
+
+- (void) testUnavailableExitStatusReportsErrorDespiteRecordedStream
+{
+  GSPRecordingOptions *options = [GSPRecordingOptions new];
+  options.executablePath = @"/bin/true";
+  options.outputPath = [NSTemporaryDirectory() stringByAppendingPathComponent:
+    [NSString stringWithFormat: @"pd-exit-warning-%@.gstrace", [[NSUUID UUID] UUIDString]]];
+  [_bundles addObject: options.outputPath];
+  GSPRecorder *recorder = [[GSPRecorder alloc] initWithOptions: options];
+  XCTAssertTrue([recorder prepareBundle: NULL]);
+  TraceBuilder *builder = named_builder();
+  [builder end: builder.start + MS];
+  NSString *source = [builder writeBundleNamed: @"exit-warning-stream" instruments: nil];
+  [_bundles addObject: source];
+  NSFileManager *fm = [NSFileManager defaultManager];
+  XCTAssertTrue([fm copyItemAtPath: [source stringByAppendingPathComponent: @"events-4242.bin"]
+                          toPath: [recorder.tracePath stringByAppendingPathComponent: @"events-4242.bin"] error: NULL]);
+  RecorderCompletionObserver *observer = [RecorderCompletionObserver new];
+  recorder.delegate = observer;
+  [recorder recordWaitFailure: ECHILD];
+  [recorder notifyFinished];
+  XCTAssertEqual(observer.completions, (NSUInteger)1);
+  XCTAssertEqualObjects(observer.error.domain, GSPRecorderErrorDomain);
+  XCTAssertEqual(observer.error.code, (NSInteger)14);
+  XCTAssertEqualObjects(observer.error.localizedDescription,
+    @"Recording stopped; the target's exit status couldn't be read.");
+  XCTAssertEqual(recorder.exitStatus, -1);
+}
+#endif
 
 - (void) testExistingExplicitRecordingPathIsPreserved
 {

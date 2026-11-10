@@ -70,6 +70,9 @@ make_error(NSInteger code, NSString *message)
   BOOL _finished;
   int _exitStatus;
   NSString *_stopReason;
+#if defined(__linux__)
+  int _waitErrno;
+#endif
   void *_process;   /* Windows process handle */
 }
 
@@ -537,6 +540,19 @@ under(NSString *value, NSString *root)
       [info setObject: [NSNumber numberWithInt: _exitStatus] forKey: @"ExitStatus"];
       if (_stopReason)
         [info setObject: _stopReason forKey: @"StopReason"];
+#if defined(__linux__)
+      if (_waitErrno != 0)
+        {
+          [info setObject: [NSNumber numberWithInt: _waitErrno] forKey: @"WaitPIDErrno"];
+          NSString *name = _waitErrno == ECHILD ? @"ECHILD"
+            : _waitErrno == EINVAL ? @"EINVAL" : nil;
+          if (name)
+            [info setObject: name forKey: @"WaitPIDErrorName"];
+          NSString *detail = [NSString stringWithUTF8String: strerror(_waitErrno)];
+          if (detail)
+            [info setObject: detail forKey: @"WaitPIDError"];
+        }
+#endif
     }
   else
     [info setObject: [NSNumber numberWithBool: YES] forKey: @"Recording"];
@@ -752,6 +768,15 @@ send_control(int pid, int request)
   [[NSData data] writeToFile: stop atomically: NO];
 }
 
+#if defined(__linux__)
+- (void) recordWaitFailure: (int)code
+{
+  _waitErrno = code;
+  if (!_options.attachPID)
+    _stopReason = @"unknown";
+}
+#endif
+
 - (void) monitor
 {
   @autoreleasepool
@@ -767,6 +792,7 @@ send_control(int pid, int request)
         {
           int status = 0;
           pid_t r = waitpid(waitFor, &status, WNOHANG);
+          int waitErrno = r < 0 ? errno : 0;
           if (r == waitFor)
             {
               _exitStatus = status;
@@ -790,11 +816,10 @@ send_control(int pid, int request)
 #endif
               break;
             }
-          if (r < 0 && errno != EINTR)
+          if (r < 0 && waitErrno != EINTR)
             {
 #if defined(__linux__)
-              if (!_options.attachPID)
-                _stopReason = @"unknown";
+              [self recordWaitFailure: waitErrno];
 #endif
               break;
             }
@@ -1254,6 +1279,10 @@ remote_agent_export(HANDLE process, NSString *agent, const char *name)
       ? @"The profiling helper did not record anything (authentication cancelled or perf_event unavailable)."
 #endif
       : @"The target did not record anything. It may have exited immediately, been statically linked, or ignored LD_PRELOAD.");
+#if defined(__linux__)
+  else if (!_options.attachPID && _exitStatus < 0)
+    error = make_error(14, @"Recording stopped; the target's exit status couldn't be read.");
+#endif
   if ([_delegate respondsToSelector: @selector(recorder:didFinishWithError:)])
     [_delegate recorder: self didFinishWithError: error];
 }
