@@ -8,6 +8,7 @@
 #import "PDAppController.h"
 #import "PDRecordPanel.h"
 #import "PDInvestigationWindowController.h"
+#import "PDRecordingStatus.h"
 
 @interface PDTraceWindowController () <PDTimelineDelegate, PDDetailControllerDelegate,
                                        GSPRecorderDelegate, NSWindowDelegate>
@@ -418,9 +419,17 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
         [_statusLabel setStringValue: [[_statusLabel stringValue] stringByAppendingFormat:
           @" · stopped: %@%@", trigger, _recorder.recordingError ? @" · incomplete" : @""]];
       NSMutableArray *details = [warnings mutableCopy] ?: [NSMutableArray array];
+      NSString *summary = [_statusLabel stringValue];
+      NSString *statusSummary = PDRecordingStatusSummary(_trace.info, summary);
+      if (![statusSummary isEqualToString: summary])
+        {
+          [_statusLabel setStringValue: statusSummary];
+          [details insertObject: statusSummary atIndex: 0];
+        }
       if (_recorder.recordingError) [details addObject: [_recorder.recordingError localizedDescription]];
       for (NSString *key in @[@"StopTrigger", @"StopReason", @"CaptureStatus", @"MaximumTraceBytes",
-                              @"MinimumFreeBytes", @"ObservedTraceBytes", @"ObservedAvailableBytes"])
+                              @"MinimumFreeBytes", @"ObservedTraceBytes", @"ObservedAvailableBytes",
+                              @"WaitPIDErrno", @"WaitPIDErrorName", @"WaitPIDError"])
         if ([_trace.info objectForKey: key])
           [details addObject: [NSString stringWithFormat: @"%@: %@", key, [_trace.info objectForKey: key]]];
       [_statusLabel setToolTip: [details componentsJoinedByString: @"\n"]];
@@ -570,12 +579,6 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
 - (void) checkForLeaksNow: (id)sender
 {
   [_recorder requestLeakCheck];
-}
-
-- (void) recorder: (GSPRecorder *)recorder didFinishWithNotice: (NSString *)notice
-{
-  /* Normal completion has already attached the trace and updated the views. */
-  NSRunAlertPanel(@"Recording Complete", @"%@", @"OK", nil, nil, notice);
 }
 
 /* ------------------------------------------------------------------ */

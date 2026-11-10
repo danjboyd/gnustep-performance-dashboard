@@ -4,6 +4,7 @@
 #import <XCTest/XCTest.h>
 #import <GSPerformance/GSPerformance.h>
 #import "TraceBuilder.h"
+#import "Dashboard/PDRecordingStatus.h"
 #include <errno.h>
 
 /* Exercise path generation at an identical instant, without changing the
@@ -1021,6 +1022,36 @@ child(GSPCallTreeNode *n, NSString *name)
   XCTAssertTrue(observer.traceLoadedBeforeNotice);
   XCTAssertEqualObjects(observer.notice, @"The target's exit status couldn't be read.");
   XCTAssertEqual(recorder.exitStatus, -1);
+}
+
+- (void) testUnavailableExitStatusUsesPersistedNonmodalSummary
+{
+  NSString *summary = @"Warning: incomplete recording · not saved";
+  XCTAssertEqualObjects(PDRecordingStatusSummary(nil, summary), summary);
+  XCTAssertEqualObjects(PDRecordingStatusSummary(@{}, summary), summary);
+  XCTAssertEqualObjects(PDRecordingStatusSummary(@{@"ExitStatus": @"unknown"}, summary), summary);
+  for (NSNumber *status in @[@0, @15, @768, @9])
+    XCTAssertEqualObjects(PDRecordingStatusSummary(@{@"ExitStatus": status}, summary), summary);
+
+  NSDictionary *info = @{@"ExitStatus": @-1, @"WaitPIDErrno": @ECHILD,
+                         @"CaptureStatus": @"complete"};
+  NSString *notice = PDRecordingStatusSummary(info, summary);
+  XCTAssertTrue([notice hasPrefix: @"Exit status unavailable · "]);
+  XCTAssertTrue([notice hasSuffix: summary]); /* Preserve other diagnostics. */
+  NSString *path = [NSTemporaryDirectory() stringByAppendingPathComponent:
+    [NSString stringWithFormat: @"pd-status-%@.plist", [[NSUUID UUID] UUIDString]]];
+  @try
+    {
+      XCTAssertTrue([info writeToFile: path atomically: YES]);
+      NSDictionary *reopened = [NSDictionary dictionaryWithContentsOfFile: path];
+      XCTAssertEqualObjects(PDRecordingStatusSummary(reopened, summary), notice);
+      XCTAssertEqualObjects([reopened objectForKey: @"WaitPIDErrno"], @ECHILD);
+      XCTAssertEqualObjects([reopened objectForKey: @"CaptureStatus"], @"complete");
+    }
+  @finally
+    {
+      [[NSFileManager defaultManager] removeItemAtPath: path error: NULL];
+    }
 }
 #endif
 
