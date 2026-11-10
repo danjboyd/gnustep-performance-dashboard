@@ -3,7 +3,7 @@
   "kind": "custom-toolchain-lock",
   "name": "performance-dashboard-v017-csd-draft",
   "based_on": "linux-amd64-clang / released CLI v0.1.5 source identities",
-  "install_domain": "SYSTEM",
+  "install_domain": "LOCAL",
   "container": {
     "recipe": "linux-amd64-clang",
     "apt_packages": [
@@ -141,6 +141,6 @@
     "existing_backend_make_args_not_expressible": [
       "ADDITIONAL_LDFLAGS=-Wl,--as-needed"
     ],
-    "note": "Per-component make_args is not supported by current builder schema/recipe; as-needed parity must be reviewed before build. Do not assume this metadata is executed. No libobjc2 patch or published input lock change."
+    "note": "Per-component make_args is not supported by current builder schema/recipe; as-needed parity must be reviewed before build. Do not assume this metadata is executed. No libobjc2 patch or published input lock change. LOCAL selected after source review: existing stager consumes Local/Library and Local/Tools; no stage-domain change."
   }
 }
