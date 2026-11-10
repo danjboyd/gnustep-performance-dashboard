@@ -27,6 +27,12 @@
 /* Write the target's stdout/stderr to <bundle>/output.txt instead of
    inheriting the recorder's (the app does this). */
 @property (nonatomic) BOOL captureOutput;
+#if defined(__linux__)
+/* GUI launch: let Foundation own child collection in a process that also uses
+   NSTask. Default NO preserves CLI posix_spawn/session/full wait status. The
+   task path uses gsp-launch, a separate session and wait-compatible status. */
+@property (nonatomic) BOOL useTaskLauncher;
+#endif
 @property (nonatomic) int attachPID;                    /* System Time Profiler */
 @property (nonatomic) unsigned perfFrequency;           /* Hz, attach only */
 @end
@@ -48,9 +54,11 @@
 @property (nonatomic, readonly) int pid;
 @property (nonatomic, readonly) BOOL isRecording;
 @property (nonatomic, readonly) NSDate *startDate;
-@property (nonatomic, readonly) int exitStatus;    /* wait status, -1 unknown */
-/* Linux launch outcome; nil for attach and other platforms.  The raw wait
-   status still distinguishes a normal exit from a signal. */
+@property (nonatomic, readonly) int exitStatus;    /* wait-compatible status, -1 unknown */
+/* Linux launch outcome; nil for attach and other platforms. With
+   useTaskLauncher, NSTask exposes exit vs signal but not the kernel core bit.
+   exitStatus retains WIFEXITED/WIFSIGNALED/WEXITSTATUS/WTERMSIG compatibility;
+   Info.plist records ExitStatusSource/ExitStatusCoreDumpKnown explicitly. */
 @property (nonatomic, readonly, copy) NSString *stopReason;
 /* Separate cause of stopping and capture validity; Linux launch only. */
 @property (nonatomic, readonly, copy) NSString *stopTrigger;

@@ -429,7 +429,8 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
       if (_recorder.recordingError) [details addObject: [_recorder.recordingError localizedDescription]];
       for (NSString *key in @[@"StopTrigger", @"StopReason", @"CaptureStatus", @"MaximumTraceBytes",
                               @"MinimumFreeBytes", @"ObservedTraceBytes", @"ObservedAvailableBytes",
-                              @"WaitPIDErrno", @"WaitPIDErrorName", @"WaitPIDError"])
+                              @"WaitPIDErrno", @"WaitPIDErrorName", @"WaitPIDError", @"ExitStatusSource",
+                              @"ExitStatusCoreDumpKnown", @"TargetSession"])
         if ([_trace.info objectForKey: key])
           [details addObject: [NSString stringWithFormat: @"%@: %@", key, [_trace.info objectForKey: key]]];
       [_statusLabel setToolTip: [details componentsJoinedByString: @"\n"]];
@@ -483,6 +484,9 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
     }
   _options.outputPath = [self temporaryTracePath];
   _options.captureOutput = YES;
+#if defined(__linux__)
+  _options.useTaskLauncher = YES;
+#endif
   _recorder = [[GSPRecorder alloc] initWithOptions: _options];
   _recorder.delegate = self;
   NSError *error = nil;

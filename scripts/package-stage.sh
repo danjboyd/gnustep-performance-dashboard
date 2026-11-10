@@ -75,7 +75,7 @@ set -u
 if [[ ! -x "$app_source/PerformanceDashboard" ]]; then
   "$repo_root/scripts/package-build.sh"
 fi
-for built in "$app_source/Resources/libgsperf-agent.so" "$app_source/Resources/gstrace-helper" \
+for built in "$app_source/Resources/gsp-launch" "$app_source/Resources/libgsperf-agent.so" "$app_source/Resources/gstrace-helper" \
              "$repo_root/GSPerformance/obj/libGSPerformance.so.0" "$repo_root/Tools/gstrace/obj/gstrace"; do
   require "$built" "scripts/package-build.sh"
 done
@@ -128,6 +128,7 @@ done
 cp "$repo_root/Tools/gstrace/obj/gstrace" "$runtime/bin/gstrace"
 # gstrace looks for the recording agent next to libGSPerformance.
 cp "$app_source/Resources/libgsperf-agent.so" "$runtime/lib/libgsperf-agent.so"
+cp "$app_source/Resources/gsp-launch" "$runtime/lib/gsp-launch"
 
 # The libraries themselves: this project's framework, then the GNUstep
 # install; remaining dependencies come from the host

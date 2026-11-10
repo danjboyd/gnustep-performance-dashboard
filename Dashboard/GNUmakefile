@@ -22,6 +22,7 @@ PerformanceDashboard_RESOURCE_FILES += ../Runtime/obj/gsperf-agent.dll
 else
 PerformanceDashboard_RESOURCE_FILES += \
   ../Runtime/obj/libgsperf-agent.so \
+  ../Runtime/obj/gsp-launch \
   ../Tools/gstrace-helper/gstrace-helper \
   ../Tools/gstrace-helper/org.gnustep.performancedashboard.policy
 endif

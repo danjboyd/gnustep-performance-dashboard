@@ -11,6 +11,7 @@ libGSPerformance_OBJC_FILES = \
   GSPAnalysis.m \
   GSPInstruments.m \
   GSPRecorder.m \
+  GSPChildTask.m \
   GSPExporter.m \
   GSPComparison.m
 
