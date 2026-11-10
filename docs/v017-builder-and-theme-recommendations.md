@@ -2,7 +2,10 @@
 
 Source/unit work only. No SDK/theme/container build or product runtime has
 been started. The lead decides these local build inputs before window A;
-its start-now message and the reviewed identities are still required.
+its start-now message and the reviewed identities are still required. The
+confirmed 2026-11-11 windows are15:00–16:00Z SDK/headless/package,
+16:00–16:10Z compositor and16:10–16:20Z GUI/TLS, cleanup included. Other
+approved workloads may overlap; these are not exclusive-CPU reservations.
 
 ## Recommended first review SDK
 
@@ -15,7 +18,7 @@ its start-now message and the reviewed identities are still required.
 | Backend linker flag | Explicitly accept omitting the old per-backend make argument ADDITIONAL_LDFLAGS=-Wl,--as-needed for the first unsigned review SDK | Current builder has no supported make-arg interface. This avoids an unreviewed builder extension or silently ignored key. It is a deliberate difference, not parity |
 | Linker acceptance | Inspect source linker commands and final DT_NEEDED closure against the retained backend; reject unexpected or unbundled dependencies | A successful compile does not settle the omission. Failure means revise the recipe, not borrow host libraries or overwrite prefix LDFLAGS |
 | Feature flags | Keep X11/cairo and the visible legacy exclusions for the first comparison; check generated configure macros/logs against CSD requirements | If CSD needs a disabled facility, stop and propose the exact lock change rather than accepting a no-corners fallback |
-| Resource limit | At most two compile jobs, new dedicated prefix/build directory, owned checkout and no overlapping recording study | The SDK build duration is unknown; request an extension/new window before the agreed cap |
+| Resource limit | At most two compile jobs, new dedicated prefix/build directory, owned checkout; record any concurrent approved workload | The SDK build duration is unknown; request an extension/new window before the agreed cap |
 
 Please review the first-SDK inventory policy and the deliberate linker-flag
 omission as distinct choices. Neither is a release approval. Capturing an image

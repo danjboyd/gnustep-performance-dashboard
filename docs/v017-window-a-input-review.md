@@ -122,8 +122,10 @@ The recorder input is c23c087; no combined candidate has been created.
 
 ## 6. Owned compositor window and reservation boundary
 
-The lead will request A+B, C and D for 2026-11-11, with separate start-now
-messages. None is started or booked by this document. For C, use a new owned
+The lead confirmed A+B15:00–16:00Z, C16:00–16:10Z and D16:10–16:20Z for
+2026-11-11, cleanup included (message22038). Inputs must first be reviewed,
+and the lead's15:00Z START mail is required. Nothing has started. Other
+approved work may overlap, so record load; no exclusive CPU or timing claim. For C, use a new owned
 Xvfb display with an owned compositing WM (`gnome-shell --x11` or
 `mutter --x11`) in its own private D-Bus session. Exact supported invocation
 and compositor capability are checks for that window, not assumptions here.

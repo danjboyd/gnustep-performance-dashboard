@@ -52,14 +52,17 @@ does not prove runtime semantics or an ABI-compatible custom SDK.
 
 ## Proposed shared-machine windows
 
-These are requests to schedule after review, not reservations. The lead plans
-A+B, C and D for 2026-11-11, with separate start-now messages. Today remains
-source-only. See `v017-window-a-input-review.md` for concrete unresolved input
+The lead confirmed these windows for 2026-11-11 in message22038: A+B
+15:00–16:00Z, C16:00–16:10Z and D16:10–16:20Z, cleanup included. Start still
+requires the lead's input review and explicit START mail at15:00Z; the booked
+time alone does not start work. Today remains source-only. See `v017-window-a-input-review.md` for concrete unresolved input
 checks, including the reviewed LOCAL correction of the earlier SYSTEM mismatch,
 explicit backend/theme binding and the static CSD capability assertion. The lead must
 announce each start after the previous owner releases the machine. A refusal
 or failed gate stops that phase; retain logs and do not silently change inputs.
-No competing recorder, application build or timing study may overlap a window.
+Other approved work may overlap; these windows do not promise exclusive CPU.
+Record actual load and do not make timing/performance claims. Coordinate any
+additional profiling study with the lead.
 
 | Window | Proposed cap | Work and prerequisites | End condition |
 | --- | --- | --- | --- |
