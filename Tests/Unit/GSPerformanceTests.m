@@ -913,9 +913,77 @@ child(GSPCallTreeNode *n, NSString *name)
   out = [GSPRecorder targetEnvironmentFrom: in additions:
     [NSDictionary dictionaryWithObject: @"/tmp/explicit.conf" forKey: @"GNUSTEP_CONFIG_FILE"]];
   XCTAssertEqualObjects([out objectForKey: @"GNUSTEP_CONFIG_FILE"], @"/tmp/explicit.conf");
-  [in setObject: @"PATH" forKey: @"GP_HOST_VARS"];
+  [in removeObjectForKey: @"GP_HOST_VARS"];
   out = [GSPRecorder targetEnvironmentFrom: in additions: empty];
   XCTAssertEqualObjects([out objectForKey: @"GNUSTEP_CONFIG_FILE"], @"/tmp/wrapper.conf");
+}
+
+- (void) testAppRunRestoresMountedAndDirectCallerEnvironment
+{
+  for (NSNumber *mounted in [NSArray arrayWithObjects: @NO, @YES, nil])
+    {
+      NSMutableDictionary *in = [NSMutableDictionary dictionaryWithObjectsAndKeys:
+        @"PATH\tLD_LIBRARY_PATH GNUSTEP_CONFIG_FILE FONTCONFIG_FILE GSTheme\n", @"GP_HOST_VARS",
+        @"  FONTCONFIG_FILE\tGSTheme\n", @"GP_HOST_UNSET",
+        @"/usr/local/bin:/usr/bin", @"GP_HOST_PATH",
+        @"/caller/lib", @"GP_HOST_LD_LIBRARY_PATH",
+        @"/caller/GNUstep.conf", @"GP_HOST_GNUSTEP_CONFIG_FILE",
+        @"stale font value", @"GP_HOST_FONTCONFIG_FILE",
+        @"", @"GP_HOST_GSTheme",
+        @"/caller", @"GP_HOST_PWD",
+        @"/image/bin:/usr/bin", @"PATH",
+        @"/image/lib", @"LD_LIBRARY_PATH",
+        @"/image/runtime.conf", @"GNUSTEP_CONFIG_FILE",
+        @"/image/fonts.conf", @"FONTCONFIG_FILE",
+        @"Adwaita", @"GSTheme",
+        @"1", @"PD_TARGET_GNUSTEP_CONFIG_FILE_SET",
+        @"/wrapper.conf", @"PD_TARGET_GNUSTEP_CONFIG_FILE",
+        @"/image.AppImage", @"APPIMAGE", @"/image.AppImage", @"ARGV0",
+        @"/old", @"OWD", @":4", @"DISPLAY", nil];
+      if ([mounted boolValue])
+        [in setObject: @"/image" forKey: @"APPDIR"];
+      NSDictionary *out = [GSPRecorder targetEnvironmentFrom: in additions: @{}];
+      XCTAssertEqualObjects([out objectForKey: @"PATH"], @"/usr/local/bin:/usr/bin");
+      XCTAssertEqualObjects([out objectForKey: @"LD_LIBRARY_PATH"], @"/caller/lib");
+      XCTAssertEqualObjects([out objectForKey: @"GNUSTEP_CONFIG_FILE"], @"/caller/GNUstep.conf");
+      XCTAssertEqualObjects([out objectForKey: @"DISPLAY"], @":4");
+      XCTAssertNil([out objectForKey: @"FONTCONFIG_FILE"]);
+      XCTAssertNil([out objectForKey: @"GSTheme"]);
+      for (NSString *key in out)
+        {
+          XCTAssertFalse([key hasPrefix: @"GP_HOST_"]);
+          XCTAssertFalse([key hasPrefix: @"PD_TARGET_"]);
+        }
+      for (NSString *key in @[@"APPDIR", @"APPIMAGE", @"ARGV0", @"OWD"])
+        XCTAssertNil([out objectForKey: key]);
+      [in setObject: @"" forKey: @"GP_HOST_GNUSTEP_CONFIG_FILE"];
+      out = [GSPRecorder targetEnvironmentFrom: in additions: @{}];
+      XCTAssertEqualObjects([out objectForKey: @"GNUSTEP_CONFIG_FILE"], @"");
+      [in setObject: @"GNUSTEP_CONFIG_FILE" forKey: @"GP_HOST_UNSET"];
+      out = [GSPRecorder targetEnvironmentFrom: in additions: @{}];
+      XCTAssertNil([out objectForKey: @"GNUSTEP_CONFIG_FILE"]);
+      out = [GSPRecorder targetEnvironmentFrom: in additions:
+        @{@"GNUSTEP_CONFIG_FILE": @"/explicit.conf"}];
+      XCTAssertEqualObjects([out objectForKey: @"GNUSTEP_CONFIG_FILE"], @"/explicit.conf");
+    }
+}
+
+- (void) testNativeRecorderEnvironmentAndWrapperFallback
+{
+  NSMutableDictionary *in = [NSMutableDictionary dictionaryWithObjectsAndKeys:
+    @"/native.conf", @"GNUSTEP_CONFIG_FILE", @"/native/bin:/usr/bin", @"PATH",
+    @"/native/lib", @"LD_LIBRARY_PATH", @"native", @"OTHER", nil];
+  NSDictionary *out = [GSPRecorder targetEnvironmentFrom: in additions: @{}];
+  XCTAssertEqualObjects(out, in);
+  [in setObject: @"1" forKey: @"PD_TARGET_GNUSTEP_CONFIG_FILE_SET"];
+  [in setObject: @"/wrapper.conf" forKey: @"PD_TARGET_GNUSTEP_CONFIG_FILE"];
+  out = [GSPRecorder targetEnvironmentFrom: in additions: @{}];
+  XCTAssertEqualObjects([out objectForKey: @"GNUSTEP_CONFIG_FILE"], @"/wrapper.conf");
+  XCTAssertNil([out objectForKey: @"PD_TARGET_GNUSTEP_CONFIG_FILE_SET"]);
+  XCTAssertNil([out objectForKey: @"PD_TARGET_GNUSTEP_CONFIG_FILE"]);
+  [in setObject: @"0" forKey: @"PD_TARGET_GNUSTEP_CONFIG_FILE_SET"];
+  out = [GSPRecorder targetEnvironmentFrom: in additions: @{}];
+  XCTAssertNil([out objectForKey: @"GNUSTEP_CONFIG_FILE"]);
 }
 
 - (void) testAppImageEnvironmentIsScrubbed

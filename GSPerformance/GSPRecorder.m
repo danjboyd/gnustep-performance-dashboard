@@ -375,6 +375,7 @@ under(NSString *value, NSString *root)
 {
   NSMutableDictionary *env = [environment mutableCopy];
   NSString *appdir = [env objectForKey: @"APPDIR"];
+  NSString *hostVariables = [environment objectForKey: @"GP_HOST_VARS"];
 
   if (appdir != nil)
     {
@@ -399,33 +400,46 @@ under(NSString *value, NSString *root)
           else if (under(value, appdir))
             [env removeObjectForKey: key];
         }
-      for (NSString *key in [NSArray arrayWithObjects: @"APPDIR", @"APPIMAGE",
-                             @"ARGV0", @"OWD", nil])
-        [env removeObjectForKey: key];
+    }
 
-      /* Packager v0.1.9+ preserves the first caller, including nested launches.
-         GP_HOST_UNSET wins over a saved empty value. Contract:
-         https://github.com/danjboyd/gnustep-packager/blob/57163d21e63734d5484e0eaab5cca1544ad01124/docs/launch-contract.md
-         Use that snapshot before the CLI wrapper's fallback snapshot. */
+  /* AppRun preserves the first caller, including nested launches. Its marker
+     is GP_HOST_VARS: direct AppRun does not export the inferred APPDIR.
+     Restore the saved values before applying GP_HOST_UNSET, as the packager's
+     host-tool wrappers do. APPDIR alone is the older AppImage path above. */
+  if (hostVariables != nil)
+    {
       NSCharacterSet *space = [NSCharacterSet whitespaceAndNewlineCharacterSet];
-      NSArray *hostVars = [[environment objectForKey: @"GP_HOST_VARS"]
-        componentsSeparatedByCharactersInSet: space];
+      NSArray *hostVars = [hostVariables componentsSeparatedByCharactersInSet: space];
       NSArray *hostUnset = [[environment objectForKey: @"GP_HOST_UNSET"]
         componentsSeparatedByCharactersInSet: space];
+      for (NSString *key in hostVars)
+        if ([key length] > 0)
+          {
+            NSString *value = [environment objectForKey:
+              [@"GP_HOST_" stringByAppendingString: key]];
+            if (value != nil)
+              [env setObject: value forKey: key];
+          }
+      for (NSString *key in hostUnset)
+        if ([key length] > 0)
+          [env removeObjectForKey: key];
+    }
+  else
+    {
+      /* Native/older launchers may only provide the CLI wrapper snapshot. */
       NSString *state = [environment objectForKey: @"PD_TARGET_GNUSTEP_CONFIG_FILE_SET"];
       NSString *config = [environment objectForKey: @"PD_TARGET_GNUSTEP_CONFIG_FILE"];
-      if ([hostVars containsObject: @"GNUSTEP_CONFIG_FILE"])
-        {
-          NSString *hostConfig = [environment objectForKey: @"GP_HOST_GNUSTEP_CONFIG_FILE"];
-          if ([hostUnset containsObject: @"GNUSTEP_CONFIG_FILE"] || hostConfig == nil)
-            [env removeObjectForKey: @"GNUSTEP_CONFIG_FILE"];
-          else
-            [env setObject: hostConfig forKey: @"GNUSTEP_CONFIG_FILE"];
-        }
-      else if ([state isEqual: @"1"] && config != nil)
+      if ([state isEqual: @"1"] && config != nil)
         [env setObject: config forKey: @"GNUSTEP_CONFIG_FILE"];
       else if ([state isEqual: @"0"])
         [env removeObjectForKey: @"GNUSTEP_CONFIG_FILE"];
+    }
+
+  if (appdir != nil || hostVariables != nil)
+    {
+      for (NSString *key in [NSArray arrayWithObjects: @"APPDIR", @"APPIMAGE",
+                             @"ARGV0", @"OWD", nil])
+        [env removeObjectForKey: key];
       /* A target that is another AppImage must capture its own caller. */
       for (NSString *key in [env allKeys])
         if ([key hasPrefix: @"GP_HOST_"])
