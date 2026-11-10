@@ -79,7 +79,11 @@ unversioned package names alone are not bit-reproducible inputs.
 The draft selects the builder's supported `SYSTEM` install domain, because the
 packager consumes a relocatable GNUstep domain. Verify that headers, libraries,
 backend bundle, tools and GNUstep configuration all remain discoverable after
-relocation. This differs from assuming the official SDK's default domain.
+relocation. Source inspection after this draft found that the current PD
+stager hardcodes Local/Library and Local/Tools; it cannot consume this SYSTEM
+selection unchanged. The input-review checklist recommends reviewing LOCAL
+for the smallest layout-compatible candidate, or explicit domain-aware stage
+changes. The draft lock remains unchanged pending that review.
 
 The backend explicitly selects X11/cairo with the base's supported
 `--enable-server=x11` and `--enable-graphics=cairo` options. It retains the

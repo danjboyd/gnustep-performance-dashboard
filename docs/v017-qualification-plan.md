@@ -52,7 +52,10 @@ does not prove runtime semantics or an ABI-compatible custom SDK.
 
 ## Proposed shared-machine windows
 
-These are requests to schedule after review, not reservations. The lead must
+These are requests to schedule after review, not reservations. The lead plans
+A+B, C and D for 2026-11-11, with separate start-now messages. Today remains
+source-only. See `v017-window-a-input-review.md` for concrete unresolved input
+checks, including the confirmed draft SYSTEM/current-stager LOCAL mismatch. The lead must
 announce each start after the previous owner releases the machine. A refusal
 or failed gate stops that phase; retain logs and do not silently change inputs.
 No competing recorder, application build or timing study may overlap a window.
@@ -61,7 +64,7 @@ No competing recorder, application build or timing study may overlap a window.
 | --- | --- | --- | --- |
 | A: custom SDK | Initial budget 45 minutes, at most 2 build jobs | Exact reviewed lock, builder/container pins and fresh private prefix; capture configure/build/provenance logs; no GUI or performance study | Report completed components or failed gate; do not overrun without lead rescheduling |
 | B: headless/package | 15 minutes including cleanup | New SDK accepted; combined source reviewed; unit/regression, bounded capture/config tests, full unsigned AppImage assembly and payload/hash tie-out | Package and receipts or first failing gate; owned recording targets gone |
-| C: compositor visuals | 10 minutes including cleanup | Final payload from B; confirm owned X11+WM+compositor can supply ARGB/shadows and screenshots before visual acceptance | Adwaita/Sombre matrix evidence or explicit unsupported visual gate; owned display stack gone |
+| C: compositor visuals | 10 minutes including cleanup | Final payload from B; new owned Xvfb plus gnome-shell --x11 or mutter --x11 in private D-Bus; inspect _NET_SUPPORTED for _GTK_FRAME_EXTENTS and actual client properties before windowed-theme screenshots | Adwaita/Sombre matrix evidence or explicit unsupported visual gate; owned display stack gone |
 | D: GUI lifecycle/TLS | 10 minutes including cleanup | Exact same payload; fresh and retained private homes; finite target outcome list and strict TLS controls | Saved/reopened outcomes and TLS results; all owned processes/listeners gone |
 
 If a phase cannot fit the cap, split its finite case list and ask the lead for
