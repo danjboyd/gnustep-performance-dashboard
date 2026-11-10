@@ -38,6 +38,17 @@ manifest=packaging/package.manifest.json
 die() { echo "package-linux: $*" >&2; exit 1; }
 warn() { echo "package-linux: warning: $*" >&2; }
 
+# This entry point's provenance writer still describes the managed recipe.
+# Refuse custom SDK/CSD input before fetch/build/stage/runtime, rather than
+# attach the old source/backend identity to a custom AppImage. Staging review
+# through package-stage.sh remains available with its strict custom inputs.
+if [[ -n "${PD_CSD_TOOLCHAIN_LOCK:-}" ]]; then
+  die "custom CSD AppImage provenance is not wired; refusing before packaging"
+fi
+if [[ -n "${GNUSTEP_CLI_ROOT:-}" && -f "$GNUSTEP_CLI_ROOT/gnustep-toolchain-provenance.json" ]]; then
+  die "custom SDK AppImage provenance is not wired; refusing before packaging"
+fi
+
 [ "$release" = 0 ] || [ -z "$(git status --porcelain)" ] || die "a release builds only from a clean tree"
 if [ "$release" = 1 ]; then
   [ -n "${PD_VERIFIED_TOOLCHAIN_CACHE:-}" ] || die "release builds use ci-release-linux.sh in a clean Debian 13 build home"

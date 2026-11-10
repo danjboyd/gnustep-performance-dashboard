@@ -135,6 +135,24 @@ class CSDChecks(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("requires explicit PD_CSD_TOOLCHAIN_LOCK", result.stderr)
 
+    def test_appimage_entry_refuses_custom_identity_before_any_build(self):
+        # Both explicit CSD mode and a custom prefix must fail before input
+        # fetching, packager invocation or creation/removal of dist outputs.
+        sdk = self.root / "sdk"
+        sdk.mkdir()
+        (sdk / "gnustep-toolchain-provenance.json").write_text("{}")
+        for variable in ("PD_CSD_TOOLCHAIN_LOCK", "GNUSTEP_CLI_ROOT"):
+            with self.subTest(variable=variable):
+                env = {key: value for key, value in os.environ.items()
+                       if not key.startswith("PD_CSD_") and key != "GNUSTEP_CLI_ROOT"}
+                env[variable] = str(sdk) if variable == "GNUSTEP_CLI_ROOT" else "reviewed-lock.json"
+                env["GNUSTEP_PACKAGER"] = "/must-not-be-accessed"
+                result = subprocess.run(["bash", str(ROOT / "scripts/package-linux.sh")],
+                                        env=env, text=True, capture_output=True, timeout=3)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("AppImage provenance is not wired; refusing before packaging", result.stderr)
+                self.assertNotIn("pinned-checkout", result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
