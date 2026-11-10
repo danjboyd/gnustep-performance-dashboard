@@ -24,6 +24,11 @@
 #  include <sys/utsname.h>
 #  include <sys/wait.h>
 #  include <sys/xattr.h>
+#  include <sys/socket.h>
+#  include <sys/statvfs.h>
+#  include <dirent.h>
+#  include "../Runtime/include/GSPerformance/gsp_capture.h"
+#  include "../Runtime/include/GSPerformance/gsp_format.h"
 #endif
 
 NSString * const GSPRecorderErrorDomain = @"GSPRecorderErrorDomain";
@@ -52,9 +57,17 @@ make_error(NSInteger code, NSString *message)
       _environment = [NSDictionary dictionary];
       _instrumentIdentifiers = [NSArray array];
       _perfFrequency = 1000;
+      _automaticMinimumFreeSpace = YES;
     }
   return self;
 }
+@end
+
+@interface GSPRecorder ()
+#if defined(__linux__)
+- (BOOL) captureFilesystemAtDescriptor: (int)fd capacity: (uint64_t *)capacity
+                            available: (uint64_t *)available error: (int *)code;
+#endif
 @end
 
 @implementation GSPRecorder
@@ -70,6 +83,16 @@ make_error(NSInteger code, NSString *message)
   BOOL _finished;
   int _exitStatus;
   NSString *_stopReason;
+  NSString *_stopTrigger;
+  NSError *_recordingError;
+  uint64_t _effectiveMinimumFreeBytes;
+  uint64_t _observedTraceBytes;
+  uint64_t _observedAvailableBytes;
+  BOOL _captureComplete;
+#if defined(__linux__)
+  int _statusFD;
+  NSMutableDictionary *_completedStreams;
+#endif
   void *_process;   /* Windows process handle */
 }
 
@@ -80,6 +103,10 @@ make_error(NSInteger code, NSString *message)
       _options = options;
       _done = [NSCondition new];
       _exitStatus = -1;
+#if defined(__linux__)
+      _statusFD = -1;
+      _completedStreams = [NSMutableDictionary dictionary];
+#endif
     }
   return self;
 }
@@ -90,6 +117,9 @@ make_error(NSInteger code, NSString *message)
 - (NSDate *) startDate { return _startDate; }
 - (int) exitStatus { return _exitStatus; }
 - (NSString *) stopReason { return _stopReason; }
+- (NSString *) stopTrigger { return _stopTrigger; }
+- (uint64_t) effectiveMinimumFreeBytes { return _effectiveMinimumFreeBytes; }
+- (NSError *) recordingError { return _recordingError; }
 - (NSString *) tracePath { return _tracePath; }
 
 /* ------------------------------------------------------------------ */
@@ -511,6 +541,19 @@ under(NSString *value, NSString *root)
       [info setObject: [NSNumber numberWithInt: _exitStatus] forKey: @"ExitStatus"];
       if (_stopReason)
         [info setObject: _stopReason forKey: @"StopReason"];
+#if defined(__linux__)
+      if (!_options.attachPID)
+        {
+          [info setObject: _stopTrigger ?: @"exited" forKey: @"StopTrigger"];
+          [info setObject: _captureComplete ? @"complete" : @"incomplete"
+                   forKey: @"CaptureStatus"];
+          if (_recordingError)
+            {
+              [info setObject: [_recordingError localizedDescription] forKey: @"CaptureError"];
+              [info setObject: @([_recordingError code]) forKey: @"CaptureErrorCode"];
+            }
+        }
+#endif
     }
   else
     [info setObject: [NSNumber numberWithBool: YES] forKey: @"Recording"];
@@ -522,8 +565,36 @@ under(NSString *value, NSString *root)
   [info setObject: [NSNumber numberWithUnsignedInt: _options.sampleIntervalMicroseconds
                     ? _options.sampleIntervalMicroseconds : 1000]
            forKey: @"SampleIntervalMicroseconds"];
+#if defined(__linux__)
+  if (!_options.attachPID)
+    {
+      [info setObject: @(_options.maximumTraceBytes) forKey: @"MaximumTraceBytes"];
+      [info setObject: @(_options.timeLimit) forKey: @"TimeLimitSeconds"];
+      [info setObject: @(_effectiveMinimumFreeBytes) forKey: @"MinimumFreeBytes"];
+      [info setObject: @(_options.automaticMinimumFreeSpace) forKey: @"AutomaticMinimumFreeSpace"];
+      [info setObject: @(_observedTraceBytes) forKey: @"ObservedTraceBytes"];
+      if (_effectiveMinimumFreeBytes)
+        [info setObject: @(_observedAvailableBytes) forKey: @"ObservedAvailableBytes"];
+    }
+#endif
+#if defined(__linux__)
+  NSError *writeError = nil;
+  NSData *data = [NSPropertyListSerialization dataWithPropertyList: info
+    format: NSPropertyListGNUstepFormat options: 0 error: &writeError];
+  if (!data || ![data writeToFile: [_tracePath stringByAppendingPathComponent: @"Info.plist"]
+                         options: NSDataWritingAtomic error: &writeError])
+    {
+      if (!_options.attachPID)
+        {
+          _captureComplete = NO;
+          if (!_recordingError)
+            _recordingError = writeError ?: make_error(EIO, @"Cannot write trace metadata.");
+        }
+    }
+#else
   [info writeToFile: [_tracePath stringByAppendingPathComponent: @"Info.plist"]
          atomically: YES];
+#endif
 }
 
 #if !defined(_WIN32)
@@ -548,6 +619,184 @@ free_c_strings(char **list)
   free(list);
 }
 
+#if defined(__linux__)
+/* Count logical bytes, without following symlinks or accepting foreign-owned
+   entries. No file content is read while a capture is running. */
+static BOOL
+bundle_bytes(int fd, unsigned depth, uint64_t *total)
+{
+  if (depth > 16) { errno = ELOOP; return NO; }
+  int copy = dup(fd);
+  if (copy < 0) return NO;
+  DIR *directory = fdopendir(copy);
+  if (!directory) { int saved = errno; close(copy); errno = saved; return NO; }
+  BOOL ok = YES;
+  struct dirent *entry;
+  for (;;)
+    {
+      errno = 0;
+      entry = readdir(directory);
+      if (!entry) { if (errno) ok = NO; break; }
+      if (!strcmp(entry->d_name, ".") || !strcmp(entry->d_name, "..")) continue;
+      struct stat st;
+      if (fstatat(fd, entry->d_name, &st, AT_SYMLINK_NOFOLLOW) != 0)
+        {
+          if (errno == ENOENT) continue; /* .next publication / atomic metadata */
+          ok = NO; break;
+        }
+      if (st.st_uid != geteuid()) { errno = EPERM; ok = NO; break; }
+      if (S_ISREG(st.st_mode))
+        {
+          if (st.st_size < 0 || *total > UINT64_MAX - (uint64_t)st.st_size)
+            { errno = EOVERFLOW; ok = NO; break; }
+          *total += (uint64_t)st.st_size;
+        }
+      else if (S_ISDIR(st.st_mode))
+        {
+          int child = openat(fd, entry->d_name, O_DIRECTORY | O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+          if (child < 0) { ok = NO; break; }
+          ok = bundle_bytes(child, depth + 1, total);
+          int saved = errno;
+          close(child);
+          errno = saved;
+          if (!ok) break;
+        }
+    }
+  int saved = errno;
+  closedir(directory);
+  errno = saved;
+  return ok;
+}
+
+- (void) setStopTriggerOnce: (NSString *)trigger
+{
+  @synchronized(self)
+    {
+      if (!_stopTrigger) _stopTrigger = [trigger copy];
+    }
+}
+
+- (void) captureErrorForOperation: (NSString *)operation code: (int)code
+{
+  if (!_recordingError)
+    _recordingError = make_error(code, [NSString stringWithFormat:
+      @"Recording incomplete: %@ failed (%d: %s).", operation, code, strerror(code)]);
+  _captureComplete = NO;
+}
+
+- (BOOL) measureCapture: (BOOL)preflight countFiles: (BOOL)countFiles
+{
+  int fd = open([_tracePath fileSystemRepresentation],
+                O_DIRECTORY | O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+  if (fd < 0)
+    { [self captureErrorForOperation: @"open trace directory" code: errno]; return NO; }
+  BOOL ok = YES;
+  if (_options.automaticMinimumFreeSpace || _options.minimumFreeBytes)
+    {
+      uint64_t capacity, available;
+      int code = 0;
+      if (![self captureFilesystemAtDescriptor: fd capacity: &capacity available: &available error: &code])
+        { [self captureErrorForOperation: @"statvfs" code: code]; ok = NO; }
+      else
+        {
+          _observedAvailableBytes = available;
+          if (preflight)
+            _effectiveMinimumFreeBytes = _options.automaticMinimumFreeSpace
+              ? gsp_default_free_floor(capacity) : _options.minimumFreeBytes;
+        }
+    }
+  if (ok && countFiles)
+    {
+      uint64_t total = 0;
+      if (!bundle_bytes(fd, 0, &total))
+        { [self captureErrorForOperation: @"measure trace files" code: errno]; ok = NO; }
+      else _observedTraceBytes = total;
+    }
+  close(fd);
+  return ok;
+}
+
+/* Kept separate so a private test subclass can supply a deterministic
+   capacity/free-space crossing without filling a filesystem or adding a
+   product environment-variable override. */
+- (BOOL) captureFilesystemAtDescriptor: (int)fd capacity: (uint64_t *)capacity
+                            available: (uint64_t *)available error: (int *)code
+{
+  struct statvfs fs;
+  if (fstatvfs(fd, &fs) != 0) { *code = errno; return NO; }
+  if (!gsp_block_bytes(fs.f_blocks, fs.f_frsize, capacity)
+      || !gsp_block_bytes(fs.f_bavail, fs.f_frsize, available))
+    { *code = EOVERFLOW; return NO; }
+  return YES;
+}
+
+- (void) readWriterStatus
+{
+  /* Each datagram comes through the endpoint passed only to our spawned
+     target. PID values describe streams, never select a process to kill. */
+  for (unsigned i = 0; i < 256 && _statusFD >= 0; i++)
+    {
+      gsp_writer_status status;
+      ssize_t n = recv(_statusFD, &status, sizeof(status), MSG_DONTWAIT | MSG_TRUNC);
+      if (n < 0 && errno == EINTR) { i--; continue; }
+      if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) break;
+      if (n < 0)
+        { [self captureErrorForOperation: @"writer status receive" code: errno]; break; }
+      if (n != sizeof(status) || status.magic != GSP_WRITER_STATUS_MAGIC
+          || status.version != GSP_WRITER_STATUS_VERSION || !status.pid
+          || status.pid > INT32_MAX || status.reserved
+          || status.operation > GSP_OUTPUT_THREAD || status.error < 0
+          || (!status.error && status.operation != GSP_OUTPUT_COMPLETE)
+          || (status.error && status.operation == GSP_OUTPUT_COMPLETE))
+        { [self captureErrorForOperation: @"writer status framing" code: EPROTO]; continue; }
+      if (status.error)
+        {
+          NSArray *operations = @[@"complete", @"open", @"write", @"fsync", @"close",
+                                   @"rename", @"success marker", @"writer thread"];
+          [self captureErrorForOperation: [NSString stringWithFormat: @"agent %@ (pid %u)",
+            [operations objectAtIndex: status.operation], status.pid] code: status.error];
+        }
+      else
+        [_completedStreams setObject: [NSData dataWithBytes: &status length: sizeof(status)]
+                              forKey: @(status.pid)];
+    }
+}
+
+- (void) validateCompletedStreams
+{
+  NSUInteger streams = 0;
+  for (NSString *name in [[NSFileManager defaultManager]
+                          contentsOfDirectoryAtPath: _tracePath error: NULL])
+    {
+      if (![name hasPrefix: @"events-"] || ![name hasSuffix: @".bin"]) continue;
+      streams++;
+      NSString *path = [_tracePath stringByAppendingPathComponent: name];
+      int fd = open([path fileSystemRepresentation], O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+      struct stat st;
+      gsp_file_header header;
+      gsp_record end;
+      gsp_writer_status status = {0};
+      BOOL valid = fd >= 0 && fstat(fd, &st) == 0 && S_ISREG(st.st_mode)
+        && st.st_uid == geteuid() && st.st_size >= sizeof(header) + sizeof(end)
+        && pread(fd, &header, sizeof(header), 0) == sizeof(header)
+        && !memcmp(header.magic, GSP_MAGIC, sizeof(header.magic))
+        && header.version == GSP_FORMAT_VERSION && header.header_size == sizeof(header)
+        && pread(fd, &end, sizeof(end), st.st_size - sizeof(end)) == sizeof(end)
+        && end.type == GSP_REC_END && end.size == sizeof(end);
+      NSData *receipt = valid ? [_completedStreams objectForKey: @(header.pid)] : nil;
+      if (receipt) [receipt getBytes: &status length: sizeof(status)];
+      valid = valid && receipt && status.epoch == header.start_ns
+        && status.bytes == (uint64_t)st.st_size && [self doneFileExistsFor: header.pid];
+      if (fd >= 0) close(fd);
+      if (!valid)
+        [self captureErrorForOperation: [@"verify completed stream " stringByAppendingString: name]
+                                 code: EIO];
+    }
+  if (!streams) [self captureErrorForOperation: @"verify recorded stream" code: EIO];
+  _captureComplete = !_recordingError;
+}
+#endif
+
 - (BOOL) launch: (NSError **)error
 {
   NSString *problem = [GSPRecorder preloadProblemForExecutable: _options.executablePath];
@@ -566,6 +815,26 @@ free_c_strings(char **list)
     }
   agent = [GSPRecorder stableAgentPath: agent];
 
+#if defined(__linux__)
+  int statusPair[2];
+  if (socketpair(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0, statusPair) != 0)
+    {
+      if (error) *error = make_error(errno, @"Cannot create recorder status channel.");
+      return NO;
+    }
+  /* Reserve an unused descriptor while building the spawn actions. dup2 in
+     the child deliberately clears CLOEXEC so wrapper execs keep the channel. */
+  int childStatus = fcntl(statusPair[1], F_DUPFD_CLOEXEC, 64);
+  if (childStatus < 0)
+    {
+      int saved = errno;
+      close(statusPair[0]); close(statusPair[1]);
+      if (error) *error = make_error(saved, @"Cannot reserve recorder status descriptor.");
+      return NO;
+    }
+  _statusFD = statusPair[0];
+#endif
+
   NSMutableDictionary *add = [NSMutableDictionary dictionary];
   [add addEntriesFromDictionary: GSPAgentEnvironmentForInstruments(
      _options.instrumentIdentifiers, _options.sampleIntervalMicroseconds,
@@ -579,6 +848,9 @@ free_c_strings(char **list)
   /* The agent goes first in LD_PRELOAD, before any the user sets (--env)
      or the environment has, rather than being replaced by them.  */
   [env addEntriesFromDictionary: _options.environment];
+#if defined(__linux__)
+  [env setObject: [NSString stringWithFormat: @"%d", childStatus] forKey: @"GSP_STATUS_FD"];
+#endif
   NSString *preload = [env objectForKey: @"LD_PRELOAD"];
   [env setObject: [preload length] ? [NSString stringWithFormat: @"%@:%@", agent, preload]
                                    : agent
@@ -599,6 +871,13 @@ free_c_strings(char **list)
   sigemptyset(&none);
   posix_spawnattr_setsigmask(&attr, &none);
   posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSIGMASK);
+#if defined(__linux__)
+  int statusActionError = posix_spawn_file_actions_adddup2(&actions, statusPair[1], childStatus);
+  if (!statusActionError)
+    statusActionError = posix_spawn_file_actions_addclose(&actions, statusPair[0]);
+  if (!statusActionError)
+    statusActionError = posix_spawn_file_actions_addclose(&actions, statusPair[1]);
+#endif
   if (_options.captureOutput)
     {
       NSString *out = [_tracePath stringByAppendingPathComponent: @"output.txt"];
@@ -612,13 +891,25 @@ free_c_strings(char **list)
       [_options.workingDirectory fileSystemRepresentation]);
 
   _startDate = [NSDate date];
-  int rc = posix_spawn(&_pid, cargv[0], &actions, &attr, cargv, cenv);
+  int rc;
+#if defined(__linux__)
+  rc = statusActionError ? statusActionError
+    : posix_spawn(&_pid, cargv[0], &actions, &attr, cargv, cenv);
+  close(statusPair[1]);
+  close(childStatus);
+#else
+  rc = posix_spawn(&_pid, cargv[0], &actions, &attr, cargv, cenv);
+#endif
   posix_spawn_file_actions_destroy(&actions);
   posix_spawnattr_destroy(&attr);
   free_c_strings(cargv);
   free_c_strings(cenv);
   if (rc != 0)
     {
+#if defined(__linux__)
+      close(_statusFD);
+      _statusFD = -1;
+#endif
       if (error)
         *error = make_error(4, [NSString stringWithFormat: @"Cannot launch %@: %s",
                                 _options.executablePath, strerror(rc)]);
@@ -672,8 +963,34 @@ free_c_strings(char **list)
 
 - (BOOL) start: (NSError **)error
 {
+#if defined(__linux__)
+  if ((_options.followChildren && _options.maximumTraceBytes)
+      || (_options.attachPID && (_options.maximumTraceBytes
+          || !_options.automaticMinimumFreeSpace || _options.minimumFreeBytes)))
+    {
+      if (error) *error = make_error(EINVAL,
+        @"Size thresholds with followed children, and explicit storage thresholds when attaching, are not qualified yet.");
+      return NO;
+    }
+#endif
   if (![self prepareBundle: error])
     return NO;
+#if defined(__linux__)
+  if (!_options.attachPID)
+    {
+      BOOL measured = [self measureCapture: YES countFiles: NO];
+      if (!measured || (_effectiveMinimumFreeBytes
+                       && _observedAvailableBytes < _effectiveMinimumFreeBytes))
+        {
+          if (error) *error = _recordingError ?: make_error(ENOSPC, [NSString stringWithFormat:
+            @"Free space %llu bytes is below recording floor %llu bytes; use --min-free 0 to disable or --min-free <size> to override.",
+            (unsigned long long)_observedAvailableBytes,
+            (unsigned long long)_effectiveMinimumFreeBytes]);
+          [[NSFileManager defaultManager] removeItemAtPath: _tracePath error: NULL];
+          return NO;
+        }
+    }
+#endif
   BOOL ok = _options.attachPID ? [self attach: error] : [self launch: error];
   if (!ok)
     {
@@ -739,6 +1056,13 @@ send_control(int pid, int request)
 
       for (;;)
         {
+#if defined(__linux__)
+          if (!_options.attachPID)
+            {
+              [self readWriterStatus];
+              if (_recordingError) [self setStopTriggerOnce: @"error"];
+            }
+#endif
           int status = 0;
           pid_t r = waitpid(waitFor, &status, WNOHANG);
           if (r == waitFor)
@@ -768,13 +1092,38 @@ send_control(int pid, int request)
             {
 #if defined(__linux__)
               if (!_options.attachPID)
-                _stopReason = @"unknown";
+                {
+                  _stopReason = @"unknown";
+                  [self captureErrorForOperation: @"waitpid" code: errno];
+                  [self setStopTriggerOnce: @"error"];
+                }
 #endif
               break;
             }
 
           BOOL wantStop = _stopRequested
             || (deadline && [deadline timeIntervalSinceNow] <= 0);
+#if defined(__linux__)
+          if (!_options.attachPID)
+            {
+              if (_stopRequested) [self setStopTriggerOnce: @"user"];
+              if (deadline && [deadline timeIntervalSinceNow] <= 0)
+                [self setStopTriggerOnce: @"time-limit"];
+              if (!stopSent)
+                {
+                  if ((_effectiveMinimumFreeBytes || _options.maximumTraceBytes)
+                      && ![self measureCapture: NO countFiles: _options.maximumTraceBytes != 0])
+                    [self setStopTriggerOnce: @"error"];
+                  else if (_effectiveMinimumFreeBytes
+                           && _observedAvailableBytes < _effectiveMinimumFreeBytes)
+                    [self setStopTriggerOnce: @"min-free"];
+                  else if (_options.maximumTraceBytes
+                           && _observedTraceBytes >= _options.maximumTraceBytes)
+                    [self setStopTriggerOnce: @"max-size"];
+                }
+              wantStop = wantStop || _stopTrigger != nil || _recordingError != nil;
+            }
+#endif
           if (wantStop && !stopSent)
             {
               stopSent = YES;
@@ -795,7 +1144,11 @@ send_control(int pid, int request)
                  period for long leak scans) end the target.  */
               double waited = -[stopSentAt timeIntervalSinceNow];
               BOOL flushed = [self doneFileExistsFor: _pid];
-              if (!termSent && (flushed || waited > 60))
+              if (!termSent && (flushed || waited > 60
+#if defined(__linux__)
+                                || (_recordingError && waited > 1)
+#endif
+                                ))
                 {
                   termSent = YES;
                   kill(_pid, SIGTERM);
@@ -819,6 +1172,17 @@ send_control(int pid, int request)
           usleep(50000);
         }
 
+#if defined(__linux__)
+      if (!_options.attachPID)
+        {
+          [self readWriterStatus];
+          [self setStopTriggerOnce: _recordingError ? @"error" : @"exited"];
+          [self measureCapture: NO countFiles: YES];
+          [self validateCompletedStreams];
+          close(_statusFD);
+          _statusFD = -1;
+        }
+#endif
       _recording = NO;
       [self writeInfo: YES];
       [_done lock];
@@ -1214,13 +1578,13 @@ remote_agent_export(HANDLE process, NSString *agent, const char *name)
 
 - (void) notifyFinished
 {
-  NSError *error = nil;
+  NSError *error = _recordingError;
   NSString *anyStream = nil;
   for (NSString *n in [[NSFileManager defaultManager]
                         contentsOfDirectoryAtPath: _tracePath error: NULL])
     if ([n hasPrefix: @"events-"] && [n hasSuffix: @".bin"])
       anyStream = n;
-  if (anyStream == nil)
+  if (anyStream == nil && !error)
     error = make_error(7, _options.attachPID
 #if defined(_WIN32)
       ? @"The agent did not record anything in the attached process."
@@ -1234,6 +1598,9 @@ remote_agent_export(HANDLE process, NSString *agent, const char *name)
 
 - (void) stop
 {
+#if defined(__linux__)
+  if (!_options.attachPID) [self setStopTriggerOnce: @"user"];
+#endif
   _stopRequested = YES;
 }
 

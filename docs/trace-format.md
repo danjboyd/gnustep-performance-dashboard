@@ -6,12 +6,35 @@ A trace is a directory bundle, `Name.gstrace/`:
 |---|---|---|
 | `Info.plist` | recorder | template, instruments, target path and arguments, `TargetPID`, start/end dates, exit status, host |
 | `events-<pid>.bin` | agent or helper | the event stream of one process |
-| `events-<pid>.done` | agent or helper | empty; the stream is complete |
+| `events-<pid>.done` | agent or helper | empty; writer-ready marker, not sufficient proof of capture completion |
 | `output.txt` | recorder (app) | the target's stdout/stderr |
 | `symbols-<pid>.plist` | `gstrace symbolicate --embed` | address (hex) → symbol name, for reading the trace elsewhere |
 
 The authoritative definition is
 [`Runtime/include/GSPerformance/gsp_format.h`](../Runtime/include/GSPerformance/gsp_format.h).
+
+For Linux launch recordings, `Info.plist` separates `StopTrigger` (`exited`,
+`time-limit`, `user`, `max-size`, `min-free`, `error`) from `StopReason`
+(the child's exit disposition) and `CaptureStatus` (`complete`, `incomplete`).
+The first stop trigger is retained even if a later error makes the capture
+incomplete. `CaptureError` and `CaptureErrorCode` describe the first recording
+failure. A trace from an older recorder may lack these fields.
+
+`MaximumTraceBytes`, `TimeLimitSeconds`, `MinimumFreeBytes` and
+`AutomaticMinimumFreeSpace` record the configured/effective policy.
+`ObservedTraceBytes` counts regular bundle files at the last measurement,
+before the final metadata rewrite. `ObservedAvailableBytes` is the filesystem's
+available-to-this-user byte count when the free-space floor is enabled.
+The recorder does not follow symlinks when counting files.
+
+The Linux agent reports its first I/O error and its successful completion
+through a private inherited datagram endpoint, independently of the trace
+filesystem. Completion requires a matching stream epoch and byte count,
+the final END record, the writer's successful sync/close status and its marker.
+An END alone does not establish that a later fsync or close succeeded.
+If writing metadata itself fails, the recorder still reports the error to
+its caller; retained initial metadata is not evidence of final completion.
+The error protocol does not add or change on-disk trace record types.
 
 ## Streams
 

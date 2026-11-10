@@ -410,6 +410,22 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
         _recorder.isRecording ? @"Recording · " : @"", summary,
         _temporary ? @" · not saved" : @""]];
     }
+#if defined(__linux__)
+  if (!_recorder.isRecording)
+    {
+      NSString *trigger = _recorder.stopTrigger ?: [_trace.info objectForKey: @"StopTrigger"];
+      if (trigger)
+        [_statusLabel setStringValue: [[_statusLabel stringValue] stringByAppendingFormat:
+          @" · stopped: %@%@", trigger, _recorder.recordingError ? @" · incomplete" : @""]];
+      NSMutableArray *details = [warnings mutableCopy] ?: [NSMutableArray array];
+      if (_recorder.recordingError) [details addObject: [_recorder.recordingError localizedDescription]];
+      for (NSString *key in @[@"StopTrigger", @"StopReason", @"CaptureStatus", @"MaximumTraceBytes",
+                              @"MinimumFreeBytes", @"ObservedTraceBytes", @"ObservedAvailableBytes"])
+        if ([_trace.info objectForKey: key])
+          [details addObject: [NSString stringWithFormat: @"%@: %@", key, [_trace.info objectForKey: key]]];
+      [_statusLabel setToolTip: [details componentsJoinedByString: @"\n"]];
+    }
+#endif
 }
 
 /* ------------------------------------------------------------------ */
@@ -530,6 +546,10 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
   _timeline.following = NO;
   if (error)
     {
+#if defined(__linux__)
+      GSPTrace *partial = [GSPTrace traceWithPath: _tracePath error: NULL];
+      if (partial) [self attachTrace: partial];
+#endif
       NSString *output = [NSString stringWithContentsOfFile:
         [_tracePath stringByAppendingPathComponent: @"output.txt"]];
       NSRunAlertPanel(@"Recording Failed", @"%@%@", @"OK", nil, nil,

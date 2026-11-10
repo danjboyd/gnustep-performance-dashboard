@@ -52,6 +52,12 @@ jobs:
           export LD_LIBRARY_PATH="$PREFIX/System/Library/Libraries${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
           make CC=clang
 
+      - name: Linux storage thresholds and writer error propagation
+        run: |
+          . "$PREFIX/System/Library/Makefiles/GNUstep.sh"
+          export LD_LIBRARY_PATH="$PREFIX/System/Library/Libraries${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+          python3 Tests/capture-threshold-checks.py Tools/gstrace/obj/gstrace Tests/out/capture-threshold
+
       - name: Signed update refusal and local replacement (throwaway keys)
         run: |
           . "$PREFIX/System/Library/Makefiles/GNUstep.sh"
