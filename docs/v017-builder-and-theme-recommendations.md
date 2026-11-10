@@ -20,8 +20,10 @@ approved workloads may overlap; these are not exclusive-CPU reservations.
 | Feature flags | Keep X11/cairo and the visible legacy exclusions for the first comparison; check generated configure macros/logs against CSD requirements | If CSD needs a disabled facility, stop and propose the exact lock change rather than accepting a no-corners fallback |
 | Resource limit | At most two compile jobs, new dedicated prefix/build directory, owned checkout; record any concurrent approved workload | The SDK build duration is unknown; request an extension/new window before the agreed cap |
 
-Please review the first-SDK inventory policy and the deliberate linker-flag
-omission as distinct choices. Neither is a release approval. Capturing an image
+The lead approved the first-SDK inventory policy, inspected builder/LOCAL lock,
+deliberate linker-flag omission and theme recipe in message22079. The linker
+command/DT_NEEDED closure comparison is a hard promotion gate; reject unexpected
+dependencies. These local choices do not start a build. Neither is a release approval. Capturing an image
 ID after a build does not retroactively pin future builds: subsequent builds
 must reuse the reviewed immutable image or return to input review.
 
@@ -82,16 +84,34 @@ lock, SDK provenance and theme receipt into metadata for later tie-out.
 
 ## AppImage provenance boundary
 
-The current managed AppImage writer still describes the official recipe and
-old two-patch backend. It now refuses custom CSD mode or an explicitly supplied
-custom SDK before fetching, building, staging or running anything. A static
-unit check covers both entry paths. This closes mislabelling through refusal;
-it does not implement the future custom AppImage writer.
+The CSD-only unsigned review path now calls `write-csd-provenance.py`, which
+constructs a fresh custom schema. It embeds the exact reviewed lock, SDK
+provenance and theme receipt, an explicit per-component patch SHA list and
+actual selected payload identities. It never merges the managed recipe's
+inputs, two-patch backend list or managed metadata fields. The managed path
+continues to use its existing writer.
 
-Custom stage review remains possible with the strict input and CSD capability
-gates. Window B cannot assemble a custom AppImage through package-linux.sh
-until a reviewed custom-aware provenance route replaces that refusal. That
-route must embed the exact custom lock/provenance/patch set, preserve the theme
-receipt and final transformed ELF identities, and never copy the old managed
-backend input claim. No tag, release, feed change or hosted dispatch is part
-of this recipe or its local review.
+Before fetch/build/stage/runtime, CSD mode requires the same complete explicit
+SDK/backend/theme/receipt inputs as staging. An unselected custom SDK is refused;
+custom mode with `--release` is also refused. Before writing the sidecar, the
+writer repeats input/capability checks, requires embedded metadata bytes to
+match those inputs and verifies selected SDK ELF SHA/build IDs against SDK
+provenance. It resolves library symlinks because the builder inventories real
+files only. Staged backend, GUI, Base, libobjc2 and dispatch must retain their
+source build IDs; the theme must match its source build ID and receipt hash.
+Pre/post transformation hashes are recorded separately. App, agent and both
+launcher copies also receive final identity records. A missing input or failed
+identity refuses the new sidecar; no old managed identity is substituted.
+
+This is a selected-file identity check, not a claim that every SDK file or any
+runtime behavior has been qualified. Nine static writer tests use synthetic
+payloads and mocked ELF-tool output, covering source/receipt retention, missing
+and changed inputs, SDK mutation, build-ID mismatch, missing helper and resolved
+symlink identities. The staging gate has its own nine static unit tests.
+There is no positive custom SDK/AppImage or GUI runtime result today.
+
+The lead must review this CSD-only path before its future execution. If it is
+not reviewed in time, window B is stage-only: an AppDir, not an AppImage.
+Windows C/D must then use that exact staged AppDir through AppRun and label all
+results accordingly. AppImage qualification moves to a later slot. No tag,
+release, feed change or hosted dispatch is part of this recipe or local review.

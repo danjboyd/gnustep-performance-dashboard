@@ -93,3 +93,11 @@ including initial command/test-harness mistakes and corrected runs. Report
 which checks ran and which did not. Any future push, hosted dispatch, tag,
 publish, feed deployment or upstream send needs its own applicable authority;
 this local plan grants none of those actions.
+
+The lead approved the inspected builder, LOCAL lock, inventory-attested container
+policy, first-review omission of --as-needed and same-SDK theme recipe in
+message22079. Record image/package identities before compilation and enforce
+linker/DT_NEEDED closure comparison as a hard gate. The CSD-only provenance
+writer is source/unit checked but still needs lead review. If it is not reviewed
+in time, B/C/D use an AppDir (via AppRun), explicitly not an AppImage; defer
+AppImage qualification to a later slot. No date or reservation replaces START.

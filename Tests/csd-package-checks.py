@@ -68,10 +68,13 @@ class CSDChecks(unittest.TestCase):
         lock_path = self.root / "lock.json"
         component = dict(name="libs-back", url="https://example.invalid/back.git",
                          revision="a" * 40, configure_args=[], patches=[])
-        lock_path.write_text(json.dumps(dict(install_domain="LOCAL", components=[component])))
+        components = [dict(component, name=name) for name in
+                      ("libobjc2", "libdispatch", "tools-make", "libs-base", "libs-corebase", "libs-gui", "libs-back")]
+        lock_path.write_text(json.dumps(dict(schema_version=1, kind="custom-toolchain-lock",
+                                             install_domain="LOCAL", components=components)))
         provenance = dict(schema_version=1, kind="custom-gnustep-toolchain-provenance",
                          official=False, install_domain="LOCAL", lock=dict(sha256=check.digest(lock_path)),
-                         components=[dict(**component, resolved_commit="a" * 40, applied_patches=[])],
+                         components=[dict(**value, resolved_commit="a" * 40, applied_patches=[]) for value in components],
                          elf_files={check.BACK: dict(sha256=check.digest(backend))})
         provenance_path = sdk / "gnustep-toolchain-provenance.json"
         provenance_path.write_text(json.dumps(provenance))
@@ -150,7 +153,8 @@ class CSDChecks(unittest.TestCase):
                 result = subprocess.run(["bash", str(ROOT / "scripts/package-linux.sh")],
                                         env=env, text=True, capture_output=True, timeout=3)
                 self.assertNotEqual(result.returncode, 0)
-                self.assertIn("AppImage provenance is not wired; refusing before packaging", result.stderr)
+                self.assertIn("custom CSD requires its exact SDK prefix" if variable == "PD_CSD_TOOLCHAIN_LOCK"
+                              else "requires explicit PD_CSD_TOOLCHAIN_LOCK", result.stderr)
                 self.assertNotIn("pinned-checkout", result.stderr)
 
 

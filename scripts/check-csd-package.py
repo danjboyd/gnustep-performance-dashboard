@@ -52,7 +52,7 @@ def check_staged(stage):
     with gui.open("rb") as source:
         require(source.read(4) == b"\x7fELF", "GUI library is not ELF")
     result = subprocess.run(["nm", "-D", "--defined-only", str(gui)],
-                            check=True, text=True, capture_output=True)
+                            check=True, text=True, capture_output=True, timeout=10)
     exported = {fields[-1].split("@", 1)[0] for line in result.stdout.splitlines()
                 if len(fields := line.split()) >= 3 and fields[-2].upper() != "U"}
     require(HOOK in exported, "staged GUI lacks defined dynamic export " + HOOK)
@@ -63,6 +63,11 @@ def check_staged(stage):
 def check_inputs(args):
     lock_path = Path(args.lock).resolve(strict=True)
     lock = json.loads(lock_path.read_text())
+    require(lock.get("schema_version") == 1 and lock.get("kind") == "custom-toolchain-lock",
+            "custom lock format mismatch")
+    require([component["name"] for component in lock["components"]] ==
+            ["libobjc2", "libdispatch", "tools-make", "libs-base", "libs-corebase", "libs-gui", "libs-back"],
+            "CSD candidate requires the exact seven-component inventory/order")
     require(lock.get("install_domain") == "LOCAL", "CSD candidate requires reviewed LOCAL layout")
     sdk = Path(args.sdk).resolve(strict=True)
     provenance_path = sdk / "gnustep-toolchain-provenance.json"
@@ -91,7 +96,7 @@ def check_inputs(args):
     backend = inside(sdk, Path(args.backend) / "libgnustep-back-032")
     require(backend == (sdk / BACK).resolve(strict=True), "explicit backend is not this SDK's exact bundle")
     backend_sha = verified_digest(backend, args.backend_sha256, "backend")
-    require(provenance.get("elf_files", {}).get(BACK, {}).get("sha256") == backend_sha,
+    require(provenance.get("elf_files", {}).get(str(backend.relative_to(sdk)), {}).get("sha256") == backend_sha,
             "backend not tied to SDK ELF provenance")
     theme = Path(args.theme).resolve(strict=True) / "Adwaita"
     theme_sha = verified_digest(theme, args.theme_sha256, "theme")

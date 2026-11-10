@@ -38,15 +38,25 @@ manifest=packaging/package.manifest.json
 die() { echo "package-linux: $*" >&2; exit 1; }
 warn() { echo "package-linux: warning: $*" >&2; }
 
-# This entry point's provenance writer still describes the managed recipe.
-# Refuse custom SDK/CSD input before fetch/build/stage/runtime, rather than
-# attach the old source/backend identity to a custom AppImage. Staging review
-# through package-stage.sh remains available with its strict custom inputs.
+# The custom path is unsigned review only and must pass the same complete
+# input identity gate as staging before fetch/build/stage/runtime.
+csd_mode=0
 if [[ -n "${PD_CSD_TOOLCHAIN_LOCK:-}" ]]; then
-  die "custom CSD AppImage provenance is not wired; refusing before packaging"
-fi
-if [[ -n "${GNUSTEP_CLI_ROOT:-}" && -f "$GNUSTEP_CLI_ROOT/gnustep-toolchain-provenance.json" ]]; then
-  die "custom SDK AppImage provenance is not wired; refusing before packaging"
+  [ "$release" = 0 ] || die "custom CSD mode is unsigned review only"
+  : "${GNUSTEP_CLI_ROOT:?custom CSD requires its exact SDK prefix}"
+  : "${LIBS_BACK_BUNDLE:?custom CSD requires the SDK backend bundle}"
+  : "${ADWAITA_THEME:?custom CSD requires a same-SDK rebuilt theme}"
+  : "${PD_CSD_BACKEND_SHA256:?custom CSD requires the backend SHA-256}"
+  : "${PD_CSD_ADWAITA_SHA256:?custom CSD requires the theme SHA-256}"
+  : "${PD_CSD_ADWAITA_BUILD_RECEIPT:?custom CSD requires a theme build receipt}"
+  python3 "$repo_root/scripts/check-csd-package.py" inputs \
+    --lock "$PD_CSD_TOOLCHAIN_LOCK" --sdk "$GNUSTEP_CLI_ROOT" \
+    --backend "$LIBS_BACK_BUNDLE" --backend-sha256 "$PD_CSD_BACKEND_SHA256" \
+    --theme "$ADWAITA_THEME" --theme-sha256 "$PD_CSD_ADWAITA_SHA256" \
+    --theme-receipt "$PD_CSD_ADWAITA_BUILD_RECEIPT"
+  csd_mode=1
+elif [[ -n "${GNUSTEP_CLI_ROOT:-}" && -f "$GNUSTEP_CLI_ROOT/gnustep-toolchain-provenance.json" ]]; then
+  die "custom SDK requires explicit PD_CSD_TOOLCHAIN_LOCK; refusing before packaging"
 fi
 
 [ "$release" = 0 ] || [ -z "$(git status --porcelain)" ] || die "a release builds only from a clean tree"
@@ -167,6 +177,19 @@ agent_id="$(build_id "$root/app/PerformanceDashboard.app/Resources/libgsperf-age
 toolchain_ids="$(for lib in libgnustep-base.so.1.31 libgnustep-gui.so.0.32 libobjc.so.4.6 libdispatch.so; do
   printf '%s=%s\n' "$lib" "$(build_id "$root/runtime/lib/$lib")"
 done)"
+if [[ "$csd_mode" = 1 ]]; then
+  python3 "$repo_root/scripts/write-csd-provenance.py" \
+    --payload "$root" --lock "$PD_CSD_TOOLCHAIN_LOCK" --sdk "$GNUSTEP_CLI_ROOT" \
+    --backend "$LIBS_BACK_BUNDLE" --backend-sha256 "$PD_CSD_BACKEND_SHA256" \
+    --theme "$ADWAITA_THEME" --theme-sha256 "$PD_CSD_ADWAITA_SHA256" \
+    --theme-receipt "$PD_CSD_ADWAITA_BUILD_RECEIPT" \
+    --version "$version" --commit "$commit" --packager-commit "$packager_commit" \
+    --source-dirty "$source_dirty" --source-diff-sha256 "$source_diff_sha256" \
+    --output "dist/packages/PerformanceDashboard-$version-x86_64.provenance.json"
+  echo "package-linux: $appimage checked; custom CSD review provenance written"
+  exit 0
+fi
+
 python3 - "dist/packages/PerformanceDashboard-$version-x86_64.provenance.json" <<PY
 import json, sys, pathlib, subprocess, os
 inputs = json.load(open("packaging/release-inputs.json"))

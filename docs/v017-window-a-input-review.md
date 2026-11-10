@@ -177,8 +177,10 @@ identity mismatches, wrong backend provenance path and early failure before
 stage mutation/fallback. Their positive fixtures are synthetic parser tests,
 not a compiled custom SDK. The existing v0.1.6 AppDir is rejected for missing
 backend CSD keys, as required. No positive custom ELF or compositor/runtime
-qualification is claimed. The AppImage entry point now refuses custom inputs before any work, closing
-the old managed-provenance mislabelling route. A custom-aware writer remains
-an open gate before window-B package assembly. See
+qualification is claimed. The AppImage entry point now routes CSD unsigned-review inputs through a fresh
+custom-aware writer after strict early input checks, with no old managed recipe
+fields. Missing inputs and custom release mode are refused before work. Lead
+review of this new writer remains required before window-B AppImage assembly;
+otherwise use the agreed AppDir-only fallback. See
 `v017-builder-and-theme-recommendations.md` for the builder/container/linker
 recommendations, exact inspected file digests and same-SDK theme receipt recipe.
