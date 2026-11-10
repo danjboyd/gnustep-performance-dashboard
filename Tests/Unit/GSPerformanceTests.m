@@ -1053,6 +1053,29 @@ child(GSPCallTreeNode *n, NSString *name)
       [[NSFileManager defaultManager] removeItemAtPath: path error: NULL];
     }
 }
+
+- (void) testExitStatusSummaryDistinguishesAttachWindowsAndLegacyLinux
+{
+  NSString *summary = @"Recorded trace";
+  NSDictionary *attached = @{@"ExitStatus": @-1, @"Attached": @YES,
+                            @"Host": @"fixture Linux 6.12 x86_64"};
+  XCTAssertEqualObjects(PDRecordingStatusSummary(attached, summary), summary);
+  /* Signed representation of Windows access-violation NTSTATUS 0xC0000005. */
+  XCTAssertEqualObjects(PDRecordingStatusSummary(
+    @{@"ExitStatus": @(-1073741819), @"Attached": @NO}, summary), summary);
+  XCTAssertEqualObjects(PDRecordingStatusSummary(
+    @{@"ExitStatus": @-1, @"Attached": @NO, @"Host": @"fixture Windows x86_64"},
+    summary), summary);
+  XCTAssertEqualObjects(PDRecordingStatusSummary(
+    @{@"ExitStatus": @-1, @"Attached": @NO}, summary), summary);
+  XCTAssertEqualObjects(PDRecordingStatusSummary(
+    @{@"ExitStatus": @0, @"WaitPIDErrno": @ECHILD}, summary),
+    @"Exit status unavailable · Recorded trace");
+  XCTAssertEqualObjects(PDRecordingStatusSummary(
+    @{@"ExitStatus": @-1, @"Attached": @NO,
+      @"Host": @"fixture Linux 6.12 x86_64"}, summary),
+    @"Exit status unavailable · Recorded trace");
+}
 #endif
 
 - (void) testExistingExplicitRecordingPathIsPreserved
