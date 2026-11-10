@@ -45,6 +45,25 @@ require() {
   fi
 }
 
+# An opt-in custom CSD candidate must bind exact inputs before any fallback
+# build or stage mutation. Other releases retain their existing path.
+if [[ -f "$gnustep_root/gnustep-toolchain-provenance.json" && -z "${PD_CSD_TOOLCHAIN_LOCK:-}" ]]; then
+  printf 'package-stage: custom SDK requires explicit PD_CSD_TOOLCHAIN_LOCK mode\n' >&2
+  exit 1
+fi
+if [[ -n "${PD_CSD_TOOLCHAIN_LOCK:-}" ]]; then
+  : "${LIBS_BACK_BUNDLE:?custom CSD requires the SDK backend bundle}"
+  : "${ADWAITA_THEME:?custom CSD requires a same-SDK rebuilt theme}"
+  : "${PD_CSD_BACKEND_SHA256:?custom CSD requires the backend SHA-256}"
+  : "${PD_CSD_ADWAITA_SHA256:?custom CSD requires the theme SHA-256}"
+  : "${PD_CSD_ADWAITA_BUILD_RECEIPT:?custom CSD requires a theme build receipt}"
+  python3 "$repo_root/scripts/check-csd-package.py" inputs \
+    --lock "$PD_CSD_TOOLCHAIN_LOCK" --sdk "$gnustep_root" \
+    --backend "$LIBS_BACK_BUNDLE" --backend-sha256 "$PD_CSD_BACKEND_SHA256" \
+    --theme "$ADWAITA_THEME" --theme-sha256 "$PD_CSD_ADWAITA_SHA256" \
+    --theme-receipt "$PD_CSD_ADWAITA_BUILD_RECEIPT"
+fi
+
 # The pinned toolchain's activation supplies its runtime library path as
 # well as the GNUstep build environment used by the theme and back builds.
 require "$gnustep_root/System/Library/Makefiles/GNUstep.sh" "set GNUSTEP_CLI_ROOT"
@@ -223,3 +242,12 @@ printf 'package-stage: staged %s (%s)\n' "$stage_root" "$(du -sh "$stage_root" |
 # A relocatable CLI entry point also scrubs the packaged runtime from targets.
 mv "$stage_root/runtime/bin/gstrace" "$stage_root/runtime/bin/gstrace-bin"
 install -m 0755 "$repo_root/packaging/linux/gstrace" "$stage_root/runtime/bin/gstrace"
+
+# Static capability gate after the final library copies/stripping. Presence is
+# necessary, never a substitute for compositor and actual runtime tests.
+if [[ -n "${PD_CSD_TOOLCHAIN_LOCK:-}" ]]; then
+  python3 "$repo_root/scripts/check-csd-package.py" staged "$stage_root"
+  cp "$PD_CSD_TOOLCHAIN_LOCK" "$stage_root/metadata/custom-toolchain-lock.json"
+  cp "$gnustep_root/gnustep-toolchain-provenance.json" "$stage_root/metadata/custom-toolchain-provenance.json"
+  cp "$PD_CSD_ADWAITA_BUILD_RECEIPT" "$stage_root/metadata/adwaita-build-receipt.json"
+fi

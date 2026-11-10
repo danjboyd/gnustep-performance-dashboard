@@ -20,7 +20,7 @@ backend bf3b3ced plus two existing PD patches and four CSD backports. Keep the
 explicit backend order 0003, 0004a, 0004, 0005. No private fork or installed
 host binary substitutes for these inputs. Preserve exact patch SHA identities.
 
-Before a build, resolve the draft's SYSTEM-domain relocation choice, retained
+Before a build, review the corrected LOCAL-domain relocation path, retained
 backend feature exclusions, unsupported per-component `--as-needed` make
 argument, public builder commit and container/action/dependency identities.
 The fixture-only Custom Toolchain workflow does not consume this PD lock.
@@ -55,7 +55,8 @@ does not prove runtime semantics or an ABI-compatible custom SDK.
 These are requests to schedule after review, not reservations. The lead plans
 A+B, C and D for 2026-11-11, with separate start-now messages. Today remains
 source-only. See `v017-window-a-input-review.md` for concrete unresolved input
-checks, including the confirmed draft SYSTEM/current-stager LOCAL mismatch. The lead must
+checks, including the reviewed LOCAL correction of the earlier SYSTEM mismatch,
+explicit backend/theme binding and the static CSD capability assertion. The lead must
 announce each start after the previous owner releases the machine. A refusal
 or failed gate stops that phase; retain logs and do not silently change inputs.
 No competing recorder, application build or timing study may overlap a window.

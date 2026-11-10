@@ -7,10 +7,10 @@ are open gates, not successful tests. Record the final input-review decision
 and source/lock identity before the lead sends a start-now message.
 
 The current draft lock SHA-256 is
-`c7a30d359b477a8742c688e4d3106f33a685ffcc0733909a9e39b1803a9534cf`.
+`ef07d0a12412db63e8225ade46c99163bfce48ca9f06054a3bb1ae5204476848`.
 Changing its domain, flags, patches or source pins requires a new digest and
-review. The retained candidate inputs are source commits 1356deb (CSD/lock/plan)
-and c23c087 (recorder); no combined candidate has been created.
+review. The lock-only LOCAL correction is c692d8a (after the input checklist f78c84b).
+The recorder input is c23c087; no combined candidate has been created.
 
 ## 1. Exact source and patch identity
 
@@ -59,18 +59,14 @@ and c23c087 (recorder); no combined candidate has been created.
 
 ## 3. Domain and staging: confirmed source mismatch
 
-- [ ] **Resolve before building:** the draft selects SYSTEM, while
-  `scripts/package-stage.sh` currently reads `<prefix>/Local/Library` and
-  `<prefix>/Local/Tools` (lines38–39). Its staging checks and resource copies
-  therefore do not consume the draft layout. The custom builder also places
-  Objective-C/Blocks header links in Local even with SYSTEM libraries; inspect
-  the complete domain search paths, not just the library directory.
-- [ ] Recommended smallest candidate: review a lock revision choosing LOCAL,
-  matching the existing stage input layout and official SDK domain, then
-  revalidate its new digest. Relocation still needs package/runtime checks.
-  If SYSTEM is desired instead, review explicit domain-aware staging changes
-  and header/tool/resource discovery before approving window A. Do not create
-  ad-hoc symlink workarounds or call the current stager SYSTEM-compatible.
+- [x] Source mismatch identified and domain choice made: the initial SYSTEM
+  draft did not match `scripts/package-stage.sh`'s Local/Library and Local/Tools
+  paths. The lead selected LOCAL in message21959; lock-only c692d8a changes
+  the domain and review note, without stager domain changes.
+- [ ] Review the new lock digest above and confirm the complete header, tool,
+  library, resource and GNUstep configuration search paths. The builder's
+  Objective-C/Blocks header links are Local too. Relocation remains unrun;
+  selecting a compatible directory layout is not runtime qualification.
 - [ ] Inspect `package-build.sh`, theme build, linker/include search paths,
   GNUstep.sh and generated configuration as one same-SDK path. Remove stale
   objects in an isolated owned checkout at the authorized build, not the
@@ -91,7 +87,9 @@ and c23c087 (recorder); no combined candidate has been created.
   and pin that exact builder, or explicitly accept the first comparison without
   this flag and require linked-closure inspection. Never insert ignored schema
   keys or overwrite the prefix's LDFLAGS with a guessed configure assignment.
-- [ ] **Prevent backend replacement:** the current package stage defaults to
+- [x] Added source/unit-level opt-in staging safeguards described below. The
+  static old-payload rejection is expected; no custom CSD payload passed yet.
+- [ ] **Review and use backend binding:** the legacy package stage defaults to
   `build-libs-back.sh`, then overwrites the staged backend with that result.
   That script consumes the old two-patch lock, not these CSD backports. Bind
   `LIBS_BACK_BUNDLE` explicitly to the reviewed custom SDK's exact built bundle,
@@ -142,3 +140,40 @@ Never reuse the shared desktop or another application's display/session.
   times. Stop/reap only owned processes; audit actual host and explicitly
   release the window to the lead and waiting machine owners. No timing study
   overlaps any correctness/build window.
+
+## Custom CSD staging interface (source/unit checked only)
+
+Set `PD_CSD_TOOLCHAIN_LOCK` to the exact reviewed LOCAL lock to select this mode.
+A prefix with `gnustep-toolchain-provenance.json` cannot fall back to legacy
+staging if this variable is absent. Before GNUstep activation, a fallback build
+or stage mutation, custom mode requires all of:
+
+- `LIBS_BACK_BUNDLE`: the exact custom SDK Local backend bundle;
+- `PD_CSD_BACKEND_SHA256`: its unstripped executable's approved digest, also
+  matched to the custom SDK ELF provenance;
+- `ADWAITA_THEME` and `PD_CSD_ADWAITA_SHA256`: exact fresh theme bundle/binary;
+- `PD_CSD_ADWAITA_BUILD_RECEIPT`: a build-produced JSON identity receipt.
+
+The theme receipt has `schemaVersion: 1`, `themeBinarySHA256`,
+`toolchainLockSHA256`, `toolchainProvenanceSHA256` and `themeSourceRevision`.
+It must bind the theme bytes and reviewed theme source pin to this exact lock
+and SDK provenance. The future reviewed theme build job must produce it from
+its actual build and retain the compile log; manually matching JSON identities
+alone cannot prove compilation origin. This receipt is not present for a new
+SDK yet, so current custom staging correctly stops rather than reusing a theme.
+
+The input checker also verifies official=false, LOCAL domain, the component
+URLs/resolved revisions/configuration/applied patches and local patch digests.
+Explicit bundle variables prevent the two legacy build helpers from running.
+After final stage copies/stripping, the backend must contain both
+`GSBackWindowShadows` and `GSBackWindowCornerRadius`; `nm -D --defined-only`
+must show the exact GUI export `GSThemeInstallBackendDefaults`. Any missing
+input, digest, identity, command or capability fails packaging.
+
+Eight static unit methods exercise missing keys/export, nm failure, input
+identity mismatches, wrong backend provenance path and early failure before
+stage mutation/fallback. Their positive fixtures are synthetic parser tests,
+not a compiled custom SDK. The existing v0.1.6 AppDir is rejected for missing
+backend CSD keys, as required. No positive custom ELF or compositor/runtime
+qualification is claimed. The old release-provenance writer mismatch in
+section5 remains an open gate before window-B package assembly.

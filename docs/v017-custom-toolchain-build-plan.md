@@ -76,14 +76,15 @@ unversioned package names alone are not bit-reproducible inputs.
 
 ## Layout and feature choices to review before a build
 
-The draft selects the builder's supported `SYSTEM` install domain, because the
-packager consumes a relocatable GNUstep domain. Verify that headers, libraries,
-backend bundle, tools and GNUstep configuration all remain discoverable after
-relocation. Source inspection after this draft found that the current PD
-stager hardcodes Local/Library and Local/Tools; it cannot consume this SYSTEM
-selection unchanged. The input-review checklist recommends reviewing LOCAL
-for the smallest layout-compatible candidate, or explicit domain-aware stage
-changes. The draft lock remains unchanged pending that review.
+The reviewed follow-up selects `LOCAL`, matching the current PD stager's
+Local/Library and Local/Tools input layout. The original SYSTEM draft was
+incompatible with those hardcoded paths; the lead selected the smaller LOCAL
+change rather than a new stager domain. Lock-only commit c692d8a has SHA-256
+`ef07d0a12412db63e8225ade46c99163bfce48ca9f06054a3bb1ae5204476848`.
+Schema/patch-digest validation passed again; no build has run. Verify headers,
+libraries, backend bundle, tools and configuration discovery after relocation.
+The input-review checklist describes the custom staging mode and remaining
+builder/link-flag/provenance gates.
 
 The backend explicitly selects X11/cairo with the base's supported
 `--enable-server=x11` and `--enable-graphics=cairo` options. It retains the
