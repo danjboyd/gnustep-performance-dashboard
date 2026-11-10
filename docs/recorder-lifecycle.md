@@ -15,7 +15,9 @@ is unchanged apart from the private selector name.
 
 GNUstep Base's NSTask closes extra descriptors during launch. `gsp-launch` is
 an unprivileged libc-only exec helper next to the original agent library, found
-by that exact path, never PATH. Both app Resources and the packaged CLI runtime
+by that exact path, never PATH. GUI target paths, including bare names, are
+made absolute against the recorder's cwd before preflight; neither adapter nor
+helper searches PATH or interprets a bare name relative to the target cwd. Both app Resources and the packaged CLI runtime
 carry a copy. The AppImage agent's stable-copy path does not change helper
 resolution. The helper receives no target environment or preload at startup.
 
@@ -30,7 +32,8 @@ response; a real target exiting 125 is an ordinary target result.
 
 The helper duplicates only intended stdio and status descriptor 4, closes every
 other descriptor except its close-on-exec error channel, restores ignored signal
-dispositions and clears the signal mask. It applies cwd and passes argv/env,
+dispositions and clears the signal mask. Unchangeable or reserved signal
+numbers rejected with EINVAL are skipped; other restoration errors fail startup. It applies cwd and passes argv/env,
 including the recording preload, only to final `execve`. This replaces the helper
 in the same PID, so agent parent/PID filtering and writer receipts are unchanged.
 Startup I/O has finite five-second socket timeouts. EOF after the prepared reply

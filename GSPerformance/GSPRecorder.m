@@ -521,8 +521,15 @@ under(NSString *value, NSString *root)
   /* A relative target path would be looked up in the target's working
      directory; make it absolute now (and in Info.plist) instead.  */
   NSString *exe = _options.executablePath;
+  BOOL resolveBare = NO;
+#if defined(__linux__)
+  /* The GUI task protocol requires an absolute target, including bare names.
+     Resolve against the recorder cwd as with other relative target paths;
+     neither the adapter nor helper searches PATH. Keep CLI behavior intact. */
+  resolveBare = _options.useTaskLauncher;
+#endif
   if (!_options.attachPID && [exe length] && ![exe isAbsolutePath]
-      && [exe rangeOfString: @"/"].location != NSNotFound)
+      && (resolveBare || [exe rangeOfString: @"/"].location != NSNotFound))
     _options.executablePath = [[[fm currentDirectoryPath]
       stringByAppendingPathComponent: exe] stringByStandardizingPath];
 

@@ -115,6 +115,7 @@ main(int argc, char **argv)
       if (!strchr(env[i], '=') || env[i][0] == '=') fail(EPROTO);
     }
   if (cursor != end || !args[0][0]) fail(EPROTO);
+  if (args[0][0] != '/') fail(EINVAL);
   /* Preserve a separate, CLOEXEC error channel before replacing stdin. */
   int copy = fcntl(0, F_DUPFD_CLOEXEC, 10);
   if (copy < 0 || dup3(copy, 3, O_CLOEXEC) < 0) fail(errno);
@@ -137,7 +138,7 @@ main(int argc, char **argv)
   sigemptyset(&ignored.sa_mask);
   for (int number = 1; number < NSIG && number <= 64; number++)
     if ((header.ignored_signals & (UINT64_C(1) << (number - 1)))
-        && sigaction(number, &ignored, NULL)) fail(errno);
+        && sigaction(number, &ignored, NULL) && errno != EINVAL) fail(errno);
   sigset_t empty;
   sigemptyset(&empty);
   if (sigprocmask(SIG_SETMASK, &empty, NULL)) fail(errno);

@@ -114,8 +114,17 @@ print('stderr too', file=sys.stderr)
                                 ignored=1 << (signal.SIGUSR1 - 1))
     assert first == (1, 0) and second == b"" and proc.wait(timeout=3) == 0
     print("PASS ignored-signal disposition restored after NSTask reset")
+    proc, first, second = launch(["", "/bin/true"], 1, 0,
+                                [null, null, null, status_child.fileno()],
+                                ignored=sum(1 << (n - 1) for n in (9, 19, 32, 33)))
+    assert first == (1, 0) and second == b"" and proc.wait(timeout=3) == 0
+    print("PASS unchangeable/reserved ignored-signal bits skipped on EINVAL")
+    proc, first, second = launch(["/bin", "true", "PATH=/bin"], 1, 1,
+                                [null, null, null, status_child.fileno()])
+    assert first == (0, errno.EINVAL) and proc.wait(timeout=3) == 125
+    print("PASS bare executable rejected without PATH lookup")
     for fd in [null, stdin, output]:
         os.close(fd)
     status_parent.close()
     status_child.close()
-print("All 6 launch-helper checks passed.")
+print("All launch-helper checks passed (9 bounded child processes).")

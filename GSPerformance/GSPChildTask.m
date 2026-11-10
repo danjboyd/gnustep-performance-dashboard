@@ -36,7 +36,8 @@ append_string(NSMutableData *data, NSString *string)
   NSError *taskLaunchError = nil;
   NSMutableData *payload = [NSMutableData data];
   NSArray *keys = [[environment allKeys] sortedArrayUsingSelector: @selector(compare:)];
-  if (!append_string(payload, directory ?: @"") || !append_string(payload, executable))
+  if (![executable isAbsolutePath] || !append_string(payload, directory ?: @"")
+      || !append_string(payload, executable))
     goto failed;
   for (NSString *argument in arguments)
     if (!append_string(payload, argument)) goto failed;

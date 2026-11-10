@@ -1013,6 +1013,24 @@ child(GSPCallTreeNode *n, NSString *name)
 
 /* The child waits for a parent-owned pipe barrier. Drain an unrelated task
    first, then let Foundation collect our registered child before polling it. */
+- (void) testTaskRecorderMakesBareTargetAbsoluteBeforeLaunch
+{
+  GSPRecordingOptions *options = [GSPRecordingOptions new];
+  options.useTaskLauncher = YES;
+  options.executablePath = @"pd-bare-target";
+  options.workingDirectory = @"/bin";
+  options.outputPath = [[NSTemporaryDirectory() stringByAppendingPathComponent:
+    [[NSProcessInfo processInfo] globallyUniqueString]] stringByAppendingPathExtension: @"gstrace"];
+  [_bundles addObject: options.outputPath];
+  GSPRecorder *recorder = [[GSPRecorder alloc] initWithOptions: options];
+  XCTAssertTrue([recorder prepareBundle: NULL]);
+  XCTAssertEqualObjects(options.executablePath,
+    [[[NSFileManager defaultManager] currentDirectoryPath]
+      stringByAppendingPathComponent: @"pd-bare-target"]);
+  XCTAssertTrue([options.executablePath isAbsolutePath]);
+  XCTAssertEqualObjects(options.workingDirectory, @"/bin");
+}
+
 - (void) testRegisteredChildKeepsStatusAfterRunLoopReaps
 {
   NSString *helper = [[GSPRecorder agentLibraryPath] stringByDeletingLastPathComponent];
@@ -1115,6 +1133,10 @@ child(GSPCallTreeNode *n, NSString *name)
   XCTAssertFalse([missingHelper launchHelper: @"/no/such/pd-helper" executable: @"/bin/true"
     arguments: @[] environment: @{} workingDirectory: nil descriptors: fds error: &error]);
   XCTAssertNotNil(error);
+  GSPChildTask *bare = [GSPChildTask new];
+  XCTAssertFalse([bare launchHelper: helper executable: @"true" arguments: @[]
+    environment: @{ @"PATH": @"/bin" } workingDirectory: @"/bin" descriptors: fds error: &error]);
+  XCTAssertEqual([error code], EINVAL);
   GSPChildTask *bad = [GSPChildTask new];
   XCTAssertFalse([bad launchHelper: helper executable: @"/no/such/pd-target"
     arguments: @[] environment: @{} workingDirectory: nil descriptors: fds error: &error]);
