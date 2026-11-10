@@ -1,0 +1,14 @@
+{
+  "name": "robin-map-fallback",
+  "url": "https://github.com/Tessil/robin-map.git",
+  "tag": "v1.4.0",
+  "revision": "4ec1bf19c6a96125ea22062f38c2cf5b958e448e",
+  "archiveURL": "https://codeload.github.com/Tessil/robin-map/tar.gz/4ec1bf19c6a96125ea22062f38c2cf5b958e448e",
+  "archiveSHA256": "4968947bd2e908854481519ec422823af4161a286ff1e16943293b753e80cb3f",
+  "upstreamBuildDescription": {
+    "libobjc2Revision": "b67709ad7851973fde127022d8ac6a710c82b1d5",
+    "url": "https://raw.githubusercontent.com/gnustep/libobjc2/b67709ad7851973fde127022d8ac6a710c82b1d5/CMakeLists.txt",
+    "sha256": "3773ad146b8af9a8ffd1af0d8a2b80541d8702bf6c3bc3b652b214b459d64b1c",
+    "recordedExcerpt": "find_package(tsl-robin-map)\n\nif (NOT tsl-robin-map_FOUND)\n\tFetchContent_Declare(\n\t\trobinmap\n\t\tGIT_REPOSITORY https://github.com/Tessil/robin-map/\n\t\tGIT_TAG        v1.4.0)\n\n\tFetchContent_MakeAvailable(robinmap)"
+  }
+}
