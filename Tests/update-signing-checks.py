@@ -41,7 +41,9 @@ class SigningChecks(unittest.TestCase):
         asset = {"backend": "appimage", "platform": "linux-x64", "name": self.payload.name,
                  "url": self.payload.as_uri(), "sizeBytes": self.payload.stat().st_size,
                  "sha256": hashlib.sha256(self.payload.read_bytes()).hexdigest()}
-        self.unsigned = {"formatVersion": 1, "releases": [{"version": "0.1.5", "assets": [asset]}]}
+        self.unsigned = {"formatVersion": 1, "channel": "stable",
+                         "package": {"id": "io.github.danjboyd.SigningFixture"},
+                         "releases": [{"version": "0.1.5", "assets": [asset]}]}
         self.write(self.unsigned)
 
     def write(self, data):
@@ -68,6 +70,53 @@ class SigningChecks(unittest.TestCase):
         self.run_signer("--verify", self.feed, self.work, ok=False)
         self.write(self.unsigned)
         self.run_signer("--verify", self.feed, self.work, ok=False)
+
+    def test_packager_published_canonical_vector(self):
+        # Public test key/vector from v0.1.10 docs/update-feed-contract.md.
+        # This is never a product signing key and is refused by its manifest validator.
+        self.payload.write_bytes(b"not really an installer")
+        feed = copy.deepcopy(self.unsigned)
+        feed["package"]["id"] = "com.example.MyGNUstepApp"
+        feed["releases"][0]["version"] = "1.2.3"
+        asset = feed["releases"][0]["assets"][0]
+        asset.update(backend="msi", platform="windows-x64", sizeBytes=23,
+                     sha256="110499c3d4d34a94a1ea70ae7e7353d32708e043bc0ccee13ec9fbdb7a9d20b1")
+        self.write(feed)
+        env = dict(self.env,
+            UPDATE_ED_PRIVATE_KEY=base64.b64encode(b"gnustep-packager test key, never").decode(),
+            UPDATE_ED_PUBLIC_KEY="Ll6BcPIwCiJWeu8fUhAG52rU62luKpZdTNsdJBfgxIs=")
+        self.run_signer(self.feed, self.work, env=env)
+        actual = json.loads(self.feed.read_text())["releases"][0]["assets"][0]
+        self.assertEqual(actual["edSignature"],
+            "OontQOUseqhwI8bs9WutMZpDP8CsAJ7VAmIO0CC3B40C29NAXAk7mHaLJVtbDOQxK+tUxuneXomb1b8VAoQ7Bw==")
+        self.assertEqual(actual["versionSignature"],
+            "OznddanxdN2fuBl7/hJlwqj+rFthQ+ItcaDcH25RKtjymCuDudMpn+23Ynocc+6d8im05LYjMhCWnaGyK39+BA==")
+        self.run_signer("--verify", self.feed, self.work, env=env)
+
+    def test_missing_channel_or_platform_fails_without_writing_feed(self):
+        for field in ("channel", "platform"):
+            feed = copy.deepcopy(self.unsigned)
+            if field == "channel": del feed["channel"]
+            else: del feed["releases"][0]["assets"][0]["platform"]
+            self.write(feed)
+            before = self.feed.read_bytes()
+            self.run_signer(self.feed, self.work, ok=False)
+            self.assertEqual(self.feed.read_bytes(), before)
+
+    def test_bound_identity_changes_and_missing_version_signature_are_refused(self):
+        good = self.sign()
+        for field in ("package", "version", "channel", "platform", "missing", "bad"):
+            with self.subTest(field=field):
+                feed = copy.deepcopy(good)
+                asset = feed["releases"][0]["assets"][0]
+                if field == "package": feed["package"]["id"] += ".other"
+                elif field == "version": feed["releases"][0]["version"] = "0.1.6"
+                elif field == "channel": feed["channel"] = "prerelease"
+                elif field == "platform": asset["platform"] = "linux-arm64"
+                elif field == "missing": del asset["versionSignature"]
+                else: asset["versionSignature"] = base64.b64encode(bytes(64)).decode()
+                self.write(feed)
+                self.run_signer("--verify", self.feed, self.work, ok=False)
 
     def test_wrong_key_and_changed_payload_fail_without_partial_feed(self):
         before = self.feed.read_bytes()
@@ -116,7 +165,18 @@ class SigningChecks(unittest.TestCase):
     @unittest.skipUnless(os.environ.get("PD_TEST_PACKAGER"), "set PD_TEST_PACKAGER for runtime-config integration")
     def test_packager_runtime_config_carries_the_throwaway_public_key(self):
         manifest = self.work / "runtime-manifest.json"
-        self.run_signer("--prepare-manifest", ROOT/"packaging/package.manifest.json", manifest)
+        refused = self.work / "real-anchor-must-not-change.json"
+        negative = self.run_signer("--prepare-manifest", ROOT/"packaging/package.manifest.json",
+                                   refused, ok=False)
+        self.assertIn("public key differs from the source manifest", negative.stderr)
+        self.assertFalse(refused.exists())
+        # The product manifest already pins its real public anchor. Exercise
+        # throwaway-key embedding on a private copy without weakening that guard.
+        source = self.work / "runtime-source.json"
+        fixture = json.loads((ROOT/"packaging/package.manifest.json").read_text())
+        fixture["updates"]["publicEDKey"] = None
+        source.write_text(json.dumps(fixture))
+        self.run_signer("--prepare-manifest", source, manifest)
         script = self.work / "runtime-config.ps1"
         script.write_text('param($Root, $Manifest, $Output)\n'
                           '. (Join-Path $Root "scripts/lib/core.ps1")\n'
@@ -128,6 +188,7 @@ class SigningChecks(unittest.TestCase):
                        env=env, check=True, capture_output=True)
         config = json.loads((self.work/"metadata/updates/gnustep-packager-update.json").read_text(encoding="utf-8-sig"))
         self.assertEqual(config["updates"]["publicEDKey"], self.env["UPDATE_ED_PUBLIC_KEY"])
+        self.assertEqual(config["package"]["id"], json.loads(manifest.read_text())["package"]["id"])
 
     @unittest.skipUnless(os.environ.get("PD_TEST_UPDATE_HELPER"), "set PD_TEST_UPDATE_HELPER for independent updater checks")
     def test_updater_refuses_bad_missing_and_applies_valid_local_fixture(self):
@@ -144,7 +205,9 @@ class SigningChecks(unittest.TestCase):
                     asset["edSignature"] = base64.b64encode(bytes(64)).decode()
                 elif case == "missing":
                     del asset["edSignature"]
-                plan = {"package": {"version": "0.1.4", "publicEDKey": self.env["UPDATE_ED_PUBLIC_KEY"]},
+                plan = {"package": {"id": self.unsigned["package"]["id"],
+                                    "currentVersion": "0.1.4", "channel": "stable",
+                                    "publicEDKey": self.env["UPDATE_ED_PUBLIC_KEY"]},
                         "release": {"version": "0.1.5"}, "asset": asset,
                         "execution": {"workingRoot": str(directory), "linux": {"currentAppImagePath": str(current)}}}
                 plan_path, state = directory/"plan.json", directory/"state.json"

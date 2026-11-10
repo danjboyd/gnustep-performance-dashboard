@@ -119,7 +119,7 @@ jobs:
 
       # These inputs must be provisioned separately by Dan. This workflow
       # names them; it never creates/rotates a key or repository secret.
-      - name: Sign payloads before distribution-feed assembly
+      - name: Sign payloads and bound release identities before assembly
         env:
           UPDATE_ED_PRIVATE_KEY: ${{ secrets.UPDATE_ED_PRIVATE_KEY }}
           UPDATE_ED_PUBLIC_KEY: ${{ vars.UPDATE_ED_PUBLIC_KEY }}

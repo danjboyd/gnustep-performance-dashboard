@@ -10,14 +10,19 @@ with one local change:
   twice, in libdispatch's `os/generic_win_base.h` and in the CRT. Re-apply
   it after a sync until the packager has it.
 
-- Source commit: `a79076895e8e1cba25ad4447f932098e4cb21690` (gnustep-packager
-  v0.1.6, 2026-10-29)
-
-The updater source tree is byte-identical to v0.1.4, so this pin migration
-requires no updater code change. It includes the install-failed alert
-punctuation fix. The three local
-compatibility lines above remain for the currently pinned Windows toolchain;
-remove them only after validating the replacement input.
+- Source commit: `a5c384b1fb6b252dc414b5420f4301cd32a181da` (v0.1.10).
+- The **whole** `objc/` source tree has been compared byte for byte with
+  `updater/objc` at that commit. Every file matches after removing exactly
+  `OBJCFLAGS += -DHAVE_MODE_T` from each of the three Makefiles. There are no
+  deliberately omitted upstream changes. `VENDORED.sha256` records the full
+  upstream file inventory and normalized content hashes.
+- `Tests/vendored-updater-checks.py` preserves that check after builds by
+  checking source files and ignoring generated objects/binaries. The four
+  shared source/header changes were the only upstream content changes since
+  the previous vendored copy; all other source bytes already matched.
+- Windows-specific files and Windows inputs/workflows were not edited.
+  Shared updater behavior still needs separate Windows qualification.
+- Source preparation only: builds and runtime acceptance are pending.
 
 `Dashboard/GNUmakefile` builds GPUpdaterCore, GPUpdaterUI and
 gp-update-helper from this copy and puts the helper in the app bundle. A

@@ -86,10 +86,12 @@ wait "$app_pid" || status=$?
 app_pid=""
 [ "$status" = 0 ] || die "the app exited with status $status on SIGTERM"
 
-(cd "$work" && "$appimage" --appimage-extract usr/runtime >/dev/null 2>&1) || die "cannot extract the AppImage"
+(cd "$work" && "$appimage" --appimage-extract >/dev/null 2>&1) || die "cannot extract the AppImage"
 runtime="$work/squashfs-root/usr/runtime"
 python3 "$repo_root/Tests/target-config-checks.py" "$work/squashfs-root" "$work/target-config" \
   || die "the bundled gstrace did not preserve the target's caller config"
+python3 "$repo_root/Tests/target-config-gui-checks.py" "$work/squashfs-root" "$work/target-config-gui" \
+  || die "the generated AppRun/GUI recorder did not preserve the target's caller config"
 info="$(LD_LIBRARY_PATH="$runtime/lib" GNUSTEP_CONFIG_FILE="$runtime/etc/GNUstep/GNUstep.conf" \
   HOME="$work/home" "$runtime/bin/gstrace" info "$trace" 2>/dev/null)"
 leaks="$(LD_LIBRARY_PATH="$runtime/lib" GNUSTEP_CONFIG_FILE="$runtime/etc/GNUstep/GNUstep.conf" \

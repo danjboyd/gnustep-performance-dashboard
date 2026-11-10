@@ -18,9 +18,13 @@ jobs:
       PREFIX: ${{ github.workspace }}/out/ci-gnustep
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The mixed-client fixture archives the immutable v0.1.5 source commit.
+          fetch-depth: 0
 
       - name: Release assembly and toolchain cache guards
         run: |
+          python3 Tests/vendored-updater-checks.py
           python3 Tests/release-assembly-checks.py
           python3 Tests/toolchain-fetch-checks.py
           python3 Tests/windows-source-inventory-checks.py
@@ -58,7 +62,7 @@ jobs:
           export LD_LIBRARY_PATH="$PREFIX/System/Library/Libraries${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
           PD_TEST_UPDATE_HELPER="$PWD/Dashboard/PerformanceDashboard.app/gp-update-helper" \
             python3 Tests/update-signing-checks.py
-          python3 Tests/update-chain-checks.py
+          python3 Tests/update-mixed-client-checks.py
 
       - name: Install pinned investigation themes
         run: |

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Sign update payload bytes before release assembly writes the distribution feed.
+"""Sign payload bytes and bound release identities before distribution assembly.
 
 Adapted from ObjcMarkdown's packaging/ci/sign-update-feed.py (Daniel Boyd).
 UPDATE_ED_PRIVATE_KEY is a base64 Ed25519 seed (32 bytes, or seed+public 64).
 UPDATE_ED_PUBLIC_KEY is the matching base64 public key (32 bytes). No key is
 printed or fetched. --verify needs only the public key. --prepare-manifest
-writes a private build input with updates.publicEDKey; the source manifest
-keeps null until Dan supplies the product key. Nothing is published.
+writes a private build input with updates.publicEDKey and requires any source
+key to match. Nothing is published.
 """
 import argparse
 import base64
@@ -49,12 +49,25 @@ def pem(path, label, data):
                      + b"-----END " + label + b"-----\n")
 
 
+def version_message(package_id, version, channel, platform, sha256):
+    """Packager v0.1.10's bound v1 statement; no trailing newline."""
+    parts = ["gnustep-packager-update-v1", package_id, version, channel,
+             platform, sha256.lower() if isinstance(sha256, str) else sha256]
+    for part in parts:
+        if not isinstance(part, str) or not part or any(
+                char in part for char in "\n\r\v\f\x85\u2028\u2029"):
+            raise ValueError("version signature fields must be nonempty single lines")
+    return "\n".join(parts).encode("utf-8")
+
+
 def assets(feed, directory):
     if feed.get("formatVersion") != 1:
         raise ValueError("unsupported feed format")
     result = []
     for release in feed.get("releases", []):
         for asset in release.get("assets", []):
+            if asset.get("backend") == "appimage" and asset.get("platform") != "linux-x64":
+                raise ValueError("AppImage update asset must name platform linux-x64")
             name = asset.get("name", "")
             if not name or Path(name).name != name or name in (".", ".."):
                 raise ValueError("feed asset must have a plain file name")
@@ -64,7 +77,7 @@ def assets(feed, directory):
             digest = hashlib.sha256(path.read_bytes()).hexdigest()
             if asset.get("sha256") != digest or asset.get("sizeBytes") != path.stat().st_size:
                 raise ValueError(f"payload hash/size differs from feed: {name}")
-            result.append((asset, path))
+            result.append((asset, path, release))
     if not result:
         raise ValueError("feed has no assets")
     return result
@@ -97,24 +110,36 @@ def process(feed_path, directory, verify=False):
             actual_der = openssl("pkey", "-in", private, "-pubout", "-outform", "DER")
             if actual_der != PUBLIC_PREFIX + expected or (len(key) == 64 and key[32:] != expected):
                 raise ValueError("private key does not match UPDATE_ED_PUBLIC_KEY")
-        for asset, path in pairs:
+        for asset, path, release in pairs:
+            message = work / "version-message"
+            message.write_bytes(version_message(feed.get("package", {}).get("id"),
+                release.get("version"), feed.get("channel"),
+                asset.get("platform"), asset.get("sha256")))
             if not verify:
                 signature = openssl("pkeyutl", "-sign", "-inkey", private, "-rawin", "-in", path)
                 if len(signature) != 64:
                     raise ValueError("invalid Ed25519 signature length")
                 asset["edSignature"] = base64.b64encode(signature).decode("ascii")
+                bound = openssl("pkeyutl", "-sign", "-inkey", private,
+                                "-rawin", "-in", message)
+                if len(bound) != 64:
+                    raise ValueError("invalid version signature length")
+                asset["versionSignature"] = base64.b64encode(bound).decode("ascii")
             signature = decode(asset.get("edSignature", ""), (64,), "edSignature")
             sig = work / "signature"
             sig.write_bytes(signature)
             openssl("pkeyutl", "-verify", "-pubin", "-inkey", pub, "-rawin", "-in", path, "-sigfile", sig)
+            sig.write_bytes(decode(asset.get("versionSignature", ""), (64,), "versionSignature"))
+            openssl("pkeyutl", "-verify", "-pubin", "-inkey", pub,
+                    "-rawin", "-in", message, "-sigfile", sig)
     if not verify:
         # No partial feed is written when a later payload or signature fails.
         atomic_json(feed_path, feed)
-    print(f"{'Verified' if verify else 'Signed and verified'} {len(pairs)} update payload(s)")
+    print(f"{'Verified' if verify else 'Signed and verified'} {len(pairs)} payload and bound version signature(s)")
 
 
-def verify_asset(asset, path):
-    """Verify one already hash/size-checked payload during release assembly."""
+def verify_asset(asset, path, package_id, version, channel):
+    """Verify payload bytes and their bound release identity during assembly."""
     expected = public_key()
     signature = decode(asset.get("edSignature", ""), (64,), "edSignature")
     with tempfile.TemporaryDirectory(prefix="pd-update-verify-") as tmp:
@@ -125,6 +150,12 @@ def verify_asset(asset, path):
         sig.write_bytes(signature)
         openssl("pkeyutl", "-verify", "-pubin", "-inkey", pub,
                 "-rawin", "-in", path, "-sigfile", sig)
+        message = work / "version-message"
+        message.write_bytes(version_message(package_id, version, channel,
+                                            asset.get("platform"), asset.get("sha256")))
+        sig.write_bytes(decode(asset.get("versionSignature", ""), (64,), "versionSignature"))
+        openssl("pkeyutl", "-verify", "-pubin", "-inkey", pub,
+                "-rawin", "-in", message, "-sigfile", sig)
 
 
 def prepare_manifest(source, output):

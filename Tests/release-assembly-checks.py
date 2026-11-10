@@ -85,7 +85,7 @@ class AssemblyChecks(unittest.TestCase):
         source_archive(directory / source_name)
         feed = {"formatVersion": 1, "provider": "github-release-feed", "channel": "prerelease",
                 "feedUrl": f"{assembly.PAGES}/updates/{platform}/prerelease.json",
-                "package": {"version": VERSION},
+                "package": {"id": assembly.PACKAGE_ID, "version": VERSION},
                 "releases": [{"version": VERSION, "tag": "v" + VERSION, "assets": [asset]}]}
         self.feeds[backend] = directory / (stem + ".update-feed.json")
         write_json(self.feeds[backend], feed)
@@ -112,6 +112,7 @@ class AssemblyChecks(unittest.TestCase):
                        env=dict(os.environ, **env), check=True, capture_output=True)
         p = assembly.load(self.provenance["appimage"])
         p["updatesPublicEDKey"] = env["UPDATE_ED_PUBLIC_KEY"]
+        p["updatesPackageIdentifier"] = assembly.PACKAGE_ID
         write_json(self.provenance["appimage"], p)
         return env
 
@@ -121,6 +122,7 @@ class AssemblyChecks(unittest.TestCase):
             assembly.assemble([self.linux], self.output, VERSION, COMMIT, ["appimage"], True)
         final = assembly.load(self.output/"site/updates/linux/prerelease.json")
         self.assertIn("edSignature", final["releases"][0]["assets"][0])
+        self.assertIn("versionSignature", final["releases"][0]["assets"][0])
         self.assertEqual(final, assembly.load(self.feeds["appimage"]))
         self.assertIn(assembly.digest(self.output/self.feeds["appimage"].name),
                       (self.output/"SHA256SUMS").read_text())
@@ -145,6 +147,31 @@ class AssemblyChecks(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Packaged public key"):
                 assembly.assemble([self.linux], self.output, VERSION, COMMIT, ["appimage"], True)
             self.assertFalse(self.output.exists())
+
+    def test_assembly_refuses_missing_or_invalid_bound_version_signature(self):
+        env = self.sign_linux()
+        good = assembly.load(self.feeds["appimage"])
+        with patch.dict(os.environ, env):
+            for signature in [None, base64.b64encode(bytes(64)).decode()]:
+                feed = json.loads(json.dumps(good))
+                asset = feed["releases"][0]["assets"][0]
+                if signature is None: asset.pop("versionSignature")
+                else: asset["versionSignature"] = signature
+                write_json(self.feeds["appimage"], feed)
+                with self.assertRaises(ValueError):
+                    assembly.assemble([self.linux], self.output, VERSION, COMMIT, ["appimage"], True)
+                self.assertFalse(self.output.exists())
+
+    def test_package_id_matches_manifest_and_packaged_client_configuration(self):
+        manifest = assembly.load(ROOT/"packaging/package.manifest.json")
+        self.assertEqual(manifest["package"]["id"], assembly.PACKAGE_ID)
+        env = self.sign_linux()
+        provenance = assembly.load(self.provenance["appimage"])
+        provenance["updatesPackageIdentifier"] = assembly.PACKAGE_ID+".other"
+        write_json(self.provenance["appimage"], provenance)
+        with patch.dict(os.environ, env), self.assertRaisesRegex(ValueError, "package id"):
+            assembly.assemble([self.linux], self.output, VERSION, COMMIT, ["appimage"], True)
+        self.assertFalse(self.output.exists())
 
     def test_combined_release_and_all_checksums(self):
         self.assemble()

@@ -23,6 +23,7 @@ from urllib.parse import quote
 
 REPOSITORY = "https://github.com/danjboyd/gnustep-performance-dashboard"
 PAGES = "https://danjboyd.github.io/gnustep-performance-dashboard"
+PACKAGE_ID = "io.github.danjboyd.PerformanceDashboard"
 PLATFORMS = {"appimage": "linux", "msi": "windows"}
 
 
@@ -95,6 +96,7 @@ def assemble(inputs, output, version, commit, backends, require_signatures=False
         require(feed.get("provider") == "github-release-feed", f"Unsupported feed provider: {name}")
         require(feed.get("channel") == channel, f"Wrong update channel: {name}")
         require(feed.get("package", {}).get("version") == version, f"Wrong package version: {name}")
+        require(feed.get("package", {}).get("id") == PACKAGE_ID, f"Wrong package id: {name}")
         releases = feed.get("releases", [])
         require(len(releases) == 1, f"Expected exactly one release: {name}")
         release = releases[0]
@@ -112,13 +114,15 @@ def assemble(inputs, output, version, commit, backends, require_signatures=False
         binary = check_payload(asset)
         checked.add(binary)
         if signing is not None:
-            signing["verify_asset"](assets[0], files[binary])
+            signing["verify_asset"](asset, files[binary], PACKAGE_ID, version, channel)
         expected_suffix = ".AppImage" if backend == "appimage" else ".msi"
         require(binary.endswith(expected_suffix), f"Wrong binary extension: {binary}")
         provenance_name = binary[:-len(expected_suffix)] + ".provenance.json"
         require(provenance_name in files, f"Missing provenance: {provenance_name}")
         provenance = load(files[provenance_name])
         if signing is not None and backend == "appimage":
+            require(provenance.get("updatesPackageIdentifier") == PACKAGE_ID,
+                    "Packaged updater package id differs from the signing package id")
             require(provenance.get("updatesPublicEDKey") == os.environ.get("UPDATE_ED_PUBLIC_KEY"),
                     "Packaged public key differs from the signing public key")
         if backend == "appimage":
@@ -179,7 +183,7 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--version", required=True)
     parser.add_argument("--commit", required=True)
-    parser.add_argument("--require-signatures", action="store_true", help="require Ed25519 payload verification using UPDATE_ED_PUBLIC_KEY")
+    parser.add_argument("--require-signatures", action="store_true", help="require payload and bound version signatures using UPDATE_ED_PUBLIC_KEY")
     parser.add_argument("--require-backend", choices=PLATFORMS, action="append", required=True)
     args = parser.parse_args()
     assemble(args.input, args.output, args.version, args.commit, args.require_backend, args.require_signatures)

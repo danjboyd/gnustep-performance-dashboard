@@ -141,6 +141,10 @@ import json, os, pathlib, sys
 configs = list(pathlib.Path(sys.argv[1]).rglob("gnustep-packager-update.json"))
 if len(configs) != 1 or json.loads(configs[0].read_text(encoding="utf-8-sig")).get("updates", {}).get("publicEDKey") != os.environ["UPDATE_ED_PUBLIC_KEY"]:
     raise SystemExit("package-linux: packaged update public key does not match the build input")
+configuration = json.loads(configs[0].read_text(encoding="utf-8-sig"))
+source = json.loads(pathlib.Path("packaging/package.manifest.json").read_text())
+if configuration.get("package", {}).get("id") != source["package"]["id"]:
+    raise SystemExit("package-linux: packaged updater package id does not match the source manifest")
 PYKEY
 fi
 theme_id="$(build_id "$root/runtime/System/Library/Themes/Adwaita.theme/Adwaita")"
@@ -169,6 +173,7 @@ json.dump({
     "sourceDirty": "$source_dirty" == "true",
     "trackedDiffSha256": "$source_diff_sha256",
     "updatesPublicEDKey": os.environ.get("UPDATE_ED_PUBLIC_KEY") or None,
+    "updatesPackageIdentifier": json.load(open("packaging/package.manifest.json"))["package"]["id"],
     "builtBy": "${GITHUB_ACTIONS:+github-actions}" or "local",
     "inputs": {
         "adwaita": pin("adwaita"),

@@ -25,10 +25,15 @@ main(int argc, char **argv)
         }
       GPUpdater *updater = [[GPUpdater alloc] initWithConfiguration: configuration];
       GPUpdateCheckResult *result = [updater checkForUpdatesSynchronously: &error];
-      if (result == nil || ![result hasUpdate])
+      if (result == nil)
         {
           fprintf(stderr, "fixture feed selection: %s\n", [[error description] UTF8String]);
           return 4;
+        }
+      if (![result hasUpdate])
+        {
+          printf("no update newer than installed version\n");
+          return 6;
         }
       GPUpdateAsset *selected = result.asset;
       /* The vendored MRC API names this getter "release", which ARC cannot
@@ -36,16 +41,22 @@ main(int argc, char **argv)
       GPUpdateRelease *selectedRelease = [result valueForKey: @"release"];
       NSMutableDictionary *asset = [NSMutableDictionary dictionaryWithDictionary:
         @{ @"backend": selected.backend, @"name": selected.name,
+           @"platform": selected.platform,
            @"url": [selected.URL absoluteString], @"sha256": selected.SHA256,
            @"sizeBytes": @(selected.sizeBytes) }];
       if (selected.edSignature != nil)
         asset[@"edSignature"] = selected.edSignature;
+      if (selected.versionSignature != nil)
+        asset[@"versionSignature"] = selected.versionSignature;
       if (selected.updateInformation != nil)
         asset[@"updateInformation"] = selected.updateInformation;
       if (selected.zsyncURL != nil)
         asset[@"zsync"] = @{ @"url": [selected.zsyncURL absoluteString] };
       NSMutableDictionary *package = [NSMutableDictionary dictionaryWithDictionary:
-        @{ @"version": configuration.currentVersion }];
+        @{ @"id": configuration.packageIdentifier,
+           @"version": configuration.currentVersion,
+           @"currentVersion": configuration.currentVersion,
+           @"channel": configuration.channel }];
       if (configuration.publicEDKey != nil)
         package[@"publicEDKey"] = configuration.publicEDKey;
       NSDictionary *plan = @{ @"package": package,
