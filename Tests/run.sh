@@ -60,6 +60,18 @@ else
 fi
 
 if [ "$(uname -s)" = Linux ]; then
+  echo "== Static custom CSD packaging gates"
+  if python3 "$ROOT/Tests/csd-package-checks.py"; then
+    pass "custom CSD inputs and static payload gates"
+  else
+    fail "custom CSD packaging gates"
+  fi
+  echo "== Static custom CSD provenance"
+  if python3 "$ROOT/Tests/csd-provenance-checks.py"; then
+    pass "custom CSD provenance identities and missing-input refusal"
+  else
+    fail "custom CSD provenance"
+  fi
   echo "== Linux CLI target exit status"
   if python3 "$ROOT/Tests/cli-exit-checks.py" "$GSTRACE" "$OUT/cli-exit"; then
     pass "CLI: target exit codes, requested stop and SIGKILL escalation"

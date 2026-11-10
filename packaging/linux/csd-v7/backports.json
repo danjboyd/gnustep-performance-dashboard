@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "scope": "PD local source-only backports of PUBLICv7; unofficial; not yet built/runtime-tested or approved to ship",
+  "seriesOrder": {
+    "libs-gui": [
+      "0001"
+    ],
+    "libs-back": [
+      "PD existing 0001 zero-extents",
+      "PD existing 0002 WM-delete",
+      "0003",
+      "0004a",
+      "0004",
+      "0005 (optional menus, included in prepared series)"
+    ]
+  },
+  "patches": [
+    {
+      "component": "gui",
+      "base": "7892137bdedd007eba8425f766e41481ddb4fda6",
+      "label": "0001",
+      "originalPublicCommit": "de97116da58b8fc5f1ca9e40f887de0fda76673d",
+      "originalPatchURL": "https://github.com/danjboyd/libs-gui/commit/de97116da58b8fc5f1ca9e40f887de0fda76673d.patch",
+      "originalPatchSHA256": "cb2ac8ec16c52350c3576d1f42dabce2cceb1418d8578a45906c50065a3be1d6",
+      "backportCommit": "a9aa827a1cf1d56089069fec2b9a5536af626cc7",
+      "file": "packaging/linux/csd-v7/libs-gui/0001-pd-backport.patch",
+      "sha256": "04d350cc294fe7fbf67ba7bc2336d07309c773d549223b724cce0fffaae4569f",
+      "author": "Daniel Boyd <danieljboyd@icloud.com>",
+      "authorDate": "Tue, 06 Oct 2026 11:36:51 -0500",
+      "validation": "PASS strict exported-series git apply --check + git apply in fresh exact-base tree, without three-way fallback; source/header/test and ChangeLog integrity verified. No build/compiler/runtime tests."
+    },
+    {
+      "component": "back",
+      "base": "bf3b3ced525f08415a20d109f05be1f91492414c",
+      "label": "0003",
+      "originalPublicCommit": "f4e32a7de1d5c0c3bd18f6fd33399c6474abc2aa",
+      "originalPatchURL": "https://github.com/danjboyd/libs-back/commit/f4e32a7de1d5c0c3bd18f6fd33399c6474abc2aa.patch",
+      "originalPatchSHA256": "1a50cc7f89ad1000be907b0ec497fbb369f2f50f4ce14a15ccdb4b138a2f8c9b",
+      "backportCommit": "910c4809a4518ca2bd982785cbaaec6564bd9b18",
+      "file": "packaging/linux/csd-v7/libs-back/0003-pd-backport.patch",
+      "sha256": "4313e6a16e0c1d8f4833897c9ec7237e5a866fe362a6bd0cd5a6479e492390c1",
+      "author": "Daniel Boyd <danieljboyd@icloud.com>",
+      "authorDate": "Tue, 06 Oct 2026 11:23:43 -0500",
+      "validation": "PASS strict exported-series git apply --check + git apply in fresh exact-base tree, without three-way fallback; source/header/test and ChangeLog integrity verified. No build/compiler/runtime tests."
+    },
+    {
+      "component": "back",
+      "base": "bf3b3ced525f08415a20d109f05be1f91492414c",
+      "label": "0004a",
+      "originalPublicCommit": "bc0e9f7637a42b2cb13751245801a66ffb09a458",
+      "originalPatchURL": "https://github.com/danjboyd/libs-back/commit/bc0e9f7637a42b2cb13751245801a66ffb09a458.patch",
+      "originalPatchSHA256": "cfb58463b6a1445fdd08b590601ad1cc36a2f57d03857581c6bc68cc54e0bdde",
+      "backportCommit": "fee64746ef24087861c303c1a69367ea82b3728b",
+      "file": "packaging/linux/csd-v7/libs-back/0004a-pd-backport.patch",
+      "sha256": "d0f9dfd98607399bfe225d88b9ee5320a346b92ad537193f6b07de79e995f68b",
+      "author": "Daniel Boyd <danieljboyd@icloud.com>",
+      "authorDate": "Thu, 05 Nov 2026 12:02:05 -0600",
+      "validation": "PASS strict exported-series git apply --check + git apply in fresh exact-base tree, without three-way fallback; source/header/test and ChangeLog integrity verified. No build/compiler/runtime tests."
+    },
+    {
+      "component": "back",
+      "base": "bf3b3ced525f08415a20d109f05be1f91492414c",
+      "label": "0004",
+      "originalPublicCommit": "bbe49da961d178bac55c50437b04a9ae02e03eff",
+      "originalPatchURL": "https://github.com/danjboyd/libs-back/commit/bbe49da961d178bac55c50437b04a9ae02e03eff.patch",
+      "originalPatchSHA256": "90cc2646151ec5271dba5a21757e2d5e5ca0749f37b3ff311faa397a91019959",
+      "backportCommit": "93dc6830e05791b6343f3f7053b4c5ebde634652",
+      "file": "packaging/linux/csd-v7/libs-back/0004-pd-backport.patch",
+      "sha256": "bbc4e09d506b17e3759302dde19efee7299b46bf13f725864bd8cdba546d22b3",
+      "author": "Daniel Boyd <danieljboyd@icloud.com>",
+      "authorDate": "Tue, 06 Oct 2026 11:30:32 -0500",
+      "validation": "PASS strict exported-series git apply --check + git apply in fresh exact-base tree, without three-way fallback; source/header/test and ChangeLog integrity verified. No build/compiler/runtime tests."
+    },
+    {
+      "component": "back",
+      "base": "bf3b3ced525f08415a20d109f05be1f91492414c",
+      "label": "0005",
+      "originalPublicCommit": "bd16074f34338f9b8b956975708a8e1752ef1855",
+      "originalPatchURL": "https://github.com/danjboyd/libs-back/commit/bd16074f34338f9b8b956975708a8e1752ef1855.patch",
+      "originalPatchSHA256": "1eba6d6c63a7235cd720cd9d076e42f623692518cd2838be3e828b7704adddd9",
+      "backportCommit": "e5191062f1ee3912090ee09cac99cd0f5b50e4bf",
+      "file": "packaging/linux/csd-v7/libs-back/0005-pd-backport.patch",
+      "sha256": "ed5e4e54d7143836685753fd873b45a6e1e55529f816c6e1a953c9062c90efc7",
+      "author": "Daniel Boyd <danieljboyd@icloud.com>",
+      "authorDate": "Tue, 06 Oct 2026 11:33:53 -0500",
+      "validation": "PASS strict exported-series git apply --check + git apply in fresh exact-base tree, without three-way fallback; source/header/test and ChangeLog integrity verified. No build/compiler/runtime tests."
+    }
+  ],
+  "validation": {
+    "strictApply": "PASS fresh exact-base trees, no3way/fuzz fallback",
+    "publicCodeIntegrity": "Source/Headers/Tests byte hashes match inspected publicv7 merge result",
+    "ChangeLog": "PD backport entries preserve attribution and explicitly state no new build/runtime run",
+    "runtime": "UNRUN",
+    "toolchainBuild": "UNRUN",
+    "tests": "Original regression sources retained; not executed for backport",
+    "ownerSignoff": "Do not infer approval for new backport hashes. Public0004a test has pending owner review in Upstream71."
+  }
+}

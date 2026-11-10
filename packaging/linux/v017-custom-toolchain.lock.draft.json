@@ -1,0 +1,146 @@
+{
+  "schema_version": 1,
+  "kind": "custom-toolchain-lock",
+  "name": "performance-dashboard-v017-csd-draft",
+  "based_on": "linux-amd64-clang / released CLI v0.1.5 source identities",
+  "install_domain": "LOCAL",
+  "container": {
+    "recipe": "linux-amd64-clang",
+    "apt_packages": [
+      "libxrender-dev"
+    ]
+  },
+  "components": [
+    {
+      "name": "libobjc2",
+      "url": "https://github.com/gnustep/libobjc2.git",
+      "revision": "b67709ad7851973fde127022d8ac6a710c82b1d5",
+      "configure_args": [],
+      "patches": []
+    },
+    {
+      "name": "libdispatch",
+      "url": "https://github.com/swiftlang/swift-corelibs-libdispatch.git",
+      "revision": "4ce40128f607a6eb7b58077a06b7464c1518a30d",
+      "configure_args": [],
+      "patches": []
+    },
+    {
+      "name": "tools-make",
+      "url": "https://github.com/gnustep/tools-make.git",
+      "revision": "50cf9619e672fb2ff6825f239b5a172c5dc55630",
+      "configure_args": [],
+      "patches": []
+    },
+    {
+      "name": "libs-base",
+      "url": "https://github.com/gnustep/libs-base.git",
+      "revision": "d898f703e618b86f9b7ecb0f05a257cb6ed3ffac",
+      "configure_args": [],
+      "patches": [
+        {
+          "path": "libs-base/0001-Turn-on-strict-host-verification-by-default.patch",
+          "sha256": "f1a8a5a5ce5f288c5325e5ab0c636e76054002eec2ce76f00b3862d787c73c0f"
+        },
+        {
+          "path": "libs-base/0002-Fix-error-message-and-disable-server-validation-fo.patch",
+          "sha256": "81f9478edf50d8ecbbac6566bdeb2bd2968414663e587c4ca4de2fdcfc3fd659"
+        },
+        {
+          "path": "libs-base/0003-More-TLS-improvements.patch",
+          "sha256": "fa8861096cfb476130e0af8d773be2953c20df92454bd8d2be9b9167e217dc82"
+        },
+        {
+          "path": "libs-base/0004-Improve-TLS-handling.patch",
+          "sha256": "e0e5241a6e137fd54e370b3a698627ab42d52df829b9d989c4ef41246076a92e"
+        },
+        {
+          "path": "libs-base/0005-Add-notification-for-verify-failure.patch",
+          "sha256": "67790903ed79fc544eee1319d346c5b942cb7e3b0721fe97cbf2f4bfd8fca9dd"
+        },
+        {
+          "path": "libs-base/0006-tweak-tls-notification-posting.patch",
+          "sha256": "4904926e1a5b24a83ab647aa1fe43e8c82e7107dde04401e1ba0e6a160d3167b"
+        },
+        {
+          "path": "libs-base/0007-Security-improvement.patch",
+          "sha256": "e2aaf06465b1622fb1312faa4e49aed37823061cd140d4083f9084f68aa9c5e8"
+        },
+        {
+          "path": "libs-base/0008-Fix-for-TLS-host-verification-when-we-have-a-host-ad.patch",
+          "sha256": "93ccc028d223452db6bd99f4066a3644e7364270b13039c35308491c7de1c9dc"
+        }
+      ]
+    },
+    {
+      "name": "libs-corebase",
+      "url": "https://github.com/gnustep/libs-corebase.git",
+      "revision": "e5983493d5ddf9c5b7e562f166855d9517a3f179",
+      "configure_args": [],
+      "patches": []
+    },
+    {
+      "name": "libs-gui",
+      "url": "https://github.com/gnustep/libs-gui.git",
+      "revision": "7892137bdedd007eba8425f766e41481ddb4fda6",
+      "configure_args": [],
+      "patches": [
+        {
+          "path": "csd-v7/libs-gui/0001-pd-backport.patch",
+          "sha256": "04d350cc294fe7fbf67ba7bc2336d07309c773d549223b724cce0fffaae4569f"
+        }
+      ]
+    },
+    {
+      "name": "libs-back",
+      "url": "https://github.com/gnustep/libs-back.git",
+      "revision": "bf3b3ced525f08415a20d109f05be1f91492414c",
+      "configure_args": [
+        "--enable-server=x11",
+        "--enable-graphics=cairo",
+        "--disable-glx",
+        "ac_cv_header_GL_glx_h=no",
+        "ac_cv_lib_GL_glXMakeContextCurrent=no",
+        "ac_cv_header_X11_extensions_Xrandr_h=no",
+        "ac_cv_lib_Xrandr_XRRUpdateConfiguration=no",
+        "ac_cv_lib_Xcursor_XcursorImageCreate=no",
+        "ac_cv_lib_Xfixes_XFixesSelectSelectionInput=no",
+        "ac_cv_lib_Xmu_main=no"
+      ],
+      "patches": [
+        {
+          "path": "libs-back/0001-x11-reject-zero-frame-extents.patch",
+          "sha256": "6535715f413d9c86af7cd591786f1cd40e3bae2d1b421510248337002903644e"
+        },
+        {
+          "path": "libs-back/0002-x11-wm-delete-window.patch",
+          "sha256": "a2f501b93ccf7d15e94b580fc03a9138d1a96a97f691c6fe1ecab8f0fe472c44"
+        },
+        {
+          "path": "csd-v7/libs-back/0003-pd-backport.patch",
+          "sha256": "4313e6a16e0c1d8f4833897c9ec7237e5a866fe362a6bd0cd5a6479e492390c1"
+        },
+        {
+          "path": "csd-v7/libs-back/0004a-pd-backport.patch",
+          "sha256": "d0f9dfd98607399bfe225d88b9ee5320a346b92ad537193f6b07de79e995f68b"
+        },
+        {
+          "path": "csd-v7/libs-back/0004-pd-backport.patch",
+          "sha256": "bbc4e09d506b17e3759302dde19efee7299b46bf13f725864bd8cdba546d22b3"
+        },
+        {
+          "path": "csd-v7/libs-back/0005-pd-backport.patch",
+          "sha256": "ed5e4e54d7143836685753fd873b45a6e1e55529f816c6e1a953c9062c90efc7"
+        }
+      ]
+    }
+  ],
+  "pd_review": {
+    "status": "DRAFT UNOFFICIAL / UNQUALIFIED; schema validation does not build or establish runtime ABI",
+    "builder_inspection_revision": "4d5504bbedf076f824c952f4ab198d09547c8c3c",
+    "existing_backend_make_args_not_expressible": [
+      "ADDITIONAL_LDFLAGS=-Wl,--as-needed"
+    ],
+    "note": "Per-component make_args is not supported by current builder schema/recipe; as-needed parity must be reviewed before build. Do not assume this metadata is executed. No libobjc2 patch or published input lock change. LOCAL selected after source review: existing stager consumes Local/Library and Local/Tools; no stage-domain change."
+  }
+}

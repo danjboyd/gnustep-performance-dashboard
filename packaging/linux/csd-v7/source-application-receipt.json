@@ -1,0 +1,75 @@
+{
+  "timestampUTC": "2026-11-10T19:08:46.292589+00:00",
+  "scope": "SOURCE APPLICABILITY ONLY: fresh exact-base trees, gitapply--check+gitapply WITHOUT3way/fuzz; source/header/test hashes match public v7 merges; NO build/runtime/GCC execution",
+  "components": [
+    {
+      "component": "gui",
+      "base": "7892137bdedd007eba8425f766e41481ddb4fda6",
+      "steps": [
+        {
+          "file": "packaging/linux/csd-v7/libs-gui/0001-pd-backport.patch",
+          "sha256": "04d350cc294fe7fbf67ba7bc2336d07309c773d549223b724cce0fffaae4569f",
+          "strictCheckExit": 0,
+          "applyExit": 0,
+          "threeWay": false
+        }
+      ],
+      "sourceHeaderTestFilesMatched": 765,
+      "matchesPreparedTree": true,
+      "matchesPublicCodeOnlyAnalysisTree": true,
+      "ChangeLogMatches": true
+    },
+    {
+      "component": "back",
+      "base": "bf3b3ced525f08415a20d109f05be1f91492414c",
+      "steps": [
+        {
+          "file": "packaging/linux/libs-back/0001-x11-reject-zero-frame-extents.patch",
+          "sha256": "6535715f413d9c86af7cd591786f1cd40e3bae2d1b421510248337002903644e",
+          "strictCheckExit": 0,
+          "applyExit": 0,
+          "threeWay": false
+        },
+        {
+          "file": "packaging/linux/libs-back/0002-x11-wm-delete-window.patch",
+          "sha256": "a2f501b93ccf7d15e94b580fc03a9138d1a96a97f691c6fe1ecab8f0fe472c44",
+          "strictCheckExit": 0,
+          "applyExit": 0,
+          "threeWay": false
+        },
+        {
+          "file": "packaging/linux/csd-v7/libs-back/0003-pd-backport.patch",
+          "sha256": "4313e6a16e0c1d8f4833897c9ec7237e5a866fe362a6bd0cd5a6479e492390c1",
+          "strictCheckExit": 0,
+          "applyExit": 0,
+          "threeWay": false
+        },
+        {
+          "file": "packaging/linux/csd-v7/libs-back/0004a-pd-backport.patch",
+          "sha256": "d0f9dfd98607399bfe225d88b9ee5320a346b92ad537193f6b07de79e995f68b",
+          "strictCheckExit": 0,
+          "applyExit": 0,
+          "threeWay": false
+        },
+        {
+          "file": "packaging/linux/csd-v7/libs-back/0004-pd-backport.patch",
+          "sha256": "bbc4e09d506b17e3759302dde19efee7299b46bf13f725864bd8cdba546d22b3",
+          "strictCheckExit": 0,
+          "applyExit": 0,
+          "threeWay": false
+        },
+        {
+          "file": "packaging/linux/csd-v7/libs-back/0005-pd-backport.patch",
+          "sha256": "ed5e4e54d7143836685753fd873b45a6e1e55529f816c6e1a953c9062c90efc7",
+          "strictCheckExit": 0,
+          "applyExit": 0,
+          "threeWay": false
+        }
+      ],
+      "sourceHeaderTestFilesMatched": 234,
+      "matchesPreparedTree": true,
+      "matchesPublicCodeOnlyAnalysisTree": true,
+      "ChangeLogMatches": true
+    }
+  ]
+}
