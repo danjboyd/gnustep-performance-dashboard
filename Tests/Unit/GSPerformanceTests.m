@@ -965,6 +965,45 @@ child(GSPCallTreeNode *n, NSString *name)
       out = [GSPRecorder targetEnvironmentFrom: in additions:
         @{@"GNUSTEP_CONFIG_FILE": @"/explicit.conf"}];
       XCTAssertEqualObjects([out objectForKey: @"GNUSTEP_CONFIG_FILE"], @"/explicit.conf");
+      [in setObject: @"" forKey: @"GP_HOST_UNSET"];
+      [in removeObjectForKey: @"GP_HOST_GNUSTEP_CONFIG_FILE"];
+      out = [GSPRecorder targetEnvironmentFrom: in additions: @{}];
+      XCTAssertNil([out objectForKey: @"GNUSTEP_CONFIG_FILE"]);
+    }
+}
+
+- (void) testDirectAppRunLeavesNoBundledEnvironmentPaths
+{
+  NSDictionary *in = @{
+    @"GP_HOST_VARS": @"PATH LD_LIBRARY_PATH GNUSTEP_CONFIG_FILE FONTCONFIG_FILE FONTCONFIG_PATH GNUSTEP_PATHPREFIX_LIST GSTheme",
+    @"GP_HOST_UNSET": @"FONTCONFIG_FILE FONTCONFIG_PATH GNUSTEP_PATHPREFIX_LIST GSTheme",
+    @"GP_HOST_PATH": @"/usr/local/bin:/usr/bin",
+    @"GP_HOST_LD_LIBRARY_PATH": @"",
+    @"GP_HOST_GNUSTEP_CONFIG_FILE": @"/caller.conf",
+    @"GP_HOST_PWD": @"/caller",
+    @"PATH": @"/image/gp-bin:/image/usr/runtime/bin:/usr/bin",
+    @"LD_LIBRARY_PATH": @"/image/usr/runtime/lib",
+    @"GNUSTEP_CONFIG_FILE": @"/image/usr/runtime/etc/GNUstep/GNUstep.conf",
+    @"FONTCONFIG_FILE": @"/image/usr/runtime/etc/fonts/fonts.conf",
+    @"FONTCONFIG_PATH": @"/image/usr/runtime/etc/fonts",
+    @"GNUSTEP_PATHPREFIX_LIST": @"/image/usr/runtime",
+    @"GSTheme": @"Adwaita",
+    @"DISPLAY": @":4"
+  };
+  NSDictionary *out = [GSPRecorder targetEnvironmentFrom: in additions: @{}];
+  XCTAssertEqualObjects([out objectForKey: @"PATH"], @"/usr/local/bin:/usr/bin");
+  XCTAssertEqualObjects([out objectForKey: @"LD_LIBRARY_PATH"], @"");
+  XCTAssertEqualObjects([out objectForKey: @"GNUSTEP_CONFIG_FILE"], @"/caller.conf");
+  XCTAssertNil([out objectForKey: @"GNUSTEP_PATHPREFIX_LIST"]);
+  XCTAssertNil([out objectForKey: @"FONTCONFIG_FILE"]);
+  XCTAssertNil([out objectForKey: @"FONTCONFIG_PATH"]);
+  XCTAssertNil([out objectForKey: @"GSTheme"]);
+  XCTAssertEqualObjects([out objectForKey: @"DISPLAY"], @":4");
+  for (NSString *key in out)
+    {
+      XCTAssertFalse([key hasPrefix: @"GP_HOST_"]);
+      for (NSString *part in [[out objectForKey: key] componentsSeparatedByString: @":"])
+        XCTAssertFalse([part isEqual: @"/image"] || [part hasPrefix: @"/image/"]);
     }
 }
 

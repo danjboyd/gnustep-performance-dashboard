@@ -419,6 +419,8 @@ under(NSString *value, NSString *root)
               [@"GP_HOST_" stringByAppendingString: key]];
             if (value != nil)
               [env setObject: value forKey: key];
+            else
+              [env removeObjectForKey: key];
           }
       for (NSString *key in hostUnset)
         if ([key length] > 0)
