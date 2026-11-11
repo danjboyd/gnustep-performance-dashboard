@@ -1,0 +1,100 @@
+{
+  "scope": "headless defaults-only probe; no NSApplication or X display; four sequential fresh private homes",
+  "candidate": "95dcc66f9dc77b919d1b3f87f0532c8b237f3f51",
+  "packagedGUIBuildIDSource": "exact local-review artifact a50598544bfa1d116b12ddd5e324de63bfb49c83afe53d017dd203010e34a3bd",
+  "results": [
+    {
+      "config": "original",
+      "theme": "Adwaita",
+      "result": {
+        "searchList": [
+          "GSPrimaryDomain",
+          "NSArgumentDomain",
+          "probe",
+          "NSGlobalDomain",
+          "GSConfigDomain",
+          "English",
+          "NSRegistrationDomain"
+        ],
+        "themeDomain": {},
+        "afterGSBackHandlesWindowDecorations": null,
+        "before": {
+          "GSX11HandlesWindowDecorations": "NO",
+          "GSBackHandlesWindowDecorations": null
+        }
+      }
+    },
+    {
+      "config": "original",
+      "theme": "Sombre",
+      "result": {
+        "searchList": [
+          "GSPrimaryDomain",
+          "NSArgumentDomain",
+          "probe",
+          "NSGlobalDomain",
+          "GSConfigDomain",
+          "English",
+          "NSRegistrationDomain"
+        ],
+        "themeDomain": {},
+        "afterGSBackHandlesWindowDecorations": null,
+        "before": {
+          "GSX11HandlesWindowDecorations": "NO",
+          "GSBackHandlesWindowDecorations": null
+        }
+      }
+    },
+    {
+      "config": "without-legacy-override",
+      "theme": "Adwaita",
+      "result": {
+        "searchList": [
+          "GSPrimaryDomain",
+          "NSArgumentDomain",
+          "probe",
+          "NSGlobalDomain",
+          "GSThemeDomain",
+          "GSConfigDomain",
+          "English",
+          "NSRegistrationDomain"
+        ],
+        "themeDomain": {
+          "GSBackHandlesWindowDecorations": "NO"
+        },
+        "afterGSBackHandlesWindowDecorations": "NO",
+        "before": {
+          "GSX11HandlesWindowDecorations": null,
+          "GSBackHandlesWindowDecorations": null
+        }
+      }
+    },
+    {
+      "config": "without-legacy-override",
+      "theme": "Sombre",
+      "result": {
+        "searchList": [
+          "GSPrimaryDomain",
+          "NSArgumentDomain",
+          "probe",
+          "NSGlobalDomain",
+          "GSThemeDomain",
+          "GSConfigDomain",
+          "English",
+          "NSRegistrationDomain"
+        ],
+        "themeDomain": {
+          "GSBackHandlesWindowDecorations": "YES"
+        },
+        "afterGSBackHandlesWindowDecorations": "YES",
+        "before": {
+          "GSX11HandlesWindowDecorations": null,
+          "GSBackHandlesWindowDecorations": null
+        }
+      }
+    }
+  ],
+  "initialHarnessFailure": "config mode0664 ignored and existing NSArgumentDomain could not be replaced; fixed mode0644 and remove/reinsert volatile argument domain; one corrected attempt passed all four cases",
+  "productBuilds": 0,
+  "GUIProcesses": 0
+}
