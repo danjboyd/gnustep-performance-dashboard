@@ -40,3 +40,27 @@ CLI already supports range/focus/prune/hide-system/symbol-summary. Improve
 examples and interpretation without changing defaults, filter semantics or
 claiming these options are new. GUI changes are deferred to avoid unrelated
 visual qualification in this local symbol work.
+
+## Recording-time identity proposal (design only)
+
+A future optional IMAGE_BUILD_ID record should bind a bounded GNU build-ID
+byte sequence to an exact IMAGE record in the same process stream, preferably
+by record offset or an explicit monotonically increasing image instance ID.
+Base address alone is ambiguous after unload/reload. Read the loaded object's
+PT_NOTE from mapped, range-checked program headers during the existing image
+scan outside signal handlers; never allocate, lock or open files in a sample
+signal handler, and keep the agent libc-only. Define missing/unsupported IDs
+explicitly; PE/PDB identity needs a separate platform contract.
+
+Old sized-record readers can skip an optional unknown record, but compatibility
+and version rules must be reviewed before assigning a record number. New
+readers would retain both recorded ID and provenance origin, refuse a local
+image/debug mismatch, and permit an explicitly supplied matching full image
+when the original path is unavailable. Never derive a historic ID from today's
+file silently. A new embedded-symbol schema would bind snapshots to recorded
+image instances/IDs; legacy name-only snapshots remain labelled legacy.
+
+Required future gates: loaded-vs-replaced-on-disk image identity, separate
+debug files and mismatches, missing IDs, dlopen/unload/reuse ordering, truncated
+records, old/new-reader compatibility, cross-platform trace reading and
+libc-only agent dependencies. No trace-format/agent implementation is included.
