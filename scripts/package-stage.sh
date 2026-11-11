@@ -193,7 +193,18 @@ EOF
 # before creating the server. A global legacy override suppresses that hook.
 # Preserve the existing managed-toolchain behavior.
 if [[ -n "${PD_CSD_TOOLCHAIN_LOCK:-}" ]]; then
+  csd_defaults="$runtime/etc/GNUstep/GlobalDefaults.plist"
+  csd_legacy_count="$(grep -c '^  GSX11HandlesWindowDecorations = NO;$' "$csd_defaults" || true)"
+  if [[ "$csd_legacy_count" != 1 ]]; then
+    printf 'package-stage: expected exactly one legacy decoration default, found %s\n' "$csd_legacy_count" >&2
+    exit 1
+  fi
   sed -i '/^  GSX11HandlesWindowDecorations = NO;$/d' "$runtime/etc/GNUstep/GlobalDefaults.plist"
+  csd_legacy_remaining="$(grep -c 'GSX11HandlesWindowDecorations' "$csd_defaults" || true)"
+  if [[ "$csd_legacy_remaining" != 0 ]]; then
+    printf 'package-stage: legacy decoration default remains after removal\n' >&2
+    exit 1
+  fi
 fi
 # gnustep-base ignores config files that group or others can write.
 chmod 0644 "$conf" "$runtime/etc/GNUstep/GlobalDefaults.plist"

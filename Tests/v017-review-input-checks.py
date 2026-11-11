@@ -32,6 +32,37 @@ class ReviewChecks(unittest.TestCase):
         change(value)
         self.manifest.write_text(json.dumps(value))
 
+    def removal_case(self, content, custom=True):
+        source = (ROOT / "scripts/package-stage.sh").read_text()
+        start = source.index("# In the custom CSD path, the GUI installs")
+        stop = source.index("# gnustep-base ignores config files", start)
+        runtime = self.root / "runtime"
+        defaults = runtime / "etc/GNUstep/GlobalDefaults.plist"
+        defaults.parent.mkdir(parents=True, exist_ok=True)
+        defaults.write_text(content)
+        result = subprocess.run(["bash", "-c", "set -euo pipefail\n" + source[start:stop]],
+            env=dict(os.environ, runtime=str(runtime), PD_CSD_TOOLCHAIN_LOCK="reviewed" if custom else ""),
+            capture_output=True, text=True, timeout=3)
+        return result, defaults.read_text()
+
+    def test_csd_default_removal_fails_closed_on_missing_duplicate_or_variant(self):
+        exact = "  GSX11HandlesWindowDecorations = NO;\n"
+        result, content = self.removal_case("{\n" + exact + "}\n")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("GSX11HandlesWindowDecorations", content)
+        for content in ("{\n}\n", "{\n\tGSX11HandlesWindowDecorations = NO;\n}\n",
+                        "{\n" + exact * 2 + "}\n", "{\n" + exact + " GSX11HandlesWindowDecorations=NO;\n}\n"):
+            with self.subTest(content=content):
+                result, remaining = self.removal_case(content)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("package-stage:", result.stderr)
+
+    def test_managed_defaults_are_unchanged(self):
+        original = "{\n  GSX11HandlesWindowDecorations = NO;\n}\n"
+        result, content = self.removal_case(original, custom=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(content, original)
+
     def test_reviewed_combination_and_order(self):
         result = check.check_review_inputs(self.manifest)
         self.assertEqual(result["sdkPatchCount"], 16)
