@@ -60,7 +60,7 @@ recording; readers stop at it.
 |---|---|
 | STRING | `aux` = id; UTF-8 bytes |
 | THREAD / THREAD_END | `aux` = flags (main, internal); thread name |
-| IMAGE | load bias, executable range, path |
+| IMAGE | load bias, executable range, path; optional loaded GNU build ID |
 | SAMPLE | `aux` = kind (cpu, wall, perf); frame count, kernel frame count, weight; frames |
 | STACK | `aux` = stack id; frames (allocation stacks are interned) |
 | ALLOC / FREE | address, size, stack id, realloc source |
@@ -84,3 +84,28 @@ unwinding is limited to frame pointers. Readers expose these in the CLI and
 GUI. Version 1 is retained because unknown record types are skipped; older
 readers will not display these diagnostics and should not be used to assess
 recording quality for v0.1.0.
+
+## Optional Linux IMAGE identity suffix
+
+The version1 stream keeps its existing IMAGE header and NUL-terminated path.
+When aux bit `GSP_IMAGE_BUILD_ID_AUX`(0x80000000) is set, immediately after the
+path NUL come uint32 magic0x44495347(GSID), uint16 version1, uint16 ID length,
+and1..64 raw GNU build-ID bytes. Padding remains8-byte record alignment.
+Legacy readers stop at the path NUL and ignore the suffix; new readers keep
+legacy records without the flag as identity-unverified. Flagged malformed or
+unsupported suffixes are invalid identity, never silently treated as legacy.
+
+The agent reads mapped readable PT_NOTE data during its ordinary image scan,
+not from sample handlers or from a possibly replaced disk file. Identity is
+attached to that exact IMAGE record, so no separate record pairing is needed.
+If a later scan observes a different identity at a previously seen mapping, it
+emits another IMAGE. Conflicting overlapping images are conservatively
+ambiguous for address-only lookup: samples lack lifetime IDs, so the reader
+refuses local/method/snapshot attribution rather than guessing. Unload/reload
+ordering that is not observed between scans cannot be reconstructed.
+
+Version2 portable symbol snapshots contain FormatVersion2, Images(path, load
+bias/range, captured ID and validity) and Symbols(address-to-name). Images
+with captured IDs require an equal binding before cached names are accepted;
+old flat name-only snapshots remain usable for legacy traces. Build IDs are
+identity assertions, not downloaded symbol data or cryptographic attestations.

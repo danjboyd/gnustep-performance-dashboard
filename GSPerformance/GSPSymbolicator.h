@@ -63,6 +63,8 @@
 /* Address -> display name for every frame of every stack, including fallback
    address labels, for embedding a portable snapshot in the trace bundle. */
 - (NSDictionary *) symbolTableForAllStacks;
+/* Versioned portable snapshot bound to recorded image identities. */
+- (NSDictionary *) symbolSnapshotForAllStacks;
 
 /* Parse the final :line component, preserving Windows drive colons.
    Returns nil for unavailable/malformed locations. Directory mappings are

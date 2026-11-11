@@ -41,6 +41,7 @@ typedef struct elf_sym
 }
 - (BOOL) functionStart: (uint64_t)vaddr into: (uint64_t *)start;
 + (GSPELFFile *) fileAtPath: (NSString *)path;
++ (GSPELFFile *) fileAtPath: (NSString *)path expectedBuildID: (NSData *)expected;
 - (const elf_sym *) symbolFor: (uint64_t)vaddr;
 - (NSString *) nameOf: (const elf_sym *)s;
 @end
@@ -451,6 +452,12 @@ debug_roots(void)
           count = dbg->count;
           names = dbg->names;
           hasSymtab = dbg->hasSymtab;
+          if (!funcCount && dbg->funcCount)
+            {
+              funcStarts = dbg->funcStarts;
+              funcCount = dbg->funcCount;
+              dbg->funcStarts = NULL;
+            }
           symbolPath = c;
           return;
         }
@@ -459,35 +466,44 @@ debug_roots(void)
 
 + (GSPELFFile *) fileAtPath: (NSString *)path
 {
-  GSPELFFile *f;
+  return [self fileAtPath: path expectedBuildID: nil];
+}
 
++ (GSPELFFile *) fileAtPath: (NSString *)path expectedBuildID: (NSData *)expected
+{
   @synchronized (self)
     {
       if (elfCache == nil)
         elfCache = [NSMutableDictionary dictionary];
-      NSArray *cacheKey = @[ path, debug_roots() ];
-      f = [elfCache objectForKey: cacheKey];
-      if (f != nil)
-        return [f isKindOfClass: [GSPELFFile class]] ? f : nil;
-      /* Pseudo images (linux-vdso.so.1) have no file; GNUstep's mapped
-         NSData does not cope with missing files.  */
-      NSData *d = nil;
+      NSArray *cacheKey = @[ path, debug_roots(), expected ?: [NSData data] ];
+      id cached = [elfCache objectForKey: cacheKey];
+      if (cached)
+        return [cached isKindOfClass: [GSPELFFile class]] ? cached : nil;
+      NSData *data = nil;
       BOOL isDir = NO;
       if ([path isAbsolutePath]
           && [[NSFileManager defaultManager] fileExistsAtPath: path isDirectory: &isDir]
           && !isDir)
-        d = [NSData dataWithContentsOfMappedFile: path];
-      f = [GSPELFFile new];
-      if (d == nil || ![f loadData: d])
+        data = [NSData dataWithContentsOfMappedFile: path];
+      GSPELFFile *file = [GSPELFFile new];
+      BOOL parsed = data && [file loadData: data];
+      if ([expected length] && (!parsed || file->isPE || ![file->buildID isEqual: expected]))
         {
-          [elfCache setObject: [NSNull null] forKey: cacheKey];
-          return nil;
+          /* Never retain functions/bounds from the wrong on-disk image.
+             A matching explicitly supplied file may replace a missing image. */
+          file = [GSPELFFile new];
+          file->buildID = expected;
+          [file loadDebugFileFor: path];
+          parsed = file->symbolPath != nil;
         }
-      f->symbolPath = path;
-      if (!f->hasSymtab)
-        [f loadDebugFileFor: path];
-      [elfCache setObject: f forKey: cacheKey];
-      return f;
+      else if (parsed)
+        {
+          file->symbolPath = path;
+          if (!file->hasSymtab)
+            [file loadDebugFileFor: path];
+        }
+      [elfCache setObject: parsed ? (id)file : (id)[NSNull null] forKey: cacheKey];
+      return parsed ? file : nil;
     }
 }
 
@@ -552,6 +568,7 @@ debug_roots(void)
   NSUInteger _impCount;
   NSArray *_impNames;
   NSDictionary *_embedded;         /* NSString hex -> name */
+  NSArray *_embeddedImages;        /* v2 snapshot image identities */
   NSMutableDictionary *_stackSymbols;   /* NSNumber stack -> NSArray or NSNull */
   NSMutableDictionary *_stackAddresses;
   NSUInteger _methodCountSeen;
@@ -604,7 +621,13 @@ static char *(*cxa_demangle)(const char *, char *, size_t *, int *);
       NSString *dir = [process.streamPath stringByDeletingLastPathComponent];
       NSString *embedded = [dir stringByAppendingPathComponent:
         [NSString stringWithFormat: @"symbols-%d.plist", process.pid]];
-      _embedded = [NSDictionary dictionaryWithContentsOfFile: embedded];
+      NSDictionary *saved = [NSDictionary dictionaryWithContentsOfFile: embedded];
+      if ([saved[@"FormatVersion"] isEqual: @2]
+          && [saved[@"Symbols"] isKindOfClass: [NSDictionary class]]
+          && [saved[@"Images"] isKindOfClass: [NSArray class]])
+        { _embedded = saved[@"Symbols"]; _embeddedImages = saved[@"Images"]; }
+      else
+        _embedded = saved;
     }
   return self;
 }
@@ -759,6 +782,15 @@ static char *(*cxa_demangle)(const char *, char *, size_t *, int *);
   return objc ? objc : name;
 }
 
+static NSDictionary *
+image_identity(GSPImage *image)
+{
+  return @{ @"Path": image.path ?: @"", @"Base": @(image.base),
+    @"Start": @(image.start), @"End": @(image.end),
+    @"BuildID": image.buildID ?: [NSData data],
+    @"Invalid": @(image.buildIDInvalid), @"Ambiguous": @(image.identityAmbiguous) };
+}
+
 /* Legacy embedded snapshots store display names, including reserved raw
  * address/image+offset labels, without a separate unknown-state flag. Match
  * that full format against this address/image, never a generic +0x suffix. */
@@ -801,7 +833,10 @@ embeddedFallback(NSString *name, uint64_t address, GSPImage *image)
   NSString *name = nil;
   uint64_t start = 0;
 
-  if (_embedded != nil)
+  BOOL unsafeImage = image.buildIDInvalid || image.identityAmbiguous;
+  if (_embedded != nil && !unsafeImage
+      && (image == nil || (_embeddedImages ? [_embeddedImages containsObject: image_identity(image)]
+          : ![image.buildID length])))
     {
       id saved = [_embedded objectForKey: [NSString stringWithFormat: @"%llx",
                                           (unsigned long long)address]];
@@ -812,7 +847,7 @@ embeddedFallback(NSString *name, uint64_t address, GSPImage *image)
         }
     }
 
-  if (name == nil)
+  if (name == nil && !unsafeImage)
     {
       const elf_sym *es = NULL;
       GSPELFFile *elf = nil;
@@ -820,7 +855,7 @@ embeddedFallback(NSString *name, uint64_t address, GSPImage *image)
       BOOL haveFunc = NO;
       if (image != nil)
         {
-          elf = [GSPELFFile fileAtPath: image.path];
+          elf = [GSPELFFile fileAtPath: image.path expectedBuildID: image.buildID];
           es = [elf symbolFor: address - image.base];
           if (es)
             start = es->start + image.base;
@@ -1051,11 +1086,16 @@ is_agent(GSPSymbol *s)
   NSString *result = nil;
   GSPImage *image = [self imageFor: address];
   NSString *tool = [GSPSymbolicator addr2linePath];
-  if (image != nil && tool != nil)
+  if (image != nil && tool != nil && !image.buildIDInvalid && !image.identityAmbiguous)
     {
       /* ELF: the address in the file is the offset from the load bias;
          PE: addr2line wants the address at the preferred image base.  */
-      GSPELFFile *file = [GSPELFFile fileAtPath: image.path];
+      GSPELFFile *file = [GSPELFFile fileAtPath: image.path expectedBuildID: image.buildID];
+      if (file == nil)
+        { [_lines setObject: [NSNull null] forKey: key]; return nil; }
+      if (!file->isPE && [file->buildID length]
+          && ![[GSPSymbolicator buildIDForImageAtPath: file->symbolPath] isEqual: file->buildID])
+        { [_lines setObject: [NSNull null] forKey: key]; return nil; }
       uint64_t where = address - image.base;
       if (file != nil && file->isPE)
         where += file->imageBase;
@@ -1171,11 +1211,35 @@ is_agent(GSPSymbol *s)
       }
   NSMutableArray *rows = [NSMutableArray array];
   for (NSString *path in [[modules allKeys] sortedArrayUsingSelector: @selector(compare:)])
-    [rows addObject: [modules objectForKey: path]];
+    {
+      NSMutableDictionary *row = [modules objectForKey: path];
+      NSMutableSet *identifiers = [NSMutableSet set];
+      BOOL invalid = NO, ambiguous = NO;
+      for (GSPImage *image in _process.images)
+        if ([image.path isEqual: path])
+          {
+            if ([image.buildID length]) [identifiers addObject: hex_string(image.buildID)];
+            invalid |= image.buildIDInvalid;
+            ambiguous |= image.identityAmbiguous;
+          }
+      if ([identifiers count] == 1 && !invalid && !ambiguous)
+        row[@"buildID"] = [identifiers anyObject];
+      row[@"identityStatus"] = invalid ? @"invalid" : ambiguous || identifiers.count > 1 ? @"ambiguous"
+        : identifiers.count ? @"recorded" : @"legacy/missing";
+      [rows addObject: row];
+    }
   return @{ @"frames": @(frames), @"unresolved": @(unknown),
             @"stacks": @([referenced count]), @"modules": rows,
             @"cpuFrames": @(cpuFrames), @"cpuUnresolved": @(cpuUnknown),
             @"cpuSampleWeight": @(cpuWeight) };
+}
+
+- (NSDictionary *) symbolSnapshotForAllStacks
+{
+  NSMutableArray *images = [NSMutableArray array];
+  for (GSPImage *image in _process.images)
+    [images addObject: image_identity(image)];
+  return @{ @"FormatVersion": @2, @"Images": images, @"Symbols": [self symbolTableForAllStacks] };
 }
 
 - (NSDictionary *) symbolTableForAllStacks

@@ -147,8 +147,21 @@ typedef struct gsp_image_payload
   uint64_t base;   /* load bias: runtime address = base + ELF vaddr */
   uint64_t start;  /* lowest mapped executable address */
   uint64_t end;    /* highest mapped executable address (exclusive) */
-  /* followed by NUL-terminated path */
+  /* Followed by NUL-terminated path. When aux has GSP_IMAGE_BUILD_ID_AUX,
+     the bytes immediately after the path NUL contain gsp_image_build_id
+     and length raw GNU build-ID bytes. Old readers ignore the suffix. */
 } gsp_image_payload;
+
+#define GSP_IMAGE_BUILD_ID_AUX UINT32_C(0x80000000)
+#define GSP_IMAGE_BUILD_ID_MAGIC UINT32_C(0x44495347) /* GSID, little endian */
+#define GSP_IMAGE_BUILD_ID_MAX 64
+
+typedef struct gsp_image_build_id
+{
+  uint32_t magic;
+  uint16_t version;   /* 1 */
+  uint16_t length;    /* 1..GSP_IMAGE_BUILD_ID_MAX, excludes header */
+} gsp_image_build_id;
 
 typedef struct gsp_frames_payload
 {

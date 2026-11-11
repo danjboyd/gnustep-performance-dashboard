@@ -175,14 +175,23 @@ pthread_create(pthread_t *thread, const pthread_attr_t *attr,
 /* images                                                              */
 
 #define MAX_IMAGES 4096
-static uintptr_t emitted_bases[MAX_IMAGES];
+typedef struct image_identity
+{
+  uint64_t start;
+  char path[1024];
+  uint16_t build_id_size;
+  uint8_t build_id[GSP_IMAGE_BUILD_ID_MAX];
+} image_identity;
+static image_identity emitted_images[MAX_IMAGES];
 static int emitted_count;
 static pthread_mutex_t images_lock = PTHREAD_MUTEX_INITIALIZER;
 
 typedef struct image_info
 {
   uint64_t base, start, end;
-  char path[1024];
+  char path[1024 + sizeof(gsp_image_build_id) + GSP_IMAGE_BUILD_ID_MAX];
+  uint16_t build_id_size;
+  uint8_t build_id[GSP_IMAGE_BUILD_ID_MAX];
 } image_info;
 
 typedef struct image_scan
@@ -190,6 +199,61 @@ typedef struct image_scan
   image_info *found;
   int count, max;
 } image_scan;
+
+/* Only inspect mapped, readable PT_NOTE ranges during the normal image scan,
+   never from a signal handler. No allocation, file access or new dependency. */
+static void
+loaded_build_id(const struct dl_phdr_info *pi, image_info *image)
+{
+  image->build_id_size = 0;
+  for (unsigned i = 0; i < pi->dlpi_phnum; i++)
+    {
+      const ElfW(Phdr) *note = &pi->dlpi_phdr[i];
+      if (note->p_type != PT_NOTE || note->p_memsz < 12
+          || note->p_vaddr > UINTPTR_MAX - pi->dlpi_addr)
+        continue;
+      uintptr_t start = pi->dlpi_addr + note->p_vaddr;
+      if (note->p_memsz > UINTPTR_MAX - start)
+        continue;
+      uintptr_t end = start + note->p_memsz;
+      bool readable = false;
+      for (unsigned j = 0; j < pi->dlpi_phnum; j++)
+        {
+          const ElfW(Phdr) *load = &pi->dlpi_phdr[j];
+          if (load->p_type != PT_LOAD || !(load->p_flags & PF_R)
+              || load->p_vaddr > UINTPTR_MAX - pi->dlpi_addr)
+            continue;
+          uintptr_t lo = pi->dlpi_addr + load->p_vaddr;
+          if (load->p_memsz <= UINTPTR_MAX - lo && start >= lo && end <= lo + load->p_memsz)
+            readable = true;
+        }
+      if (!readable)
+        continue;
+      const uint8_t *bytes = (const uint8_t *)start;
+      size_t size = (size_t)note->p_memsz, offset = 0;
+      while (offset <= size - 12)
+        {
+          uint32_t fields[3];
+          memcpy(fields, bytes + offset, sizeof(fields));
+          offset += 12;
+          size_t names = ((uint64_t)fields[0] + 3) & ~UINT64_C(3);
+          size_t desc = ((uint64_t)fields[1] + 3) & ~UINT64_C(3);
+          if (names > size - offset || desc > size - offset - names)
+            break;
+          if (fields[2] == NT_GNU_BUILD_ID && fields[0] == 4
+              && fields[1] > 0 && fields[1] <= GSP_IMAGE_BUILD_ID_MAX
+              && memcmp(bytes + offset, "GNU", 4) == 0)
+            {
+              image->build_id_size = (uint16_t)fields[1];
+              memcpy(image->build_id, bytes + offset + names, fields[1]);
+              return;
+            }
+          offset += names + desc;
+          if (size - offset < 12)
+            break;
+        }
+    }
+}
 
 static int
 image_cb(struct dl_phdr_info *pi, size_t size, void *data)
@@ -212,26 +276,34 @@ image_cb(struct dl_phdr_info *pi, size_t size, void *data)
     }
   if (hi == 0)
     return 0;
-  for (int i = 0; i < emitted_count; i++)
-    if (emitted_bases[i] == lo)
-      return 0;
   if (scan->count >= scan->max || emitted_count >= MAX_IMAGES)
     return 0;
-  image_info *im = &scan->found[scan->count++];
+  image_info *im = &scan->found[scan->count];
+  loaded_build_id(pi, im);
   im->base = pi->dlpi_addr;
   im->start = lo;
   im->end = hi;
   if (pi->dlpi_name && pi->dlpi_name[0])
     {
-      strncpy(im->path, pi->dlpi_name, sizeof(im->path) - 1);
-      im->path[sizeof(im->path) - 1] = 0;
+      strncpy(im->path, pi->dlpi_name, 1023);
+      im->path[1023] = 0;
     }
   else
     {
-      ssize_t n = readlink("/proc/self/exe", im->path, sizeof(im->path) - 1);
+      ssize_t n = readlink("/proc/self/exe", im->path, 1023);
       im->path[n > 0 ? n : 0] = 0;
     }
-  emitted_bases[emitted_count++] = lo;
+  for (int i = 0; i < emitted_count; i++)
+    if (emitted_images[i].start == lo && strcmp(emitted_images[i].path, im->path) == 0
+        && emitted_images[i].build_id_size == im->build_id_size
+        && memcmp(emitted_images[i].build_id, im->build_id, im->build_id_size) == 0)
+      return 0;
+  image_identity *identity = &emitted_images[emitted_count++];
+  identity->start = lo;
+  memcpy(identity->path, im->path, strlen(im->path) + 1);
+  identity->build_id_size = im->build_id_size;
+  memcpy(identity->build_id, im->build_id, im->build_id_size);
+  scan->count++;
   return 0;
 }
 
@@ -247,11 +319,20 @@ emit_new_images(gsp_thread *t, bool writer)
     {
       gsp_image_payload p = { found[i].base, found[i].start, found[i].end };
       size_t len = strlen(found[i].path) + 1;
+      uint32_t aux = 0;
+      if (found[i].build_id_size)
+        {
+          gsp_image_build_id id = { GSP_IMAGE_BUILD_ID_MAGIC, 1, found[i].build_id_size };
+          memcpy(found[i].path + len, &id, sizeof(id));
+          memcpy(found[i].path + len + sizeof(id), found[i].build_id, id.length);
+          len += sizeof(id) + id.length;
+          aux = GSP_IMAGE_BUILD_ID_AUX;
+        }
       if (writer)
-        gsp_writer_emit(GSP_REC_IMAGE, 0, gsp_now(), (uint32_t)gsp_gettid(),
+        gsp_writer_emit(GSP_REC_IMAGE, aux, gsp_now(), (uint32_t)gsp_gettid(),
                         &p, sizeof(p), found[i].path, len);
       else
-        gsp_emit_normal(t, GSP_REC_IMAGE, 0, 0, gsp_now(),
+        gsp_emit_normal(t, GSP_REC_IMAGE, aux, 0, gsp_now(),
                         &p, sizeof(p), found[i].path, len);
     }
   pthread_mutex_unlock(&images_lock);

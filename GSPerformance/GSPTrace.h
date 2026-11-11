@@ -78,6 +78,9 @@ typedef struct GSPIOEvent
 @property (nonatomic) uint64_t start;
 @property (nonatomic) uint64_t end;
 @property (nonatomic, copy) NSString *path;
+@property (nonatomic, copy) NSData *buildID; /* nil in legacy/unsupported images */
+@property (nonatomic) BOOL buildIDInvalid;  /* flagged suffix malformed: refuse local symbols */
+@property (nonatomic) BOOL identityAmbiguous; /* reused overlapping mapping, no lifetime attribution */
 @property (nonatomic, readonly) NSString *name;
 @end
 

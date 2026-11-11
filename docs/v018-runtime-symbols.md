@@ -1,9 +1,9 @@
 # Build-ID matched local runtime symbols
 
-Existing trace image records contain an absolute path, ELF load bias and
+Legacy trace image records contain an absolute path, ELF load bias and
 executable mapping range. Stack addresses and Objective-C method names are
-recorded; display snapshots may be embedded by `symbolicate --embed`. The
-stream and GSPImage do not contain a module build ID, original file digest,
+recorded; display snapshots may be embedded by `symbolicate --embed`. Those
+legacy records do not contain a module build ID, original file digest,
 debuglink CRC or a copy of runtime/debug files. A historic path alone cannot
 prove that the image still names the bytes loaded when recording.
 
@@ -25,10 +25,11 @@ include the configured roots, so alternate root sets do not reuse each other.
 
 For old traces, describe matching as local image-to-debug identity, not verified
 recording-time identity. If the original image is missing or matching symbols
-are unavailable, retain honest module+offset labels. No new agent/format or
-network/debuginfod dependency is introduced in this change. Capture-time IDs
-require a separately qualified agent/format extension; embedded display-name
-snapshots keep their existing precedence and are not retroactive ID evidence.
+are unavailable, retain honest module+offset labels. The initial local image/debug matching fix adds no network/debuginfod
+dependency. The subsequent local capture extension is documented below. Its
+agent/format changes have local validation, but package and cross-platform
+qualification remain unrun. Legacy display-name snapshots are not retroactive
+ID evidence and cannot override a recorded ID.
 
 Validation must cover a correct candidate resolving a private function, a
 different-ID richer candidate refusing, missing IDs refusing, root layout and
@@ -41,7 +42,7 @@ examples and interpretation without changing defaults, filter semantics or
 claiming these options are new. GUI changes are deferred to avoid unrelated
 visual qualification in this local symbol work.
 
-## Recording-time identity proposal (design only)
+## Earlier lifetime-aware proposal (remaining design work)
 
 A future optional IMAGE_BUILD_ID record should bind a bounded GNU build-ID
 byte sequence to an exact IMAGE record in the same process stream, preferably
@@ -60,7 +61,25 @@ when the original path is unavailable. Never derive a historic ID from today's
 file silently. A new embedded-symbol schema would bind snapshots to recorded
 image instances/IDs; legacy name-only snapshots remain labelled legacy.
 
-Required future gates: loaded-vs-replaced-on-disk image identity, separate
+Remaining qualification gates include: loaded-vs-replaced-on-disk image identity, separate
 debug files and mismatches, missing IDs, dlopen/unload/reuse ordering, truncated
 records, old/new-reader compatibility, cross-platform trace reading and
-libc-only agent dependencies. No trace-format/agent implementation is included.
+libc-only agent dependencies. Some gates now have local coverage below; a
+full lifetime-aware format and package qualification are still deferred.
+
+## Local implementation after goal674 scope approval
+
+The lead superseded the earlier design-only boundary for this new goal. The
+implementation uses a flagged suffix inside each existing IMAGE record instead
+of a separately paired record: header/path remain unchanged, old readers ignore
+trailing bytes, and new readers parse the bounded ID extension. See the exact
+layout in trace-format.md. This avoids ambiguous pairing between IMAGE and a
+separate identity record. Address reuse with conflicting observed identities
+is marked ambiguous; the reader does not infer sample lifetimes.
+
+Recorded IDs take precedence over the current path. A replaced/missing image
+can resolve only via an explicitly supplied matching symbol/full-image file.
+Malformed IDs and ambiguous mappings refuse attribution. Version2 embedded
+snapshots bind names to the image record identities; flat legacy snapshots
+cannot override a recorded ID. Existing traces and legacy snapshots remain
+readable. The broader lifetime-aware mapping design above remains future work.

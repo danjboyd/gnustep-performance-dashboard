@@ -340,6 +340,30 @@ payload_string(const uint8_t *p, size_t max)
           im.start = ip->start;
           im.end = ip->end;
           im.path = payload_string(p + sizeof(*ip), plen - sizeof(*ip));
+          if (r->aux & GSP_IMAGE_BUILD_ID_AUX)
+            {
+              size_t pathBytes = strnlen((const char *)p + sizeof(*ip), plen - sizeof(*ip));
+              size_t offset = sizeof(*ip) + pathBytes + 1;
+              im.buildIDInvalid = YES;
+              if (offset <= plen && sizeof(gsp_image_build_id) <= plen - offset)
+                {
+                  gsp_image_build_id id;
+                  memcpy(&id, p + offset, sizeof(id));
+                  if (id.magic == GSP_IMAGE_BUILD_ID_MAGIC && id.version == 1
+                      && id.length > 0 && id.length <= GSP_IMAGE_BUILD_ID_MAX
+                      && id.length <= plen - offset - sizeof(id))
+                    {
+                      im.buildID = [NSData dataWithBytes: p + offset + sizeof(id) length: id.length];
+                      im.buildIDInvalid = NO;
+                    }
+                }
+            }
+          for (GSPImage *old in _images)
+            if (im.start < old.end && old.start < im.end
+                && (im.buildIDInvalid || old.buildIDInvalid
+                    || im.base != old.base || ![im.path isEqual: old.path]
+                    || ![(im.buildID ?: [NSData data]) isEqual: (old.buildID ?: [NSData data])]))
+              { im.identityAmbiguous = YES; old.identityAmbiguous = YES; }
           [_images addObject: im];
         }
       break;

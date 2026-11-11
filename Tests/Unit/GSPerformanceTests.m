@@ -899,6 +899,94 @@ child(GSPCallTreeNode *n, NSString *name)
     }
 }
 
+- (void) testRecordedImageIDsPreserveLegacyAndRejectMalformedSuffix
+{
+  NSData *identifier = [NSData dataWithBytes: "\x11\x22\x33\x44" length: 4];
+  TraceBuilder *builder = [[TraceBuilder alloc] initWithPID: 4242];
+  [builder image: "/missing/legacy.so" base: 0x1000 start: 0x1100 end: 0x1200];
+  [builder image: "/missing/current.so" base: 0x2000 start: 0x2100 end: 0x2200 buildID: identifier];
+  [builder image: "/missing/bad.so" base: 0x3000 start: 0x3100 end: 0x3200 buildID: [NSData data]];
+  [builder image: "/missing/oversized.so" base: 0x4000 start: 0x4100 end: 0x4200 buildID: [NSMutableData dataWithLength: 65]];
+  [builder end: builder.start + MS];
+  GSPTrace *trace = [self traceFrom: builder name: @"image-identities" instruments: nil];
+  XCTAssertEqual(trace.targetProcess.images.count, (NSUInteger)4);
+  XCTAssertNil([trace.targetProcess.images[0] buildID]);
+  XCTAssertFalse([trace.targetProcess.images[0] buildIDInvalid]);
+  XCTAssertEqualObjects([trace.targetProcess.images[1] buildID], identifier);
+  XCTAssertFalse([trace.targetProcess.images[1] buildIDInvalid]);
+  XCTAssertTrue([trace.targetProcess.images[2] buildIDInvalid]);
+  XCTAssertTrue([trace.targetProcess.images[3] buildIDInvalid]);
+}
+
+- (void) testRecordedBuildIDOverridesChangedPathAndCanUseMatchingLocalFile
+{
+  NSFileManager *fm = [NSFileManager defaultManager];
+  NSString *root = [NSTemporaryDirectory() stringByAppendingPathComponent: [[NSUUID UUID] UUIDString]];
+  [fm createDirectoryAtPath: root withIntermediateDirectories: YES attributes: nil error: NULL];
+  NSString *image = [root stringByAppendingPathComponent: @"changed.so"];
+  NSString *debug = [root stringByAppendingPathComponent: @"matching.debug"];
+  NSData *recorded = [NSData dataWithBytes: "\x11\x22\x33\x44" length: 4];
+  NSData *changed = [NSData dataWithBytes: "\x55\x66\x77\x88" length: 4];
+  [symbol_elf_fixture(changed, YES) writeToFile: image atomically: YES];
+  [symbol_elf_fixture(recorded, YES) writeToFile: debug atomically: YES];
+  const char *current = getenv("GSP_DEBUG_ROOTS");
+  NSString *saved = current ? [NSString stringWithUTF8String: current] : nil;
+  @try
+    {
+      TraceBuilder *builder = [[TraceBuilder alloc] initWithPID: 4242];
+      [builder image: image.UTF8String base: 0x70000000 start: 0x70001000 end: 0x70002000 buildID: recorded];
+      [builder end: builder.start + MS];
+      NSString *path = [builder writeBundleNamed: @"changed-image-id" instruments: nil];
+      setenv("GSP_DEBUG_ROOTS", "/nonexistent/pd-debug-root", 1);
+      GSPTrace *trace = [GSPTrace traceWithPath: path error: NULL];
+      XCTAssertTrue([trace.targetProcess.symbolicator symbolForAddress: 0x70001104].isUnknown);
+      setenv("GSP_DEBUG_ROOTS", debug.UTF8String, 1);
+      trace = [GSPTrace traceWithPath: path error: NULL];
+      XCTAssertEqualObjects([trace.targetProcess.symbolicator symbolForAddress: 0x70001104].name, @"hidden_runtime");
+      [fm removeItemAtPath: image error: NULL];
+      trace = [GSPTrace traceWithPath: path error: NULL];
+      XCTAssertEqualObjects([trace.targetProcess.symbolicator symbolForAddress: 0x70001104].name, @"hidden_runtime");
+      /* A legacy name-only snapshot cannot override a recorded ID. */
+      NSString *cache = [path stringByAppendingPathComponent: @"symbols-4242.plist"];
+      [@{@"70001104": @"wrong_legacy_name"} writeToFile: cache atomically: YES];
+      trace = [GSPTrace traceWithPath: path error: NULL];
+      XCTAssertEqualObjects([trace.targetProcess.symbolicator symbolForAddress: 0x70001104].name, @"hidden_runtime");
+      NSDictionary *snapshot = [trace.targetProcess.symbolicator symbolSnapshotForAllStacks];
+      NSMutableDictionary *portable = [snapshot mutableCopy];
+      portable[@"Symbols"] = @{@"70001104": @"portable_matched_name"};
+      [portable writeToFile: cache atomically: YES];
+      setenv("GSP_DEBUG_ROOTS", "/nonexistent/pd-debug-root", 1);
+      trace = [GSPTrace traceWithPath: path error: NULL];
+      XCTAssertEqualObjects([trace.targetProcess.symbolicator symbolForAddress: 0x70001104].name, @"portable_matched_name");
+      portable[@"Images"] = @[];
+      [portable writeToFile: cache atomically: YES];
+      trace = [GSPTrace traceWithPath: path error: NULL];
+      XCTAssertTrue([trace.targetProcess.symbolicator symbolForAddress: 0x70001104].isUnknown);
+      [fm removeItemAtPath: path error: NULL];
+    }
+  @finally
+    {
+      if (saved) setenv("GSP_DEBUG_ROOTS", saved.UTF8String, 1);
+      else unsetenv("GSP_DEBUG_ROOTS");
+      [fm removeItemAtPath: root error: NULL];
+    }
+}
+
+- (void) testReusedMappingWithDifferentRecordedIdentityStaysUnknown
+{
+  TraceBuilder *builder = [[TraceBuilder alloc] initWithPID: 4242];
+  NSData *one = [NSData dataWithBytes: "1111" length: 4];
+  NSData *two = [NSData dataWithBytes: "2222" length: 4];
+  [builder image: "/missing/one.so" base: 0x70000000 start: 0x70001000 end: 0x70002000 buildID: one];
+  [builder image: "/missing/two.so" base: 0x70000000 start: 0x70001000 end: 0x70002000 buildID: two];
+  [builder name: 0x70001100 as: @"cannot_assign_to_one_lifetime"];
+  [builder end: builder.start + MS];
+  GSPTrace *trace = [self traceFrom: builder name: @"reused-image-id" instruments: nil];
+  XCTAssertTrue([trace.targetProcess.images[0] identityAmbiguous]);
+  XCTAssertTrue([trace.targetProcess.images[1] identityAmbiguous]);
+  XCTAssertTrue([trace.targetProcess.symbolicator symbolForAddress: 0x70001104].isUnknown);
+}
+
 - (void) testRuntimeDebugSymbolsMatchBuildIDInExplicitFile
 {
   NSData *identifier = [NSData dataWithBytes: "\x11\x22\x33\x44" length: 4];

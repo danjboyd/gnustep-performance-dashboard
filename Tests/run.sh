@@ -111,6 +111,12 @@ if [ "$(uname -s)" = Linux ]; then
   else
     fail "task launch descriptor handoff"
 
+  echo "== Loaded image build-ID capture"
+  if python3 "$ROOT/Tests/image-build-id-checks.py" >"$OUT/image-build-id.log" 2>&1; then
+    pass "loaded image build IDs and backward-compatible image paths"
+  else
+    cat "$OUT/image-build-id.log"
+    fail "loaded image build ID capture"
   fi
   echo "== Linux CLI target exit status"
   if python3 "$ROOT/Tests/cli-exit-checks.py" "$GSTRACE" "$OUT/cli-exit"; then

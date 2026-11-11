@@ -167,7 +167,35 @@ gstrace diff before.gstrace after.gstrace --kind allocations --fail-above 10
                          # kinds: cpu, allocations, leaks, signposts, files, network
 ```
 
-`--range 1.5-3.0` (seconds) and `--thread <tid>` restrict reports.
+`--range 1.5-3.0` (seconds from trace start) and `--thread <tid>` restrict reports.
+To separate workload activity from setup or teardown, start with a time range
+and inspect symbol coverage before narrowing the call tree:
+
+```sh
+gstrace report trace.gstrace top --range 1.5-3.0 --symbol-summary
+gstrace report trace.gstrace calltree --focus '-[Worker render]' --hide-system
+gstrace report trace.gstrace calltree --prune '-[Worker setUp]'
+```
+
+These are existing options. `--focus` keeps stacks containing the exact symbol
+name; `--prune` drops matching stacks. `--hide-system` removes system-library
+frames, so avoid hiding a frame you intend to focus on. Inclusive weights in
+parent/child rows overlap; do not sum them. `--symbol-summary` reports whole
+process coverage, even when the table uses a time range or other filters; its
+CPU-weighted denominator excludes wall samples.
+
+On Linux, optional `GSP_DEBUG_ROOTS=/path/to/debug-store:/path/to/runtime.debug`
+adds local debug files or build-ID directories. Separate symbols are accepted
+only when their ELF build ID matches the local image; mismatches or missing
+IDs retain the normal fallback. No symbols are downloaded automatically.
+New Linux captures retain loaded GNU build IDs and require matching local
+images/symbols; `gstrace info` lists capture coverage and unresolved-module
+IDs. Legacy traces through v0.1.6 lack recording-time IDs, so a local match
+cannot prove their historical image paths still name the recorded bytes.
+IDs identify builds; they do not supply symbols. Obtain matching debug symbols
+from the producer of that exact runtime build and verify its ID before placing
+it in a local debug root. A rebuild from the same source can have a different
+ID and is not a substitute. See [runtime symbol design](docs/v018-runtime-symbols.md).
 
 Linux launch recordings have no default size or duration cap. They request
 a graceful stop if available space on the trace filesystem falls below

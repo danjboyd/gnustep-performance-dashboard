@@ -73,6 +73,17 @@
              a: &image alen: sizeof(image) b: path blen: strlen(path) + 1];
 }
 
+- (void) image: (const char *)path base: (uint64_t)base start: (uint64_t)start end: (uint64_t)end buildID: (NSData *)identifier
+{
+  gsp_image_payload image = { base, start, end };
+  NSMutableData *tail = [NSMutableData dataWithBytes: path length: strlen(path) + 1];
+  gsp_image_build_id id = { GSP_IMAGE_BUILD_ID_MAGIC, 1, (uint16_t)identifier.length };
+  [tail appendBytes: &id length: sizeof(id)];
+  [tail appendData: identifier];
+  [self record: GSP_REC_IMAGE aux: GSP_IMAGE_BUILD_ID_AUX time: _start tid: (uint32_t)_pid
+             a: &image alen: sizeof(image) b: tail.bytes blen: tail.length];
+}
+
 - (void) string: (uint32_t)identifier value: (const char *)value
 {
   [self record: GSP_REC_STRING aux: identifier time: _start tid: (uint32_t)_pid

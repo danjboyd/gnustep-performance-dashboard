@@ -493,9 +493,11 @@ report_symbols(GSPProcess *process)
         NSString *path = [row objectForKey: @"path"];
         NSString *name = [path lastPathComponent];
         if ([[basenameCounts objectForKey: name] unsignedIntegerValue] > 1) name = path;
-        out([NSString stringWithFormat: @"    %@: %llu of %llu unresolved\n", name,
+        out([NSString stringWithFormat: @"    %@: %llu of %llu unresolved%@\n", name,
           [[row objectForKey: @"unresolved"] unsignedLongLongValue],
-          [[row objectForKey: @"frames"] unsignedLongLongValue]]);
+          [[row objectForKey: @"frames"] unsignedLongLongValue],
+          row[@"buildID"] ? [NSString stringWithFormat: @" [build-id %@]", row[@"buildID"]]
+            : [NSString stringWithFormat: @" [identity %@]", row[@"identityStatus"]]]);
       }
   uint64_t cpuFrames = [[summary objectForKey: @"cpuFrames"] unsignedLongLongValue];
   if (cpuFrames > 0)
@@ -554,6 +556,14 @@ cmd_info(NSArray *args)
       out([NSString stringWithFormat: @"  threads: %lu  images: %lu  stacks: %lu\n",
            (unsigned long)[p.threads count], (unsigned long)[p.images count],
            (unsigned long)[p.stacks count]]);
+      NSUInteger recordedIDs = 0, invalidIDs = 0;
+      for (GSPImage *image in p.images)
+        {
+          if ([image.buildID length]) recordedIDs++;
+          if (image.buildIDInvalid || image.identityAmbiguous) invalidIDs++;
+        }
+      out([NSString stringWithFormat: @"  image build IDs: %lu of %lu recorded; %lu invalid/ambiguous\n",
+        (unsigned long)recordedIDs, (unsigned long)p.images.count, (unsigned long)invalidIDs]);
       out([NSString stringWithFormat: @"  CPU samples: %llu (%@ CPU)  wall samples: %llu  dropped: %llu\n",
            (unsigned long long)cpu,
            GSPFormatDuration(cpu * (p.sampleIntervalMicroseconds ?: 1000) / 1e6),
@@ -1093,12 +1103,12 @@ cmd_symbolicate(NSArray *args)
     {
       for (GSPProcess *p in t.processes)
         {
-          NSDictionary *table = [p.symbolicator symbolTableForAllStacks];
+          NSDictionary *table = [p.symbolicator symbolSnapshotForAllStacks];
           NSString *file = [t.path stringByAppendingPathComponent:
             [NSString stringWithFormat: @"symbols-%d.plist", p.pid]];
           [table writeToFile: file atomically: YES];
           out([NSString stringWithFormat: @"%@: %lu symbols\n", [file lastPathComponent],
-               (unsigned long)[table count]]);
+               (unsigned long)[table[@"Symbols"] count]]);
         }
     }
   GSPProcess *p = t.targetProcess;
