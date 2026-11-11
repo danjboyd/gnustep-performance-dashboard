@@ -72,6 +72,12 @@ if [ "$(uname -s)" = Linux ]; then
   else
     fail "custom CSD provenance"
   fi
+  echo "== Combined v0.1.7 CSD review identities and exact dependencies"
+  if python3 "$ROOT/Tests/v017-review-input-checks.py"; then
+    pass "combined CSD patch order, application identity and hard direct-library gate"
+  else
+    fail "combined CSD review identities"
+  fi
   echo "== Linux task-launch descriptor handoff"
   if python3 "$ROOT/Tests/launch-helper-checks.py" "$ROOT/Runtime/obj/gsp-launch"; then
     pass "task launch: descriptors, environment, startup failures and no leaks"

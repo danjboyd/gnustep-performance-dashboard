@@ -23,8 +23,8 @@ no review artifact silently becomes a numeric release by renaming it.
 ## Producer and cache contract
 
 1. Verify application source, complete lock/patch order, builder commit and file
-   hashes before any fetch/cache use. The current XFixes proposal preserves15
-   patches; the separate link patch would make a different combined lock.
+   hashes before any fetch/cache use. The combined proposal has16 SDK patches and one separately bound applied
+   application patch. Its review manifest records both typed inventories.
    Counts come from that reviewed lock, never a hard-coded historical15.
 2. Resolve the Debian13 base image immutably and record final image ID, recipe,
    compiler and complete package inventory before compilation. Explicitly add

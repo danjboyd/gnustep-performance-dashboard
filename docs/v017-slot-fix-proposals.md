@@ -1,8 +1,9 @@
 # v0.1.7 slot corrections proposed for local review
 
 This branch starts at frozen candidate
-`95dcc66f9dc77b919d1b3f87f0532c8b237f3f51`. It proposes changes; it does
-not change the qualified input lock, frozen branches, or any built payload.
+`95dcc66f9dc77b919d1b3f87f0532c8b237f3f51`. The lead approved its direction, and it now carries combined proposed inputs
+and the CSD-only application defaults change. It does not change frozen
+branches or any built payload.
 No new SDK/app/theme build, GUI session, release or publication is authorized
 by this document. The November 11 artifact is **LOCAL REVIEW — dependency
 delta unresolved, NOT a release candidate**.
@@ -28,10 +29,13 @@ compositor that advertised `_GTK_FRAME_EXTENTS`. Enabling the build feature
 removes that unconditional failure. It cannot prove the remaining runtime
 conditions: those must be measured in the next slot.
 
-The sibling `v017-custom-toolchain.lock.proposed.json` removes only the forced
-XFixes-negative cache answer and adds `libxfixes-dev` to the explicit Debian13
-package inputs. It preserves all seven revisions, all fifteen patch hashes
-and ordering, the LOCAL domain and the other feature exclusions. The pinned
+The sibling `v017-custom-toolchain.lock.proposed.json` removes the forced XFixes-negative cache answer, adds `libxfixes-dev` to the
+explicit Debian13 inputs, and carries the approved Cairo link patch after
+the original six backend patches. All seven source revisions, the original
+fifteen patch hashes/order, LOCAL domain and other exclusions are preserved.
+The combined SDK count is16: Base8, GUI1, backend7. A separate application
+defaults patch makes17 reviewed patch entries; the SDK builder never applies
+that application patch. The pinned
 builder validator accepts the proposal and patch bytes. No configure or SDK
 build was run for it. Capture the new exact lock digest, resolved image and
 package inventory before any separately reviewed build. A new direct
@@ -60,7 +64,8 @@ Propose the small `docs/proposals/csd-theme-defaults.patch`: remove the
 legacy setting **only in explicit custom CSD staging**, where the reviewed
 GUI hook exists. Keep GSTheme=Adwaita and key mappings. Preserve the managed
 SDK path's legacy behavior. Do not change the hook to override user or
-command-line choices. The patch is not applied on this branch, and no new
+command-line choices. The approved patch is now applied to scripts/package-stage.sh in this isolated
+branch and its exact source digest is bound in v017-review-inputs.json. No new
 package has been built. The probe tested a private copy of its effect.
 
 The first diagnostic attempt was invalid because group-writable config
@@ -104,8 +109,9 @@ backend carry patch. It filters exactly `-lXft` and `-lXt` from GRAPHIC_LIBS
 only when BUILD_SERVER=x11 and BUILD_GRAPHICS=cairo. It changes the generated
 make-variable input, not the builder's prefix LDFLAGS, and needs no ignored
 schema key or new builder API. Other graphics backends retain their inputs.
-The patch is a proposal, not part of the proposed XFixes lock yet: adding it
-changes the carry-patch count/digest and needs review before a combined lock.
+The approved backend patch is now the last of seven backend carry patches in
+the combined proposed lock. Its digest and full16-patch SDK order are bound by
+v017-review-inputs.json; the application defaults patch is bound separately.
 
 The retained `config.make` contains both flags. Configure's Xt check adds Xt
 to LIBS; Cairo's Xlib branch also appends XFT_LIBS, and config.make.in exports
@@ -131,3 +137,21 @@ retain newly required libXfixes with a reviewed updated baseline, resolve
 all transitive libraries, and pass package/GUI gates. No current ELF or SDK
 was relinked. The dependency gate returns to hard failure; no local-review
 waiver carries forward automatically.
+
+## Combined input validation for the next slot
+
+`packaging/linux/v017-review-inputs.json` binds the exact combined lock, all16
+SDK patch entries in order, the separate applied application patch/source,
+and the strict backend-needed policy. Run the `review-inputs` subcommand of
+check-csd-package.py before building. The pinned builder also validates the
+SDK lock independently. Custom input checks automatically revalidate this
+manifest; both production package entry points explicitly bind it, preventing
+the historical draft lock from bypassing the gate. They require PD_CSD_BACKEND_LINK_LOG plus exact backend DT_NEEDED.
+The hard policy is the retained12-library set plus libXfixes.so.3, with no
+Xft/Xt. It is not a transitive-resolution waiver.
+
+Seven new static mutation tests cover order changes, changed patch bytes,
+applied-source drift, a forced XFixes-negative cache answer extra/missing direct libraries refusal of a missing link-log binding and historical/foreign-lock bypass. They are included in Tests/run.sh. The existing nine CSD
+input/stage tests and nine provenance tests also passed (25 total). No full
+product regression or new binary build was run. The unrendered next-slot
+receipt template explicitly marks every runtime result UNRUN.

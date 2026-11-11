@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "kind": "pd-csd-backend-needed-policy",
+  "retainedBackendSHA256": "9ff7360a84ad08972ec1b198fac9eba781b2a954d4908f751ec58082f219f0d9",
+  "retainedNeeded": [
+    "libX11.so.6",
+    "libXext.so.6",
+    "libXrender.so.1",
+    "libc.so.6",
+    "libcairo.so.2",
+    "libfontconfig.so.1",
+    "libfreetype.so.6",
+    "libgcc_s.so.1",
+    "libgnustep-base.so.1.31",
+    "libgnustep-gui.so.0.32",
+    "libm.so.6",
+    "libobjc.so.4.6"
+  ],
+  "expectedNeeded": [
+    "libX11.so.6",
+    "libXext.so.6",
+    "libXfixes.so.3",
+    "libXrender.so.1",
+    "libc.so.6",
+    "libcairo.so.2",
+    "libfontconfig.so.1",
+    "libfreetype.so.6",
+    "libgcc_s.so.1",
+    "libgnustep-base.so.1.31",
+    "libgnustep-gui.so.0.32",
+    "libm.so.6",
+    "libobjc.so.4.6"
+  ],
+  "policy": "exact equality; missing and unexpected direct entries fail; full transitive closure remains separate"
+}

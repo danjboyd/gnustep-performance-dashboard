@@ -1,0 +1,11 @@
+--- a/config.make.in
++++ b/config.make.in
+@@ -17,3 +17,8 @@
+ 
+ BACKEND_NAME=@BACKEND_NAME@
+ 
++
++# Cairo/X11 does not call Xft or Xt; preserve them for other backends.
++ifeq ($(BUILD_SERVER):$(BUILD_GRAPHICS),x11:cairo)
++GRAPHIC_LIBS := $(filter-out -lXft -lXt,$(GRAPHIC_LIBS))
++endif

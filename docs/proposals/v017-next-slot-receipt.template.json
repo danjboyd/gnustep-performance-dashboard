@@ -1,0 +1,162 @@
+{
+  "schemaVersion": 1,
+  "candidateCommit": null,
+  "renderRule": "Fill candidateCommit only after exact-head sign-off; this unrendered template cannot authorize or evidence a run",
+  "status": "UNRUN",
+  "reviewInputsSHA256": "c7f7ccc4b363db80dc0e0bcd30023f10db73f5865e0ff8626f5abf0fb2fd221a",
+  "toolchainLockSHA256": "a41f17bb116de08e904acb4ee2186c899ced69002d5f73ae06e844e4b4c7a943",
+  "sdkPatchCount": 16,
+  "sdkPatchCounts": {
+    "libobjc2": 0,
+    "libdispatch": 0,
+    "tools-make": 0,
+    "libs-base": 8,
+    "libs-corebase": 0,
+    "libs-gui": 1,
+    "libs-back": 7
+  },
+  "sdkPatchOrder": [
+    {
+      "component": "libs-base",
+      "path": "libs-base/0001-Turn-on-strict-host-verification-by-default.patch",
+      "sha256": "f1a8a5a5ce5f288c5325e5ab0c636e76054002eec2ce76f00b3862d787c73c0f"
+    },
+    {
+      "component": "libs-base",
+      "path": "libs-base/0002-Fix-error-message-and-disable-server-validation-fo.patch",
+      "sha256": "81f9478edf50d8ecbbac6566bdeb2bd2968414663e587c4ca4de2fdcfc3fd659"
+    },
+    {
+      "component": "libs-base",
+      "path": "libs-base/0003-More-TLS-improvements.patch",
+      "sha256": "fa8861096cfb476130e0af8d773be2953c20df92454bd8d2be9b9167e217dc82"
+    },
+    {
+      "component": "libs-base",
+      "path": "libs-base/0004-Improve-TLS-handling.patch",
+      "sha256": "e0e5241a6e137fd54e370b3a698627ab42d52df829b9d989c4ef41246076a92e"
+    },
+    {
+      "component": "libs-base",
+      "path": "libs-base/0005-Add-notification-for-verify-failure.patch",
+      "sha256": "67790903ed79fc544eee1319d346c5b942cb7e3b0721fe97cbf2f4bfd8fca9dd"
+    },
+    {
+      "component": "libs-base",
+      "path": "libs-base/0006-tweak-tls-notification-posting.patch",
+      "sha256": "4904926e1a5b24a83ab647aa1fe43e8c82e7107dde04401e1ba0e6a160d3167b"
+    },
+    {
+      "component": "libs-base",
+      "path": "libs-base/0007-Security-improvement.patch",
+      "sha256": "e2aaf06465b1622fb1312faa4e49aed37823061cd140d4083f9084f68aa9c5e8"
+    },
+    {
+      "component": "libs-base",
+      "path": "libs-base/0008-Fix-for-TLS-host-verification-when-we-have-a-host-ad.patch",
+      "sha256": "93ccc028d223452db6bd99f4066a3644e7364270b13039c35308491c7de1c9dc"
+    },
+    {
+      "component": "libs-gui",
+      "path": "csd-v7/libs-gui/0001-pd-backport.patch",
+      "sha256": "04d350cc294fe7fbf67ba7bc2336d07309c773d549223b724cce0fffaae4569f"
+    },
+    {
+      "component": "libs-back",
+      "path": "libs-back/0001-x11-reject-zero-frame-extents.patch",
+      "sha256": "6535715f413d9c86af7cd591786f1cd40e3bae2d1b421510248337002903644e"
+    },
+    {
+      "component": "libs-back",
+      "path": "libs-back/0002-x11-wm-delete-window.patch",
+      "sha256": "a2f501b93ccf7d15e94b580fc03a9138d1a96a97f691c6fe1ecab8f0fe472c44"
+    },
+    {
+      "component": "libs-back",
+      "path": "csd-v7/libs-back/0003-pd-backport.patch",
+      "sha256": "4313e6a16e0c1d8f4833897c9ec7237e5a866fe362a6bd0cd5a6479e492390c1"
+    },
+    {
+      "component": "libs-back",
+      "path": "csd-v7/libs-back/0004a-pd-backport.patch",
+      "sha256": "d0f9dfd98607399bfe225d88b9ee5320a346b92ad537193f6b07de79e995f68b"
+    },
+    {
+      "component": "libs-back",
+      "path": "csd-v7/libs-back/0004-pd-backport.patch",
+      "sha256": "bbc4e09d506b17e3759302dde19efee7299b46bf13f725864bd8cdba546d22b3"
+    },
+    {
+      "component": "libs-back",
+      "path": "csd-v7/libs-back/0005-pd-backport.patch",
+      "sha256": "ed5e4e54d7143836685753fd873b45a6e1e55529f816c6e1a953c9062c90efc7"
+    },
+    {
+      "component": "libs-back",
+      "path": "libs-back/0003-cairo-trim-unused-xft-xt.patch",
+      "sha256": "d5230c9a3463334c7cab858bc98bc8bc8020e7ba3e07a82eeb457537aff5bc74"
+    }
+  ],
+  "applicationPatchCount": 1,
+  "applicationPatchAppliedSourceSHA256": "289c82f77f6831c13fcbb9a876e013bf6ed92c7bc94fb6818de8c9bbdf4589b0",
+  "totalReviewedPatchEntries": 17,
+  "expectedDirectBackendNeeded": [
+    "libX11.so.6",
+    "libXext.so.6",
+    "libXfixes.so.3",
+    "libXrender.so.1",
+    "libc.so.6",
+    "libcairo.so.2",
+    "libfontconfig.so.1",
+    "libfreetype.so.6",
+    "libgcc_s.so.1",
+    "libgnustep-base.so.1.31",
+    "libgnustep-gui.so.0.32",
+    "libm.so.6",
+    "libobjc.so.4.6"
+  ],
+  "backendClosure": {
+    "status": "UNRUN",
+    "policy": "HARD exact direct set; no missing transitive or unexcluded external library",
+    "actualNeeded": null,
+    "executedLinkLogSHA256": null
+  },
+  "sdkBuild": {
+    "status": "UNRUN",
+    "imageIdentity": null,
+    "packageInventorySHA256": null,
+    "HAVE_XFIXES": null,
+    "jobsLimit": 2
+  },
+  "themeBuild": "UNRUN",
+  "appBuild": "UNRUN",
+  "headlessChecks": "UNRUN",
+  "AppImageSHA256": null,
+  "corners": {
+    "status": "UNRUN",
+    "AdwaitaExpected": "CSD extents, shadows and radius with supported compositor/ARGB",
+    "SombreExpected": "backend/WM decorations; maximize and Alt-F4 pass",
+    "menuTracking": "UNRUN; discover actual menu window and capture held press"
+  },
+  "guiLifecycle": "UNRUN",
+  "unrelatedNSTaskOverlap": "UNRUN",
+  "saveReopen": "UNRUN",
+  "debugSourceLookup": "UNRUN",
+  "strictTLSControls": {
+    "OS-store-real-feed": "UNRUN",
+    "combined-store-fixture-and-real-same-process": "UNRUN",
+    "same-leaf-default-refusal": "UNRUN",
+    "unrelated-issuer": "UNRUN",
+    "wrong-DNS-SAN": "UNRUN",
+    "wrong-IP-SAN": "UNRUN"
+  },
+  "cleanup": {
+    "status": "UNRUN",
+    "ownedIdentities": null,
+    "remainingOwnedProcesses": null,
+    "remainingOwnedDisplaySockets": null,
+    "releaseUTC": null
+  },
+  "publicationAuthority": "none",
+  "sdkPatchOrderSHA256": "c0769ba88e6e94749fa8d45c60802ba6b0e291cb40a451bbd833e812e4775f71"
+}

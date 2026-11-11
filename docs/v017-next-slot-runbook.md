@@ -1,6 +1,6 @@
 # Proposed next local v0.1.7 qualification slot
 
-No slot is booked by this document. Require lead review of one combined source
+No slot is booked by this document. The lead approved the proposal direction; require exact-head sign-off on the combined source
 commit, lock hash, patch set and builder identity, then an explicit START and
 hard cut. Do not reuse the November11 local-review waiver or artifact as a
 corrected candidate. No push, tag, signing, publication or upstream send is
@@ -16,9 +16,9 @@ included. Stop/reap owned processes and report release inside every window.
    explicit user/command-line preferences. Repeat the four headless probes
    in private homes if any hook/default bytes change. Config copies must be
    mode0644. Never create NSApplication or a display in that probe.
-3. Agree the exact expected direct DT_NEEDED baseline: original retained
-   baseline plus intentionally enabled libXfixes, without Xft/Xt. Record
-   whether other reviewed changes are permitted. Restore a HARD closure gate:
+3. Require the exact direct DT_NEEDED set in v017-backend-needed.json: original
+   retained12 entries plus libXfixes.so.3, without Xft/Xt. No other delta is
+   permitted by the current review. Restore a HARD closure gate:
    any unexpected direct library, missing transitive library, or external
    library absent from the explicit exclusion policy stops promotion.
 4. Prepare immutable Debian13 image identity with explicit libxrender-dev and
@@ -31,7 +31,9 @@ included. Stop/reap owned processes and report release inside every window.
 - Configure must detect XFixes and define HAVE_XFIXES=1. Keep the actual
   configure summary and full commands, with all other disabled features
   visible. A positive configure answer alone is insufficient.
-- Retain an expanded executed backend link command (GNUstep messages=yes or
+- Export PD_CSD_BACKEND_LINK_LOG to the actual backend build log before any
+  custom package input check. The checker refuses it if missing and enforces
+  the exact direct-library set. Retain an expanded executed backend link command (GNUstep messages=yes or
   equivalent reviewed verbosity); the previous quiet make log was insufficient.
   Check DT_NEEDED against the reviewed baseline and resolve the entire closure.
 - Build pinned Adwaita with the same SDK and its real receipt; build the pinned
@@ -110,3 +112,11 @@ loaded maps/properties, raw and decoded status, saved-trace tie-out, TLS proof,
 UTC/load snapshots, PID/start identities and final empty-owned-process/socket
 audit. A source prediction is not a runtime pass. No release acceptance is
 established until the lead reviews this exact corrected-build packet.
+
+## Receipt identities to render after sign-off
+
+Copy docs/proposals/v017-next-slot-receipt.template.json and fill only the
+reviewed candidate commit before execution. Verify its lock/manifest/order
+identities against source; leave runtime results UNRUN until supported by
+actual evidence. Rendered source must remain unchanged through qualification.
+No previous local-review dependency waiver applies.

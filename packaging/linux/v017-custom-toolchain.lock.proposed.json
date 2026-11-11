@@ -131,16 +131,21 @@
         {
           "path": "csd-v7/libs-back/0005-pd-backport.patch",
           "sha256": "ed5e4e54d7143836685753fd873b45a6e1e55529f816c6e1a953c9062c90efc7"
+        },
+        {
+          "path": "libs-back/0003-cairo-trim-unused-xft-xt.patch",
+          "sha256": "d5230c9a3463334c7cab858bc98bc8bc8020e7ba3e07a82eeb457537aff5bc74"
         }
       ]
     }
   ],
   "pd_review": {
-    "status": "PROPOSAL ONLY \u2014 source checked, not built or qualified",
+    "status": "COMBINED PROPOSED INPUT \u2014 awaiting exact-head sign-off and new runtime slot",
     "builder_inspection_revision": "4d5504bbedf076f824c952f4ab198d09547c8c3c",
     "existing_backend_make_args_not_expressible": [
       "ADDITIONAL_LDFLAGS=-Wl,--as-needed"
     ],
-    "note": "Per-component make_args is not supported by current builder schema/recipe; as-needed parity must be reviewed before build. Do not assume this metadata is executed. No libobjc2 patch or published input lock change. LOCAL selected after source review: existing stager consumes Local/Library and Local/Tools; no stage-domain change. Proposed correction: let configure detect XFixes with explicit libxfixes-dev; all other pins and patch bytes unchanged. No source proof alone establishes runtime compositor/ARGB support."
+    "note": "XFixes enabled with explicit development package; Cairo/X11 filters only unused Xft/Xt link inputs. The approved CSD-only application defaults patch is applied in application source and separately bound by the review-input manifest; it is not an SDK-component patch. No new build or runtime qualification.",
+    "review_inputs": "v017-review-inputs.json"
   }
 }

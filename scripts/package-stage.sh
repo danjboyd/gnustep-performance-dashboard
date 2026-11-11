@@ -58,6 +58,7 @@ if [[ -n "${PD_CSD_TOOLCHAIN_LOCK:-}" ]]; then
   : "${PD_CSD_ADWAITA_SHA256:?custom CSD requires the theme SHA-256}"
   : "${PD_CSD_ADWAITA_BUILD_RECEIPT:?custom CSD requires a theme build receipt}"
   python3 "$repo_root/scripts/check-csd-package.py" inputs \
+    --review-inputs "$repo_root/packaging/linux/v017-review-inputs.json" \
     --lock "$PD_CSD_TOOLCHAIN_LOCK" --sdk "$gnustep_root" \
     --backend "$LIBS_BACK_BUNDLE" --backend-sha256 "$PD_CSD_BACKEND_SHA256" \
     --theme "$ADWAITA_THEME" --theme-sha256 "$PD_CSD_ADWAITA_SHA256" \
@@ -188,6 +189,12 @@ cat > "$runtime/etc/GNUstep/GlobalDefaults.plist" <<'EOF'
   GSSecondAlternateKey = Super_R;
 }
 EOF
+# In the custom CSD path, the GUI installs each theme's backend preference
+# before creating the server. A global legacy override suppresses that hook.
+# Preserve the existing managed-toolchain behavior.
+if [[ -n "${PD_CSD_TOOLCHAIN_LOCK:-}" ]]; then
+  sed -i '/^  GSX11HandlesWindowDecorations = NO;$/d' "$runtime/etc/GNUstep/GlobalDefaults.plist"
+fi
 # gnustep-base ignores config files that group or others can write.
 chmod 0644 "$conf" "$runtime/etc/GNUstep/GlobalDefaults.plist"
 
