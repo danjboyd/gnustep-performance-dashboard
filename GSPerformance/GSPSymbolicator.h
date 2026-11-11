@@ -7,7 +7,9 @@
    2. the Objective-C method table the agent dumps at the end of a
       recording (GNUstep's libraries are normally stripped);
    3. ELF .symtab/.dynsym of the image, or of its separate debug file found
-      by build-id or .gnu_debuglink under /usr/lib/debug.  */
+      by matching build ID under /usr/lib/debug or explicit local
+      GSP_DEBUG_ROOTS. Old traces do not record module IDs; this checks
+      local image/debug identity, not historical recording identity.  */
 
 #import <Foundation/Foundation.h>
 
@@ -69,6 +71,10 @@
 
 + (BOOL) isSystemLibraryPath: (NSString *)path;
 + (NSString *) executableSearchPathInEnvironment: (NSDictionary *)environment;
+/* Local ELF diagnostics. Missing IDs and mismatched debug files are refused. */
++ (NSData *) buildIDForImageAtPath: (NSString *)path;
++ (NSString *) matchingDebugFileForImageAtPath: (NSString *)path;
+
 + (NSString *) addr2linePath;   /* nil when no addr2line is installed */
 + (NSString *) prettyObjCName: (NSString *)elfName;
 + (NSString *) demangle: (NSString *)name;

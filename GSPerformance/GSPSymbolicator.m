@@ -33,6 +33,7 @@ typedef struct elf_sym
   BOOL hasSymtab;
   NSData *buildID;
   NSString *debugLink;
+  NSString *symbolPath;
   uint64_t *funcStarts;      /* from .eh_frame_hdr, sorted */
   NSUInteger funcCount;
   BOOL isPE;
@@ -382,19 +383,51 @@ hex_string(NSData *d)
   return s;
 }
 
+/* Only explicit local roots; no network lookup or basename-based identity. */
+static NSArray *
+debug_roots(void)
+{
+  NSMutableArray *roots = [NSMutableArray arrayWithObject: @"/usr/lib/debug"];
+  const char *value = getenv("GSP_DEBUG_ROOTS");
+  NSString *configured = value ? [NSString stringWithUTF8String: value] : nil;
+#if defined(_WIN32)
+  NSString *separator = @";";
+#else
+  NSString *separator = @":";
+#endif
+  for (NSString *root in [configured componentsSeparatedByString: separator])
+    if ([root isAbsolutePath] && ![roots containsObject: root])
+      [roots addObject: root];
+  return roots;
+}
+
 - (void) loadDebugFileFor: (NSString *)path
 {
+  if ([buildID length] == 0)
+    return;   /* A matching filename/debuglink alone is insufficient. */
   NSMutableArray *candidates = [NSMutableArray array];
   NSFileManager *fm = [NSFileManager defaultManager];
-
-  if ([buildID length] > 1)
+  NSString *hex = hex_string(buildID);
+  for (NSString *root in debug_roots())
     {
-      NSString *hex = hex_string(buildID);
-      [candidates addObject: [NSString stringWithFormat:
-        @"/usr/lib/debug/.build-id/%@/%@.debug",
-        [hex substringToIndex: 2], [hex substringFromIndex: 2]]];
+      BOOL isDir = NO;
+      if (![fm fileExistsAtPath: root isDirectory: &isDir])
+        continue;
+      if (!isDir)
+        [candidates addObject: root];
+      else if ([hex length] > 2)
+        {
+          NSString *relative = [NSString stringWithFormat: @"%@/%@",
+            [hex substringToIndex: 2], [hex substringFromIndex: 2]];
+          for (NSString *directory in @[ root, [root stringByAppendingPathComponent: @".build-id"] ])
+            {
+              NSString *file = [directory stringByAppendingPathComponent: relative];
+              [candidates addObject: [file stringByAppendingString: @".debug"]];
+              [candidates addObject: file];
+            }
+        }
     }
-  if (debugLink != nil)
+  if ([debugLink length] && [[debugLink lastPathComponent] isEqual: debugLink])
     {
       NSString *dir = [path stringByDeletingLastPathComponent];
       [candidates addObject: [dir stringByAppendingPathComponent: debugLink]];
@@ -408,15 +441,17 @@ hex_string(NSData *d)
       if (![fm fileExistsAtPath: c] || [c isEqual: path])
         continue;
       GSPELFFile *dbg = [GSPELFFile new];
-      NSData *d = [NSData dataWithContentsOfFile: c];
-      if (d != nil && [dbg loadData: d] && dbg->count > count)
+      NSData *data = [NSData dataWithContentsOfFile: c];
+      if (data != nil && [dbg loadData: data] && !dbg->isPE
+          && [dbg->buildID isEqual: buildID] && dbg->count > count)
         {
           free(syms);
           syms = dbg->syms;
           dbg->syms = NULL;
           count = dbg->count;
           names = dbg->names;
-          hasSymtab = YES;
+          hasSymtab = dbg->hasSymtab;
+          symbolPath = c;
           return;
         }
     }
@@ -430,7 +465,8 @@ hex_string(NSData *d)
     {
       if (elfCache == nil)
         elfCache = [NSMutableDictionary dictionary];
-      f = [elfCache objectForKey: path];
+      NSArray *cacheKey = @[ path, debug_roots() ];
+      f = [elfCache objectForKey: cacheKey];
       if (f != nil)
         return [f isKindOfClass: [GSPELFFile class]] ? f : nil;
       /* Pseudo images (linux-vdso.so.1) have no file; GNUstep's mapped
@@ -444,12 +480,13 @@ hex_string(NSData *d)
       f = [GSPELFFile new];
       if (d == nil || ![f loadData: d])
         {
-          [elfCache setObject: [NSNull null] forKey: path];
+          [elfCache setObject: [NSNull null] forKey: cacheKey];
           return nil;
         }
+      f->symbolPath = path;
       if (!f->hasSymtab)
         [f loadDebugFileFor: path];
-      [elfCache setObject: f forKey: path];
+      [elfCache setObject: f forKey: cacheKey];
       return f;
     }
 }
@@ -542,6 +579,19 @@ static char *(*cxa_demangle)(const char *, char *, size_t *, int *);
         cxa_demangle = dlsym(h, "__cxa_demangle");
     }
 #endif
+}
+
++ (NSData *) buildIDForImageAtPath: (NSString *)path
+{
+  GSPELFFile *file = [GSPELFFile new];
+  NSData *data = [NSData dataWithContentsOfFile: path];
+  return data && [file loadData: data] && !file->isPE ? file->buildID : nil;
+}
+
++ (NSString *) matchingDebugFileForImageAtPath: (NSString *)path
+{
+  GSPELFFile *file = [GSPELFFile fileAtPath: path];
+  return file && ![file->symbolPath isEqual: path] ? file->symbolPath : nil;
 }
 
 - (instancetype) initWithProcess: (GSPProcess *)process
@@ -1012,7 +1062,7 @@ is_agent(GSPSymbol *s)
       NSTask *task = [NSTask new];
       NSPipe *pipe = [NSPipe pipe];
       [task setLaunchPath: tool];
-      [task setArguments: [NSArray arrayWithObjects: @"-e", image.path,
+      [task setArguments: [NSArray arrayWithObjects: @"-e", file ? file->symbolPath : image.path,
         [NSString stringWithFormat: @"0x%llx", (unsigned long long)where], nil]];
       [task setStandardOutput: pipe];
       [task setStandardError: [NSFileHandle fileHandleWithNullDevice]];

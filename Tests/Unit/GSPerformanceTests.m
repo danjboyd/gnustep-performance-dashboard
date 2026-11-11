@@ -14,6 +14,58 @@
 #include <unistd.h>
 #endif
 
+#if defined(__linux__)
+#include "GSPerformance/GSPELF.h"
+#include <stdlib.h>
+#include <string.h>
+
+/* Tiny real ELF tables exercise the reader without compiler/debug packages. */
+static NSData *
+symbol_elf_fixture(NSData *buildID, BOOL richer)
+{
+  NSMutableData *data = [NSMutableData dataWithLength: 2048];
+  uint8_t *bytes = data.mutableBytes;
+  Elf64_Ehdr *header = (Elf64_Ehdr *)bytes;
+  memcpy(header->e_ident, "\177ELF\2\1\1", 7);
+  header->e_type = 3;
+  header->e_machine = 62;
+  header->e_version = 1;
+  header->e_ehsize = sizeof(*header);
+  header->e_shoff = 1024;
+  header->e_shentsize = sizeof(Elf64_Shdr);
+  header->e_shnum = 4;
+  Elf64_Shdr *sections = (Elf64_Shdr *)(bytes + 1024);
+  uint32_t note[] = { 4, (uint32_t)buildID.length, 3 };
+  memcpy(bytes + 128, note, sizeof(note));
+  memcpy(bytes + 140, "GNU", 4);
+  if (buildID.length)
+    memcpy(bytes + 144, buildID.bytes, buildID.length);
+  sections[1].sh_type = SHT_NOTE;
+  sections[1].sh_offset = 128;
+  sections[1].sh_size = 16 + ((buildID.length + 3) & ~3u);
+  const char names[] = "\0exported\0hidden_runtime\0another_hidden\0";
+  memcpy(bytes + 256, names, sizeof(names));
+  sections[2].sh_type = SHT_STRTAB;
+  sections[2].sh_offset = 256;
+  sections[2].sh_size = sizeof(names);
+  sections[3].sh_type = richer ? SHT_SYMTAB : SHT_DYNSYM;
+  sections[3].sh_offset = 512;
+  sections[3].sh_size = (richer ? 3 : 1) * sizeof(Elf64_Sym);
+  sections[3].sh_link = 2;
+  sections[3].sh_entsize = sizeof(Elf64_Sym);
+  Elf64_Sym *symbols = (Elf64_Sym *)(bytes + 512);
+  for (unsigned k = 0; k < (richer ? 3u : 1u); k++)
+    {
+      symbols[k].st_name = k == 0 ? 1 : k == 1 ? 10 : 25;
+      symbols[k].st_info = STT_FUNC;
+      symbols[k].st_shndx = 1;
+      symbols[k].st_value = 0x1000 + k * 0x100;
+      symbols[k].st_size = 0x40;
+    }
+  return data;
+}
+#endif
+
 /* Exercise path generation at an identical instant, without changing the
    process clock or requiring a recording target. */
 @interface GSPRecorder (DefaultPathTests)
@@ -798,6 +850,81 @@ child(GSPCallTreeNode *n, NSString *name)
   XCTAssertEqualWithAccuracy(hang.duration, 0.6, 0.011);
   XCTAssertEqual(hang.severity, GSPHangHang);
 }
+
+#if defined(__linux__)
+- (void) checkRuntimeDebugSymbolsWithID: (NSData *)candidateID
+                               imageID: (NSData *)imageID
+                              expected: (BOOL)expected
+                                layout: (BOOL)layout
+{
+  NSFileManager *fm = [NSFileManager defaultManager];
+  NSString *root = [NSTemporaryDirectory() stringByAppendingPathComponent: [[NSUUID UUID] UUIDString]];
+  [fm createDirectoryAtPath: root withIntermediateDirectories: YES attributes: nil error: NULL];
+  NSString *image = [root stringByAppendingPathComponent: @"runtime.so"];
+  NSString *debug = [root stringByAppendingPathComponent: @"runtime.debug"];
+  if (layout)
+    {
+      debug = [root stringByAppendingPathComponent: @".build-id/11/223344.debug"];
+      [fm createDirectoryAtPath: debug.stringByDeletingLastPathComponent
+        withIntermediateDirectories: YES attributes: nil error: NULL];
+    }
+  [symbol_elf_fixture(imageID, NO) writeToFile: image atomically: YES];
+  [symbol_elf_fixture(candidateID, YES) writeToFile: debug atomically: YES];
+  const char *current = getenv("GSP_DEBUG_ROOTS");
+  NSString *saved = current ? [NSString stringWithUTF8String: current] : nil;
+  @try
+    {
+      setenv("GSP_DEBUG_ROOTS", (layout ? root : debug).UTF8String, 1);
+      XCTAssertEqualObjects([GSPSymbolicator buildIDForImageAtPath: image], imageID);
+      XCTAssertEqualObjects([GSPSymbolicator matchingDebugFileForImageAtPath: image], expected ? debug : nil);
+      TraceBuilder *builder = [[TraceBuilder alloc] initWithPID: 4242];
+      [builder image: image.UTF8String base: 0x70000000 start: 0x70001000 end: 0x70002000];
+      uint64_t frames[] = { 0x70001104 };
+      [builder sampleAt: builder.start + MS tid: 4242 kind: GSP_SAMPLE_CPU weight: 1 frames: frames count: 1];
+      [builder end: builder.start + 2 * MS];
+      GSPTrace *trace = [self traceFrom: builder name: @"debug-build-id" instruments: nil];
+      GSPSymbol *symbol = [trace.targetProcess.symbolicator symbolForAddress: frames[0]];
+      XCTAssertEqual(symbol.isUnknown, !expected);
+      if (expected)
+        XCTAssertEqualObjects(symbol.name, @"hidden_runtime");
+      /* A changed root set must not reuse an adopted debug table. */
+      setenv("GSP_DEBUG_ROOTS", "/nonexistent/pd-debug-root", 1);
+      XCTAssertNil([GSPSymbolicator matchingDebugFileForImageAtPath: image]);
+    }
+  @finally
+    {
+      if (saved) setenv("GSP_DEBUG_ROOTS", saved.UTF8String, 1);
+      else unsetenv("GSP_DEBUG_ROOTS");
+      [fm removeItemAtPath: root error: NULL];
+    }
+}
+
+- (void) testRuntimeDebugSymbolsMatchBuildIDInExplicitFile
+{
+  NSData *identifier = [NSData dataWithBytes: "\x11\x22\x33\x44" length: 4];
+  [self checkRuntimeDebugSymbolsWithID: identifier imageID: identifier expected: YES layout: NO];
+}
+
+- (void) testRuntimeDebugSymbolsMatchBuildIDDirectory
+{
+  NSData *identifier = [NSData dataWithBytes: "\x11\x22\x33\x44" length: 4];
+  [self checkRuntimeDebugSymbolsWithID: identifier imageID: identifier expected: YES layout: YES];
+}
+
+- (void) testRuntimeDebugSymbolsRejectDifferentBuildID
+{
+  NSData *identifier = [NSData dataWithBytes: "\x11\x22\x33\x44" length: 4];
+  NSData *other = [NSData dataWithBytes: "\x55\x66\x77\x88" length: 4];
+  [self checkRuntimeDebugSymbolsWithID: other imageID: identifier expected: NO layout: YES];
+}
+
+- (void) testRuntimeDebugSymbolsRejectMissingBuildID
+{
+  NSData *identifier = [NSData dataWithBytes: "\x11\x22\x33\x44" length: 4];
+  [self checkRuntimeDebugSymbolsWithID: [NSData data] imageID: identifier expected: NO layout: NO];
+  [self checkRuntimeDebugSymbolsWithID: identifier imageID: [NSData data] expected: NO layout: NO];
+}
+#endif
 
 - (void) testSymbolNames
 {
