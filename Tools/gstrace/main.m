@@ -14,7 +14,7 @@
 #  include <GSPerformance/gsp_capture.h>
 #endif
 
-#define GSTRACE_VERSION "0.1.5"
+#define GSTRACE_VERSION "0.1.6"
 
 static volatile sig_atomic_t interrupted;
 

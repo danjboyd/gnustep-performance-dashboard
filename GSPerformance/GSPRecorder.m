@@ -33,7 +33,7 @@
 
 NSString * const GSPRecorderErrorDomain = @"GSPRecorderErrorDomain";
 
-#define GSP_VERSION @"0.1.5"
+#define GSP_VERSION @"0.1.6"
 #define CTL_STOP 1
 #define CTL_LEAKS 2
 #define CTL_MARK 3
