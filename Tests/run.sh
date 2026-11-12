@@ -51,6 +51,13 @@ else
   fail "unit tests"
 fi
 
+echo "== Effective application version"
+if python3 "$ROOT/Tests/app-version-checks.py"; then
+  pass "application bundle version matches effective manifest; stale versions refused"
+else
+  fail "application bundle version"
+fi
+
 echo "== Symbol coverage CLI scenarios"
 if python3 "$ROOT/Tests/symbol-summary-checks.py" >"$OUT/symbol-summary.log" 2>&1; then
   pass "symbol coverage: allocation-only, CPU-weighted, embedding and CSV scenarios"

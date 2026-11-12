@@ -351,9 +351,15 @@ termination_signal(int sig)
 
 - (void) showAbout: (id)sender
 {
+  NSDictionary *info = [[NSBundle mainBundle] infoDictionary];
+  id value = [info objectForKey: @"CFBundleShortVersionString"];
+  if (![value isKindOfClass: [NSString class]] || ![value length])
+    value = [info objectForKey: @"ApplicationRelease"];
+  NSString *version = [value isKindOfClass: [NSString class]] && [value length]
+    ? value : @"unknown";
   NSRunAlertPanel(@"Performance Dashboard",
-    @"Version 0.1.5\n\nA performance analysis tool for GNUstep applications: Time Profiler, Hangs, Points of Interest, os_log, Allocations, Leaks and Zombies.\n\nAgent: %@",
-    @"OK", nil, nil, [GSPRecorder agentLibraryPath] ?: @"not found");
+    @"Version %@\n\nA performance analysis tool for GNUstep applications: Time Profiler, Hangs, Points of Interest, os_log, Allocations, Leaks and Zombies.\n\nAgent: %@",
+    @"OK", nil, nil, version, [GSPRecorder agentLibraryPath] ?: @"not found");
 }
 
 - (void) installHelper: (id)sender

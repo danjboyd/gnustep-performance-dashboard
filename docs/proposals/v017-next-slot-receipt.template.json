@@ -3,7 +3,7 @@
   "candidateCommit": null,
   "renderRule": "Fill candidateCommit only after exact-head sign-off; this unrendered template cannot authorize or evidence a run",
   "status": "UNRUN",
-  "reviewInputsSHA256": "ba45a773ca4cbc65b3f475bb83e15a122d3e27287c35b57351f3924fb36d1aee",
+  "reviewInputsSHA256": "b087dd3684612a583a35d8ce17618cc988727f4c4c290ebc479a1899ea6d7297",
   "toolchainLockSHA256": "a41f17bb116de08e904acb4ee2186c899ced69002d5f73ae06e844e4b4c7a943",
   "sdkPatchCount": 16,
   "sdkPatchCounts": {
@@ -98,7 +98,7 @@
     }
   ],
   "applicationPatchCount": 1,
-  "applicationPatchAppliedSourceSHA256": "0444cb0f51a18041431304ab87b7a3331a80300881ac3cf11a709bb8036c3bdc",
+  "applicationPatchAppliedSourceSHA256": "93bb9f4ea1efd8e6205ec8881d12dc47e40fa47f2a2b80ed940291d85296f601",
   "totalReviewedPatchEntries": 17,
   "expectedDirectBackendNeeded": [
     "libX11.so.6",

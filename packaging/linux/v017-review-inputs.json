@@ -103,7 +103,7 @@
       "sha256": "a12bb0538a044d45e9b359a11f542e0048de6d0a4e4f938e93ef26bd0a2d7f09",
       "appliedSource": {
         "path": "scripts/package-stage.sh",
-        "sha256": "0444cb0f51a18041431304ab87b7a3331a80300881ac3cf11a709bb8036c3bdc"
+        "sha256": "93bb9f4ea1efd8e6205ec8881d12dc47e40fa47f2a2b80ed940291d85296f601"
       },
       "scope": "applied in application source, not passed to SDK builder"
     }

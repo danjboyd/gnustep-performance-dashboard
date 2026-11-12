@@ -72,6 +72,7 @@ updater:
 
 # GPStandardUpdaterController looks for the helper beside the executable.
 after-all::
+	python3 ../scripts/app-version.py stamp --bundle PerformanceDashboard.app
 ifneq (,$(WINDOWS))
 ifeq ($(PD_ENABLE_SIGNPOSTS),1)
 	cp ../Runtime/obj/gsperf.dll PerformanceDashboard.app/

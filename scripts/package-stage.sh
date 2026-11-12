@@ -76,6 +76,7 @@ set -u
 if [[ ! -x "$app_source/PerformanceDashboard" ]]; then
   "$repo_root/scripts/package-build.sh"
 fi
+python3 "$repo_root/scripts/app-version.py" check --bundle "$app_source"
 for built in "$app_source/Resources/gsp-launch" "$app_source/Resources/libgsperf-agent.so" "$app_source/Resources/gstrace-helper" \
              "$repo_root/GSPerformance/obj/libGSPerformance.so.0" "$repo_root/Tools/gstrace/obj/gstrace"; do
   require "$built" "scripts/package-build.sh"

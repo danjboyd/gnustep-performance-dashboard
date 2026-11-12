@@ -157,6 +157,7 @@ build_id() { # file
   readelf -n "$1" 2>/dev/null | sed -n 's/^ *Build ID: *//p' | head -1
 }
 root="$work/squashfs-root/usr"
+python3 "$repo_root/scripts/app-version.py" check --bundle "$root/app/PerformanceDashboard.app" --version "$version"
 if [ "$release" = 1 ]; then
   python3 - "$work/squashfs-root" <<'PYKEY'
 import json, os, pathlib, sys
