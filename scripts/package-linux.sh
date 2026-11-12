@@ -101,7 +101,10 @@ signing_manifest=""
 work="$(mktemp -d "${TMPDIR:-/tmp}/pd-package.XXXXXX")"
 xvfb_pid=""
 cleanup() {
-  [ -n "$xvfb_pid" ] && kill "$xvfb_pid" 2>/dev/null || true
+  if [ -n "$xvfb_pid" ]; then
+    kill "$xvfb_pid" 2>/dev/null || true
+    wait "$xvfb_pid" 2>/dev/null || true
+  fi
   rm -rf "$work"
   [ -z "$signing_manifest" ] || rm -f "$signing_manifest"
 }
@@ -133,9 +136,8 @@ for command in manifest-check build stage validate; do
 done
 pwsh "$packager" -Manifest "$manifest" -Command package -Backend appimage "${version_args[@]}"
 
-exec 3< <(Xvfb -displayfd 4 -screen 0 1280x800x24 -nolisten tcp 4>&1 2>/dev/null)
-xvfb_pid=$!
-read -r -t 10 display_number <&3 || die "Xvfb did not start"
+. "$repo_root/scripts/private-xvfb.sh"
+pd_start_private_xvfb "$work/xvfb.log" || die "private pinned Xvfb did not start"
 mkdir -p "$work/home" "$work/xdg"
 DISPLAY=":$display_number" GNUSTEP_HOME="$work/home" XDG_DATA_HOME="$work/xdg" XDG_CONFIG_HOME="$work/xdg" \
   DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent \
@@ -143,6 +145,7 @@ DISPLAY=":$display_number" GNUSTEP_HOME="$work/home" XDG_DATA_HOME="$work/xdg" X
   python3 scripts/with-private-home.py "$work/smoke-sandbox" -- \
     pwsh "$packager" -Manifest "$manifest" -Command validate -Backend appimage -RunSmoke "${version_args[@]}"
 kill "$xvfb_pid" 2>/dev/null || true
+wait "$xvfb_pid" 2>/dev/null || true
 xvfb_pid=""
 
 appimage="dist/packages/PerformanceDashboard-$version-x86_64.AppImage"

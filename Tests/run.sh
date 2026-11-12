@@ -67,6 +67,12 @@ else
 fi
 
 if [ "$(uname -s)" = Linux ]; then
+  echo "== Offline CSD harness contracts"
+  if python3 "$ROOT/Tests/csd-harness-checks.py"; then
+    pass "CSD harness: nested make overrides and reserved-display refusal"
+  else
+    fail "CSD harness contracts"
+  fi
   echo "== Static custom CSD packaging gates"
   if python3 "$ROOT/Tests/csd-package-checks.py"; then
     pass "custom CSD inputs and static payload gates"

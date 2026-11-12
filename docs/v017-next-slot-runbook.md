@@ -120,3 +120,34 @@ reviewed candidate commit before execution. Verify its lock/manifest/order
 identities against source; leave runtime results UNRUN until supported by
 actual evidence. Rendered source must remain unchanged through qualification.
 No previous local-review dependency waiver applies.
+
+## Post-slot harness corrections (Nov12, local proposal)
+
+The Nov12 qualification of frozen28 passed47 unit tests and60 headless checks.
+The first unit invocation never ran tests: GNUstep config reset the environment
+GNUSTEP_MAKEFILES path. Yesterday's script installed XCTest into its private SDK,
+so it did not expose that issue. The accepted correction30290 copies makefiles
+outside the SDK and passes all three variables on the make command line and
+through MAKEFLAGS. No compiler flags/source/SDK are changed or installed.
+For a future reviewed SDK and serially built, uninstalled tools-xctest use:
+
+```sh
+bash scripts/csd-test-build.sh "$PD_SDK" "$PD_XCTEST" "$PD_UNUSED_TEST_EVIDENCE"
+```
+
+Paths must be absolute without whitespace; the output must be new. The helper
+logs exact overrides and stops at the first failing unit/headless gate. Use this
+entry point in future hosted consumption instead of hand-exported makefile paths.
+The new version and offline harness regression groups add two named headless
+checks to the60 from frozen28 (expected62, still not executed here); compiled count/GUI qualification is still UNRUN for this proposal.
+
+Package smoke/record now source private-xvfb.sh, default to explicit:151, log
+the number/PID, refuse occupied or host0/120 displays, and require a connection
+to the owned child. Existing traps stop only that child. Disposable-container
+X0 was isolated from host0 and accepted30367; fixed/logged numbers remove the
+ambiguity. Run compositor/window qualification only in a separately booked slot.
+The first C readiness attempt confused _NET_SUPPORTED with the separate root
+_NET_SUPPORTING_WM_CHECK property. Future C polls must require the root property
+to point to a child carrying the same value, log each poll up to30s, and separately
+require advertised _GTK_FRAME_EXTENTS plus a compositor selection owner. The
+single fresh-profile retry30647 passed; keep its raw failed first attempt.
