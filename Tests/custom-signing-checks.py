@@ -93,7 +93,7 @@ class InputChecks(unittest.TestCase):
             self.assertFalse((root / 'wrong').exists())
             gate.unpack(archive, sha(archive), root / 'good')
             self.assertEqual((root / 'good/candidate.AppImage').read_bytes(), b'synthetic')
-            self.assertTrue((root / 'good/candidate.AppImage').stat().st_mode & 0o100)
+            self.assertFalse((root / 'good/candidate.AppImage').stat().st_mode & 0o111)
             for name, mode in [('../escape', stat.S_IFREG), ('link', stat.S_IFLNK), ('nested/file', stat.S_IFREG)]:
                 with self.subTest(name=name):
                     with zipfile.ZipFile(archive, 'w') as stream:

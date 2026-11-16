@@ -62,10 +62,6 @@ def unpack(archive, digest, output):
         for entry in files:
             with source.open(entry) as src, (output / entry.filename).open('xb') as dst:
                 shutil.copyfileobj(src, dst)
-            # Upload/download does not preserve executable modes. Only the
-            # independently hash-bound AppImage needs execution for extraction.
-            if entry.filename.endswith('.AppImage'):
-                (output / entry.filename).chmod(0o755)
 
 
 def main():
