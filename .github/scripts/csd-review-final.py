@@ -26,7 +26,7 @@ EVIDENCE = {'container-inputs.json', 'theme-receipt.json', 'backend-closure.json
 
 
 def names(version):
-    require(re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+(?:-review(?:\.[0-9]+)?)?', version), 'unsigned review version required')
+    require(re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+(?:-review(?:\.[0-9]+)?)?', version), 'valid unsigned review or production version required')
     base = 'PerformanceDashboard-' + version + '-x86_64'
     return {base + suffix for suffix in ('.AppImage', '.AppImage.zsync', '.provenance.json', '.update-feed.json', '.metadata.json', '.diagnostics.txt')}
 

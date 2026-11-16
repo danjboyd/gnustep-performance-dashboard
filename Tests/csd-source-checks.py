@@ -171,6 +171,21 @@ class CSDSourceChecks(unittest.TestCase):
         self.assertNotIn('apt-get', wrapper)
         self.assertIn('custom-sdk/', (work / 'sources.json').read_text())
 
+    def test_runtime_auxiliary_declaration_and_archive_are_required(self):
+        entries = self.manifest['gitSources']
+        runtime = next(item for item in entries if item['name'] == 'appimage-runtime')
+        self.assertRegex(runtime['revision'], '^[0-9a-f]{40}$')
+        self.assertRegex(runtime['archiveSHA256'], '^[0-9a-f]{64}$')
+        self.manifest['gitSources'] = [item for item in entries if item is not runtime]
+        self.save()
+        with self.assertRaisesRegex(ValueError, 'auxiliary source missing/different'):
+            self.verify()
+        self.manifest['gitSources'] = entries
+        self.save()
+        (self.tree / runtime['archiveFile']).unlink()
+        with self.assertRaises((OSError, ValueError)):
+            self.verify()
+
     def test_fallback_pinned_archive_mismatch_refused(self):
         self.manifest['fallbackSource']['archiveSHA256'] = '0' * 64
         self.save()

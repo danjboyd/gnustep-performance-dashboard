@@ -1,0 +1,135 @@
+# Manual promotion only. Producer pushes/tags never call this workflow.
+name: Sign exact custom Linux candidate
+on:
+  workflow_dispatch:
+    inputs:
+      producer_run:
+        description: Successful custom production run ID at the reviewed commit
+        required: true
+      commit:
+        description: Reviewed full 40-character producer commit
+        required: true
+      signing_environment:
+        description: Existing environment with required reviewers; never creates one
+        type: environment
+        required: true
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: custom-sign-${{ inputs.commit }}
+  cancel-in-progress: false
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    outputs:
+      environment: ${{ steps.gate.outputs.environment }}
+    steps:
+      - name: Validate typed immutable inputs before checkout or API use
+        env:
+          COMMIT: ${{ inputs.commit }}
+          RUN: ${{ inputs.producer_run }}
+          SIGNING_ENVIRONMENT: ${{ inputs.signing_environment }}
+        run: |
+          [[ "$COMMIT" =~ ^[0-9a-f]{40}$ && "$RUN" =~ ^[1-9][0-9]*$ ]]
+          [[ "$SIGNING_ENVIRONMENT" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$ ]]
+          [[ "$GITHUB_REPOSITORY" == danjboyd/gnustep-performance-dashboard ]]
+          [[ "$GITHUB_SHA" == "$COMMIT" ]]
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ inputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require exact successful producer and existing reviewer protection
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMIT: ${{ inputs.commit }}
+          RUN: ${{ inputs.producer_run }}
+          SIGNING_ENVIRONMENT: ${{ inputs.signing_environment }}
+        run: |
+          mkdir -p out/signing-request
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN" > out/signing-request/run.json
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN/artifacts?per_page=100" > out/signing-request/artifacts.json
+          gh api "repos/$GITHUB_REPOSITORY/environments/$SIGNING_ENVIRONMENT" > out/signing-request/environment.json
+          python3 .github/scripts/custom-signing-input.py validate --run out/signing-request/run.json --artifacts out/signing-request/artifacts.json \
+            --environment-json out/signing-request/environment.json --commit "$COMMIT" --run-id "$RUN" \
+            --environment "$SIGNING_ENVIRONMENT" --request-output out/signing-request/validated.json >> "$GITHUB_OUTPUT"
+  sign:
+    needs: preflight
+    runs-on: ubuntu-24.04
+    environment: ${{ needs.preflight.outputs.environment }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ inputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Repeat read-only gates after environment approval and download exact artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMIT: ${{ inputs.commit }}
+          RUN: ${{ inputs.producer_run }}
+          SIGNING_ENVIRONMENT: ${{ inputs.signing_environment }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$COMMIT"
+          mkdir -p out/signing-request
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN" > out/signing-request/run.json
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN/artifacts?per_page=100" > out/signing-request/artifacts.json
+          gh api "repos/$GITHUB_REPOSITORY/environments/$SIGNING_ENVIRONMENT" > out/signing-request/environment.json
+          python3 .github/scripts/custom-signing-input.py validate --run out/signing-request/run.json --artifacts out/signing-request/artifacts.json \
+            --environment-json out/signing-request/environment.json --commit "$COMMIT" --run-id "$RUN" \
+            --environment "$SIGNING_ENVIRONMENT" --request-output out/signing-request/validated.json
+          artifact=$(python3 -c 'import json; print(json.load(open("out/signing-request/validated.json"))["artifactID"])')
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact/zip" > out/signing-request/production.zip
+          python3 .github/scripts/custom-signing-input.py unpack --archive out/signing-request/production.zip \
+            --request out/signing-request/validated.json --output dist/producer
+      - name: Install nonexecuting extraction and disposable-test tools
+        run: |
+          sudo apt-get -q update
+          sudo apt-get -q -y install squashfs-tools python3-yaml
+      - name: Verify unsigned receipt and adapt provenance from extracted public config
+        env:
+          CSD_MODE: production
+          UPDATE_ED_PUBLIC_KEY: ${{ vars.UPDATE_ED_PUBLIC_KEY }}
+        run: |
+          version=$(python3 -c 'import json; print(json.load(open("packaging/package.manifest.json"))["package"]["version"])')
+          python3 .github/scripts/custom-signing-adapter.py --input dist/producer --output dist/signing-input \
+            --evidence dist/signing-evidence --extracted out/signing-extracted --request out/signing-request/validated.json --version "$version"
+      - name: Check refusal paths with disposable keys before the secret-bearing step
+        run: |
+          /usr/bin/python3 Tests/custom-signing-checks.py
+          /usr/bin/python3 Tests/update-signing-checks.py
+          /usr/bin/python3 Tests/release-assembly-checks.py
+      - name: Sign and verify exact candidate payload and bound identity
+        env:
+          UPDATE_ED_PRIVATE_KEY: ${{ secrets.UPDATE_ED_PRIVATE_KEY }}
+          UPDATE_ED_PUBLIC_KEY: ${{ vars.UPDATE_ED_PUBLIC_KEY }}
+        run: |
+          set -eu
+          set +x
+          test -z "$(git status --porcelain)"
+          set -- dist/signing-input/*.update-feed.json
+          [ "$#" -eq 1 ] && [ -f "$1" ]
+          python3 scripts/sign-update-feed.py "$1" dist/signing-input
+          python3 scripts/sign-update-feed.py --verify "$1" dist/signing-input
+      - name: Assemble with signatures required and exact source commit
+        env:
+          UPDATE_ED_PUBLIC_KEY: ${{ vars.UPDATE_ED_PUBLIC_KEY }}
+          COMMIT: ${{ inputs.commit }}
+        run: |
+          version=$(python3 -c 'import json; print(json.load(open("packaging/package.manifest.json"))["package"]["version"])')
+          python3 scripts/assemble-release.py --input dist/signing-input --output dist/ci/release \
+            --version "$version" --commit "$COMMIT" --require-backend appimage --require-signatures
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: custom-csd-signed-candidate
+          path: dist/ci/release
+          if-no-files-found: error
+          retention-days: 7
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: custom-csd-signing-evidence
+          path: dist/signing-evidence
+          if-no-files-found: error
+          retention-days: 7
