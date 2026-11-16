@@ -50,7 +50,7 @@ def file_record(file):
 def prepare(packages, output, version):
     expected = names(version)
     exact_files(packages, expected)
-    output.mkdir()  # A stale output is a refusal, never replaced/merged.
+    output.mkdir(parents=True)  # A stale output is a refusal, never replaced/merged.
     for name in sorted(expected):
         shutil.copy2(packages / name, output / name)
 

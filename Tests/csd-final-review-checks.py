@@ -114,6 +114,16 @@ class FinalReviewChecks(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'extra or missing'):
             final.inventory(self.root, self.directory, VERSION)
 
+    def test_prepare_creates_missing_parent_but_never_replaces_output(self):
+        output = self.root / 'fresh/dist/ci/csd-review'
+        self.assertFalse(output.parent.exists())
+        final.prepare(self.packages, output, VERSION)
+        self.assertEqual({p.name for p in output.iterdir()}, final.names(VERSION))
+        before = {p.name: p.read_bytes() for p in output.iterdir()}
+        with self.assertRaises(FileExistsError):
+            final.prepare(self.packages, output, VERSION)
+        self.assertEqual({p.name: p.read_bytes() for p in output.iterdir()}, before)
+
     def test_prepare_refuses_stale_package_or_existing_output(self):
         with self.assertRaises(FileExistsError):
             final.prepare(self.packages, self.directory, VERSION)
