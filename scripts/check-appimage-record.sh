@@ -92,7 +92,11 @@ app_pid=""
 runtime="$work/squashfs-root/usr/runtime"
 python3 "$repo_root/Tests/target-config-checks.py" "$work/squashfs-root" "$work/target-config" \
   || die "the bundled gstrace did not preserve the target's caller config"
-python3 "$repo_root/Tests/target-config-gui-checks.py" "$work/squashfs-root" "$work/target-config-gui" \
+# The nested GUI check owns its server; release ours before reusing its number.
+kill "$xvfb_pid" 2>/dev/null || true
+wait "$xvfb_pid" 2>/dev/null || true
+xvfb_pid=""
+PD_CONFIG_GUI_DISPLAY=":$display_number" python3 "$repo_root/Tests/target-config-gui-checks.py" "$work/squashfs-root" "$work/target-config-gui" \
   || die "the generated AppRun/GUI recorder did not preserve the target's caller config"
 info="$(LD_LIBRARY_PATH="$runtime/lib" GNUSTEP_CONFIG_FILE="$runtime/etc/GNUstep/GNUstep.conf" \
   HOME="$work/home" "$runtime/bin/gstrace" info "$trace" 2>/dev/null)"
