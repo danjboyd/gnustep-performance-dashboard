@@ -1,4 +1,4 @@
-# Linux-only v0.1.0 release artifacts. No tags or publication are created here.
+# Unsigned Linux producer only. Pushes/tags cannot access real signing secrets.
 # Windows remains experimental and is exercised by the ordinary CI workflow.
 name: Release
 
@@ -17,6 +17,7 @@ on:
 
 permissions:
   contents: read
+  # No secrets are passed or referenced; signing requires a separate manual workflow.
 
 concurrency:
   group: release-${{ github.ref }}-${{ inputs.version }}
@@ -27,6 +28,7 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.version.outputs.version }}
+      producer: ${{ steps.version.outputs.producer }}
     steps:
       - uses: actions/checkout@v4
       - id: version
@@ -34,21 +36,11 @@ jobs:
         env:
           VERSION: ${{ inputs.version }}
         run: |
-          manifest="$(python3 -c 'import json; print(json.load(open("packaging/package.manifest.json"))["package"]["version"])')"
-          version="${VERSION:-$manifest}"
-          case "$GITHUB_REF" in
-            refs/tags/v*)
-              # A tag names the version (v0.1.0-rc1 packages 0.1.0-rc1); its
-              # base must be package.version.
-              version="${GITHUB_REF#refs/tags/v}"
-              [ "${version%%-*}" = "$manifest" ] || {
-                echo "::error::tag ${GITHUB_REF#refs/tags/} is not package.version $manifest"; exit 1; }
-              ;;
-          esac
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "Performance Dashboard $version from ${GITHUB_SHA::7}" >> "$GITHUB_STEP_SUMMARY"
+          python3 .github/scripts/release-selection.py \
+            --ref "$GITHUB_REF" --version "$VERSION" >> "$GITHUB_OUTPUT"
 
-  linux:
+  linux-managed:
+    if: needs.version.outputs.producer == 'managed'
     needs: version
     runs-on: ubuntu-24.04
     container: debian:trixie
@@ -102,46 +94,14 @@ jobs:
           path: dist/logs
           if-no-files-found: warn
 
-  release:
-    needs: [version, linux]
+  linux-custom:
+    if: needs.version.outputs.producer == 'custom-csd'
+    needs: version
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          name: linux
-          path: dist/ci/linux
-
-      - name: Check signing and assembly failure paths with disposable keys
+      # Fail closed until the separately reviewed custom-producer integration.
+      # Never fall back to the managed SDK for a custom production manifest.
+      - name: Refuse an unintegrated custom producer
         run: |
-          python3 Tests/update-signing-checks.py
-          python3 Tests/release-assembly-checks.py
-
-      # These inputs must be provisioned separately by Dan. This workflow
-      # names them; it never creates/rotates a key or repository secret.
-      - name: Sign payloads and bound release identities before assembly
-        env:
-          UPDATE_ED_PRIVATE_KEY: ${{ secrets.UPDATE_ED_PRIVATE_KEY }}
-          UPDATE_ED_PUBLIC_KEY: ${{ vars.UPDATE_ED_PUBLIC_KEY }}
-        run: |
-          set -eu
-          set -- dist/ci/linux/*.update-feed.json
-          [ "$#" -eq 1 ] && [ -f "$1" ]
-          python3 scripts/sign-update-feed.py "$1" dist/ci/linux
-          python3 scripts/sign-update-feed.py --verify "$1" dist/ci/linux
-
-      - name: Validate and assemble release artifacts
-        env:
-          VERSION: ${{ needs.version.outputs.version }}
-          UPDATE_ED_PUBLIC_KEY: ${{ vars.UPDATE_ED_PUBLIC_KEY }}
-        run: |
-          python3 scripts/assemble-release.py --input dist/ci/linux \
-            --output dist/ci/release --version "$VERSION" --commit "$GITHUB_SHA" \
-            --require-backend appimage --require-signatures
-          cat dist/ci/release/SHA256SUMS >> "$GITHUB_STEP_SUMMARY"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: release
-          path: dist/ci/release
-          if-no-files-found: error
+          echo "::error::Custom unsigned producer handoff requires reviewed integration"
+          exit 1
