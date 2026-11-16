@@ -90,6 +90,34 @@ class VersionChecks(unittest.TestCase):
         self.assertNotRegex(about, r'Version [0-9]+\.[0-9]+\.[0-9]+')
         self.assertNotRegex((ROOT / 'Dashboard/PerformanceDashboardInfo.plist').read_text(), r'(?:ApplicationRelease|FullVersionID)\s*=')
 
+    def test_three_reported_versions_have_no_numeric_literal_and_share_effective_header(self):
+        pairs = [('GSPerformance/GSPRecorder.m', 'GSP_VERSION', 'GSPerformance/GNUmakefile'),
+                 ('Tools/gstrace/main.m', 'GSTRACE_VERSION', 'Tools/gstrace/GNUmakefile'),
+                 ('Tools/gstrace-helper/gstrace-helper.c', 'HELPER_VERSION', 'Tools/gstrace-helper/GNUmakefile')]
+        for source_path, macro, make_path in pairs:
+            source = (ROOT / source_path).read_text()
+            self.assertNotRegex(source, r'#define\s+' + macro + r'\s+@?"[0-9]')
+            definition = next(line for line in source.splitlines() if line.startswith('#define ' + macro + ' '))
+            self.assertIn('PD_PRODUCT_VERSION', definition)
+            self.assertIn('package-version.make', (ROOT / make_path).read_text())
+            self.assertIn('$(PD_PRODUCT_VERSION_CPPFLAGS)', (ROOT / make_path).read_text())
+        makefile = self.root / 'version.make'
+        makefile.write_text('include ' + str(ROOT / 'scripts/package-version.make') + '\nall:\n\t@echo $(PD_PRODUCT_VERSION)\n')
+        header = self.root / 'obj/PDProductVersion.h'
+        for expected in ['0.1.7-review.2', '0.1.8-rc1']:
+            env = dict(os.environ, GP_PACKAGE_VERSION=expected)
+            result = subprocess.run(['make', '-s', '-f', str(makefile), 'all'], cwd=self.root, env=env, text=True, capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout.strip(), expected)
+            self.assertIn('#define PD_PRODUCT_VERSION "' + expected + '"', header.read_text())
+            before = header.stat().st_mtime_ns
+            result = subprocess.run(['make', '-s', '-f', str(makefile), 'all'], cwd=self.root, env=env, capture_output=True)
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(header.stat().st_mtime_ns, before)
+        # Neither the trace protocol nor the independent library ABI is bumped.
+        self.assertIn('#define GSP_FORMAT_VERSION 1', (ROOT / 'Runtime/include/GSPerformance/gsp_format.h').read_text())
+        self.assertIn('VERSION = 0.1.5', (ROOT / 'GSPerformance/GNUmakefile').read_text())
+
     def test_build_stage_and_final_package_enforce_same_contract(self):
         make = (ROOT / 'Dashboard/GNUmakefile').read_text()
         self.assertIn('python3 ../scripts/app-version.py stamp --bundle PerformanceDashboard.app', make)

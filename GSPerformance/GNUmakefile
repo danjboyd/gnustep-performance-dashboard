@@ -1,4 +1,7 @@
 include $(GNUSTEP_MAKEFILES)/common.make
+include ../scripts/package-version.make
+
+ADDITIONAL_OBJCFLAGS += $(PD_PRODUCT_VERSION_CPPFLAGS)
 
 LIBRARY_NAME = libGSPerformance
 VERSION = 0.1.5

@@ -152,7 +152,7 @@
     "runtimeNotices": [
       {
         "name": "Performance Dashboard",
-        "version": "0.1.5",
+        "version": "0.1.7",
         "license": "GPL-3.0-or-later",
         "source": "Dashboard, gstrace and gstrace-helper",
         "homepage": "https://github.com/danjboyd/gnustep-performance-dashboard",

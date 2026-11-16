@@ -34,7 +34,10 @@
 
 NSString * const GSPRecorderErrorDomain = @"GSPRecorderErrorDomain";
 
-#define GSP_VERSION @"0.1.5"
+#ifndef PD_PRODUCT_VERSION
+#error "The build must supply the effective package version."
+#endif
+#define GSP_VERSION [NSString stringWithUTF8String: PD_PRODUCT_VERSION]
 #define CTL_STOP 1
 #define CTL_LEAKS 2
 #define CTL_MARK 3

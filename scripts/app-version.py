@@ -90,10 +90,29 @@ def stamp_bundle(bundle, version):
     return check_bundle(bundle, version)
 
 
+def write_product_header(path, version):
+    path = Path(path)
+    raw = ('/* Generated from the effective package version; not trace format. */\n'
+           '#ifndef PD_PRODUCT_VERSION_H\n#define PD_PRODUCT_VERSION_H\n'
+           '#define PD_PRODUCT_VERSION ' + json.dumps(version) + '\n#endif\n').encode('ascii')
+    if path.is_file() and path.read_bytes() == raw:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(dir=path.parent, prefix='.product-version-', delete=False) as output:
+        temporary = Path(output.name)
+        output.write(raw)
+    try:
+        os.chmod(temporary, 0o644)
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['stamp', 'check'])
-    parser.add_argument('--bundle', type=Path, required=True)
+    parser.add_argument('command', choices=['stamp', 'check', 'value'])
+    parser.add_argument('--bundle', type=Path)
+    parser.add_argument('--header', type=Path)
     parser.add_argument('--manifest', type=Path, default=Path(__file__).resolve().parents[1] / 'packaging/package.manifest.json')
     parser.add_argument('--version')
     args = parser.parse_args()
@@ -102,6 +121,13 @@ def main():
         if args.version is not None:
             env['GP_PACKAGE_VERSION'] = args.version
         version = effective_version(args.manifest, env)
+        if args.command == 'value':
+            if args.header:
+                write_product_header(args.header, version)
+            print(version)
+            return
+        if args.bundle is None:
+            parser.error('--bundle is required for stamp/check')
         values = stamp_bundle(args.bundle, version) if args.command == 'stamp' else check_bundle(args.bundle, version)
         print(json.dumps(dict(version=version, bundle=str(args.bundle), values=values), sort_keys=True))
     except (OSError, ValueError, KeyError, TypeError, plistlib.InvalidFileException) as error:

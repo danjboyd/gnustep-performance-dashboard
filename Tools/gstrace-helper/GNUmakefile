@@ -1,9 +1,11 @@
 # gstrace-helper: small, dependency-free C program run as root via pkexec.
 
+include ../../scripts/package-version.make
+
 CC ?= cc
 CFLAGS ?= -O2 -g
 ALL_CFLAGS = $(CFLAGS) -std=gnu11 -Wall -Wextra -Wno-unused-parameter \
-  -D_FORTIFY_SOURCE=2 -fstack-protector-strong -fPIE -I../../Runtime/include
+  $(PD_PRODUCT_VERSION_CPPFLAGS) -D_FORTIFY_SOURCE=2 -fstack-protector-strong -fPIE -I../../Runtime/include
 # Staged next to the GNUstep libraries, where Performance Dashboard and
 # `gstrace install-helper` look for it.  The root-owned copy in
 # /usr/local/libexec is made by `gstrace install-helper`.
@@ -12,7 +14,7 @@ HELPER_DIR ?= $(GNUSTEP_LIBS_DIR)/../libexec/performance-dashboard
 
 all: gstrace-helper
 
-gstrace-helper: gstrace-helper.c ../../Runtime/include/GSPerformance/gsp_format.h
+gstrace-helper: $(PD_VERSION_HEADER) gstrace-helper.c ../../Runtime/include/GSPerformance/gsp_format.h
 	$(CC) $(ALL_CFLAGS) -pie -Wl,-z,relro,-z,now -o $@ gstrace-helper.c
 
 install: all
