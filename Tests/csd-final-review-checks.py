@@ -91,6 +91,18 @@ class FinalReviewChecks(unittest.TestCase):
         self.assertEqual(record['reviewImageID'], self.container['reviewImageID'])
         self.assertRegex(final.verify_receipt(self.root, self.directory, VERSION), r'^[0-9a-f]{64}$')
 
+    def test_numeric_unsigned_receipt_still_binds_exact_source_commit(self):
+        with patch.dict(globals(), VERSION='0.1.7', BASE='PerformanceDashboard-0.1.7-x86_64'):
+            self.setUp()
+            record = self.receipt()
+            self.assertEqual(record['version'], '0.1.7')
+            self.assertEqual(record['applicationCommit'], COMMIT)
+            self.assertEqual(len(record['files']), 13)
+            self.provenance['commit'] = 'b' * 40
+            self.write(BASE + '.provenance.json', self.provenance)
+            with self.assertRaisesRegex(ValueError, 'version/commit/clean-source'):
+                final.verify_receipt(self.root, self.directory, VERSION)
+
     def test_missing_source_and_extra_versions_refuse(self):
         for name in ('PerformanceDashboard-0.1.6-sources.tar.gz', 'PerformanceDashboard-0.1.7-review.1-x86_64.AppImage', 'unexplained.json'):
             file = self.directory / name

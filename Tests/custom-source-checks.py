@@ -80,6 +80,8 @@ class CustomSources(unittest.TestCase):
         with tarfile.open(self.args.output) as archive:
             prefix = 'PerformanceDashboard-0.1.7-sources/'
             names = archive.getnames()
+            inventory = json.loads(archive.extractfile(prefix + 'sources.json').read())
+            self.assertEqual(len(inventory), 14)
             for component in self.lock['components']:
                 self.assertIn(prefix + component['name'] + '-' + component['revision'] + '.tar.gz', names)
                 for entry in component['patches']:
@@ -94,6 +96,18 @@ class CustomSources(unittest.TestCase):
             for line in archive.extractfile(prefix + 'SHA256SUMS').read().decode().splitlines():
                 digest, name = line.split('  ', 1)
                 self.assertEqual(hashlib.sha256(archive.extractfile(prefix + name).read()).hexdigest(), digest)
+
+    def test_numeric_collection_refuses_wrong_version_or_managed_producer(self):
+        self.args.version = '0.1.8'
+        with self.assertRaisesRegex(ValueError, 'package.version'):
+            collector.collect(self.args)
+        self.args.version = '0.1.7'
+        config = self.root / 'packaging/linux/release-production.json'
+        config.write_text(json.dumps({'schemaVersion': 1, 'linuxProducer': 'managed'}))
+        with self.assertRaisesRegex(ValueError, 'Custom producer'):
+            collector.collect(self.args)
+        self.network.assert_not_called()
+        self.assertFalse(self.args.work.exists())
 
     def test_wrong_lock(self):
         self.provenance['lock']['sha256'] = '0' * 64

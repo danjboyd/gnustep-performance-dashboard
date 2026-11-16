@@ -1,15 +1,23 @@
 # Source-only implementation until Dan approves an exact future dispatch.
-name: Custom CSD unsigned review
+name: Custom CSD unsigned producer
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: Unsigned review version (must end in -review or -review.N)
+        description: Exact package.version for production; -review or -review.N for review
         required: true
         default: 0.1.7-review
+      mode:
+        description: Explicit unsigned producer mode; production must equal package.version
+        type: choice
+        options: [review, production]
+        default: review
   workflow_call:
     inputs:
       version:
+        type: string
+        required: true
+      mode:
         type: string
         required: true
 permissions:
@@ -23,11 +31,14 @@ jobs:
     timeout-minutes: 120
     env:
       CSD_VERSION: ${{ inputs.version }}
+      CSD_MODE: ${{ inputs.mode }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Validate explicit unsigned producer mode before any acquisition
+        run: python3 .github/scripts/release-selection.py --custom-mode "$CSD_MODE" --version "$CSD_VERSION"
       - name: Verify combined application inputs before builder fetch or cache use
         run: python3 scripts/check-csd-package.py review-inputs packaging/linux/v017-review-inputs.json
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -36,6 +47,14 @@ jobs:
           ref: 4d5504bbedf076f824c952f4ab198d09547c8c3c
           path: out/csd-ci/builder
           persist-credentials: false
+      - name: Preserve immutable builder blob bytes before identity checks
+        run: |
+          builder=out/csd-ci/builder
+          test "$(git -C "$builder" rev-parse HEAD)" = 4d5504bbedf076f824c952f4ab198d09547c8c3c
+          mkdir -p "$builder/.git/info"
+          printf '* -text\n' > "$builder/.git/info/attributes"
+          git -C "$builder" checkout-index --all --force
+          git -C "$builder" update-index --refresh
       - name: Static policy and source tests
         run: |
           sudo apt-get -q update
@@ -45,6 +64,8 @@ jobs:
           /usr/bin/python3 Tests/csd-package-checks.py
           /usr/bin/python3 Tests/csd-provenance-checks.py
           /usr/bin/python3 Tests/csd-ci-checks.py
+          /usr/bin/python3 Tests/custom-source-checks.py
+          /usr/bin/python3 Tests/release-producer-checks.py
           /usr/bin/python3 Tests/csd-source-checks.py
           /usr/bin/python3 Tests/csd-final-review-checks.py
       - name: Prepare Debian13 build and consumption image; inventory before compilation
@@ -69,7 +90,7 @@ jobs:
       - name: Keep unsigned review only
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: custom-csd-unsigned-review
+          name: custom-csd-unsigned-${{ inputs.mode }}
           path: dist/ci/csd-review
           if-no-files-found: error
           retention-days: 7

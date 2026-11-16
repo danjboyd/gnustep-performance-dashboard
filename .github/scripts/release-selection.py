@@ -17,15 +17,29 @@ def select(manifest, production, ref, override=''):
     return {'version': version, 'producer': config['linuxProducer']}
 
 
+def custom_version(manifest, production, mode, version):
+    selected = select(manifest, production, '', version)
+    if selected['producer'] != 'custom-csd':
+        raise ValueError('Custom producer must be selected explicitly')
+    base = json.loads(Path(manifest).read_text())['package']['version']
+    valid = version == base if mode == 'production' else bool(
+        re.fullmatch(re.escape(base) + r'-review(?:\.[0-9]+)?', version)) if mode == 'review' else False
+    if not valid:
+        raise ValueError('Custom production requires exact package.version; review requires -review suffix')
+    return selected
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--manifest', default='packaging/package.manifest.json')
     parser.add_argument('--production', default='packaging/linux/release-production.json')
-    parser.add_argument('--ref', required=True)
+    parser.add_argument('--ref', default='')
+    parser.add_argument('--custom-mode')
     parser.add_argument('--version', default='')
     args = parser.parse_args()
     try:
-        result = select(args.manifest, args.production, args.ref, args.version)
+        result = custom_version(args.manifest, args.production, args.custom_mode, args.version) if args.custom_mode else select(
+            args.manifest, args.production, args.ref, args.version)
     except (OSError, ValueError, KeyError, TypeError) as error:
         parser.exit(1, str(error) + '\n')
     for name, value in result.items():

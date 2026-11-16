@@ -139,6 +139,29 @@ class CSDCIChecks(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'fallback source identity changed'):
                 state.record_build_sources(self.root, self.prefix)
 
+    def test_builder_checkout_preserves_raw_blob_despite_eol_attributes(self):
+        repo = self.root / 'raw-builder-fixture'
+        repo.mkdir()
+        def git(*args, data=None):
+            return subprocess.run(['git', '-C', str(repo), *args], input=data,
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True).stdout
+        git('init', '-q')
+        (repo / '.gitattributes').write_text('*.patch text eol=lf\n')
+        git('add', '.gitattributes')
+        raw = b'first\r\nsecond\n'
+        blob = git('hash-object', '-w', '--stdin', data=raw).decode().strip()
+        git('update-index', '--add', '--cacheinfo', '100644', blob, 'fixture.patch')
+        git('checkout-index', '--all', '--force')
+        initial = subprocess.run(['git', '-C', str(repo), 'diff-files', '--exit-code'], capture_output=True)
+        self.assertNotEqual(initial.returncode, 0)
+        (repo / '.git/info/attributes').write_text('* -text\n')
+        git('checkout-index', '--all', '--force')
+        self.assertEqual((repo / 'fixture.patch').read_bytes(), raw)
+        git('update-index', '--refresh')
+        git('diff-files', '--exit-code')
+        workflow = (ROOT / '.github/workflows/csd-review.yml').read_text()
+        self.assertLess(workflow.index('Preserve immutable builder blob bytes'), workflow.index('csd-review-host.sh prepare'))
+
     def test_workflow_is_manual_unsigned_read_only_and_pinned(self):
         workflow = yaml.load((ROOT / '.github/workflows/csd-review.yml').read_text(), Loader=yaml.BaseLoader)
         self.assertEqual(set(workflow['on']), {'workflow_dispatch', 'workflow_call'})

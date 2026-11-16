@@ -49,6 +49,17 @@ class ProducerChecks(unittest.TestCase):
         self.production.write_text(json.dumps({'schemaVersion': 1, 'linuxProducer': 'managed'}))
         self.assertEqual(selection.select(self.manifest, self.production, 'refs/tags/v0.1.7')['producer'], 'managed')
 
+    def test_numeric_unsigned_path_requires_custom_and_exact_base(self):
+        self.assertEqual(selection.custom_version(self.manifest, self.production, 'production', '0.1.7')['version'], '0.1.7')
+        self.assertEqual(selection.custom_version(self.manifest, self.production, 'review', '0.1.7-review.1')['version'], '0.1.7-review.1')
+        for mode, version in [('production', '0.1.7-review'), ('production', '0.1.6'),
+                              ('review', '0.1.7'), ('unknown', '0.1.7')]:
+            with self.subTest(mode=mode, version=version), self.assertRaises(ValueError):
+                selection.custom_version(self.manifest, self.production, mode, version)
+        self.production.write_text(json.dumps({'schemaVersion': 1, 'linuxProducer': 'managed'}))
+        with self.assertRaisesRegex(ValueError, 'Custom producer'):
+            selection.custom_version(self.manifest, self.production, 'production', '0.1.7')
+
     def test_automatic_workflow_has_no_real_signing_surface(self):
         text = (ROOT / '.github/workflows/release.yml').read_text()
         workflow = yaml.safe_load(text)
@@ -62,7 +73,9 @@ class ProducerChecks(unittest.TestCase):
         jobs = workflow['jobs']
         self.assertEqual(jobs['linux-managed']['if'], "needs.version.outputs.producer == 'managed'")
         self.assertEqual(jobs['linux-custom']['if'], "needs.version.outputs.producer == 'custom-csd'")
-        self.assertIn('exit 1', jobs['linux-custom']['steps'][0]['run'])
+        self.assertEqual(jobs['linux-custom']['uses'], './.github/workflows/csd-review.yml')
+        self.assertEqual(jobs['linux-custom']['with']['mode'], 'production')
+        self.assertNotIn('secrets', jobs['linux-custom'])
         self.assertNotIn('release', jobs)
         ci_text = (ROOT / '.github/workflows/ci.yml').read_text()
         self.assertIn('/usr/bin/python3 Tests/release-producer-checks.py', ci_text)

@@ -7,7 +7,7 @@ pd_work="$pd_repo/out/csd-ci"
 pd_builder="$pd_work/builder"
 pd_state="$pd_work/container-inputs.json"
 pd_policy="$pd_repo/.github/scripts/csd-review-state.py"
-[[ "${CSD_VERSION:-}" =~ ^[0-9]+\.[0-9]+\.[0-9]+-review(\.[0-9]+)?$ ]] || { echo 'unsigned -review version required' >&2; exit 1; }
+python3 "$pd_repo/.github/scripts/release-selection.py" --custom-mode "${CSD_MODE:-review}" --version "${CSD_VERSION:-}" >/dev/null
 [[ "$(git -C "$pd_builder" rev-parse HEAD)" == 4d5504bbedf076f824c952f4ab198d09547c8c3c ]]
 python3 "$pd_repo/scripts/check-csd-package.py" review-inputs "$pd_repo/packaging/linux/v017-review-inputs.json"
 python3 "$pd_policy" builder-check --root "$pd_repo" --builder "$pd_builder"
@@ -35,7 +35,7 @@ case "${1:-}" in
     pd_image="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["reviewImageID"])' "$pd_state")"
     [[ "$pd_image" =~ ^sha256:[0-9a-f]{64}$ ]]
     docker run --rm -v "$pd_repo:$pd_repo" -w "$pd_repo" \
-      -e GITHUB_ACTIONS=true -e CSD_VERSION -e SDK_CACHE_HIT \
+      -e GITHUB_ACTIONS=true -e CSD_VERSION -e CSD_MODE -e SDK_CACHE_HIT \
       "$pd_image" bash "$pd_repo/.github/scripts/csd-review-container.sh" "$1"
     ;;
   *) echo 'usage: csd-review-host.sh prepare|sdk|review' >&2; exit 2 ;;

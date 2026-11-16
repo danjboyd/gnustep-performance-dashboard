@@ -9,8 +9,8 @@ pd_sdk="$pd_work/sdk"
 pd_lock="$pd_repo/packaging/linux/v017-custom-toolchain.lock.proposed.json"
 pd_state="$pd_work/container-inputs.json"
 pd_policy="$pd_repo/.github/scripts/csd-review-state.py"
+python3 "$pd_repo/.github/scripts/release-selection.py" --custom-mode "${CSD_MODE:-review}" --version "${CSD_VERSION:-}" >/dev/null
 pd_final="$pd_repo/.github/scripts/csd-review-final.py"
-[[ "${CSD_VERSION:-}" =~ ^[0-9]+\.[0-9]+\.[0-9]+-review(\.[0-9]+)?$ ]]
 [[ "$(git -C "$pd_builder" rev-parse HEAD)" == 4d5504bbedf076f824c952f4ab198d09547c8c3c ]]
 mkdir -p "$pd_work/logs"
 case "${1:-}" in

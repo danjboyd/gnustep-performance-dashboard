@@ -16,7 +16,7 @@ from unittest.mock import patch
 
 sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location('csd_sources', ROOT / 'scripts/collect-csd-sources.py')
+spec = importlib.util.spec_from_file_location('csd_sources', ROOT / 'scripts/verify-csd-sources.py')
 source = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(source)
 COMMIT = 'c' * 40
@@ -140,6 +140,37 @@ class CSDSourceChecks(unittest.TestCase):
             target.add(self.tree, arcname='sources')
         self.assertTrue(source.verify_bundle(archive, COMMIT, self.lock_sha)['ok'])
 
+    def test_shared_collector_handoff_preserves_strong_fourteen_source_receipt(self):
+        spec = importlib.util.spec_from_file_location('shared_core', ROOT / 'scripts/collect-release-sources.py')
+        core = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(core)
+        work = self.root / 'shared-work'
+        work.mkdir()
+        for entry in self.manifest['gitSources']:
+            shutil.copy2(self.tree / entry['archiveFile'], work / (entry['name'] + '-' + entry['revision'] + '.tar.gz'))
+        shutil.copy2(self.tree / 'PerformanceDashboard.tar', work / 'PerformanceDashboard.tar')
+        shutil.copytree(self.tree / 'debian', work / 'debian')
+        shutil.copytree(self.tree / 'custom-toolchain-lock', work / 'custom-sdk')
+        licenses = self.project / 'dist/stage/metadata/licenses'
+        licenses.mkdir(parents=True)
+        shutil.copy2(self.tree / 'metadata/host-libraries.txt', licenses / 'host-libraries.txt')
+        custom = {'provenance_path': self.tree / 'metadata/gnustep-toolchain-provenance.json'}
+        with patch.object(core, 'root', self.project), patch.object(core, 'git', return_value=COMMIT), \
+             patch.object(core, 'evidence_module', return_value=source), \
+             patch.object(core.subprocess, 'check_output', return_value='fixture\t1.0'):
+            verifier, commit = core.finish_evidence(custom, work, self.tree / 'metadata')
+        verifier.write_checksums(work)
+        result = verifier.verify_tree(work, commit, self.lock_sha)
+        self.assertEqual(result['gitSourceCount'], 14)
+        self.assertEqual(result['patchCount'], 16)
+        self.assertEqual(result['applicationCommit'], COMMIT)
+        # The compatibility CLI must delegate, not acquire any sources itself.
+        wrapper = (ROOT / 'scripts/collect-csd-sources.py').read_text()
+        self.assertIn('core.collect(', wrapper)
+        self.assertNotIn('urlopen', wrapper)
+        self.assertNotIn('apt-get', wrapper)
+        self.assertIn('custom-sdk/', (work / 'sources.json').read_text())
+
     def test_fallback_pinned_archive_mismatch_refused(self):
         self.manifest['fallbackSource']['archiveSHA256'] = '0' * 64
         self.save()
@@ -217,6 +248,9 @@ class CSDSourceChecks(unittest.TestCase):
     def test_structured_receipt_is_separate_from_collection_stdout_and_never_clobbers(self):
         receipt = self.root / 'collection-proof.json'
         result = dict(ok=True, applicationCommit=COMMIT)
+        wrapper_spec = importlib.util.spec_from_file_location('source_wrapper', ROOT / 'scripts/collect-csd-sources.py')
+        wrapper = importlib.util.module_from_spec(wrapper_spec)
+        wrapper_spec.loader.exec_module(wrapper)
         def collect(*args):
             print('synthetic apt progress: not JSON')
             return result
@@ -224,13 +258,13 @@ class CSDSourceChecks(unittest.TestCase):
                 '--receipt-output', str(receipt)]
         with patch.object(source.sys, 'argv', args), \
              patch.dict(source.os.environ, GNUSTEP_CLI_ROOT=str(self.root)), \
-             patch.object(source, 'collect', side_effect=collect), \
+             patch.object(wrapper, 'collect', side_effect=collect), \
              contextlib.redirect_stdout(io.StringIO()) as output:
-            self.assertIsNone(source.main())
+            self.assertIsNone(wrapper.main())
             self.assertIn('not JSON', output.getvalue())
             self.assertEqual(json.loads(receipt.read_text()), result)
             with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
-                source.main()
+                wrapper.main()
             self.assertEqual(json.loads(receipt.read_text()), result)
 
     def test_outer_tar_path_escape_refused_without_extraction(self):

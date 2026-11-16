@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path
 import re
 import shutil
@@ -25,7 +26,7 @@ EVIDENCE = {'container-inputs.json', 'theme-receipt.json', 'backend-closure.json
 
 
 def names(version):
-    require(re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+-review(?:\.[0-9]+)?', version), 'unsigned review version required')
+    require(re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+(?:-review(?:\.[0-9]+)?)?', version), 'unsigned review version required')
     base = 'PerformanceDashboard-' + version + '-x86_64'
     return {base + suffix for suffix in ('.AppImage', '.AppImage.zsync', '.provenance.json', '.update-feed.json', '.metadata.json', '.diagnostics.txt')}
 
@@ -110,7 +111,7 @@ def source_metadata(archive, expected):
 
 
 def verify_sources(root, archive, commit, lock_sha, metadata):
-    spec = importlib.util.spec_from_file_location('csd_sources', root / 'scripts/collect-csd-sources.py')
+    spec = importlib.util.spec_from_file_location('csd_sources', root / 'scripts/verify-csd-sources.py')
     sources = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(sources)
     result = sources.verify_bundle(archive, commit, lock_sha)
@@ -174,7 +175,7 @@ def inventory(root, directory, version, with_receipt=False):
     } | {'metadata/gnustep-toolchain-provenance.json': cache['sdkProvenanceSHA256'],
          'metadata/pd-csd-build-sources.json': cache['buildSourcesSHA256']})
     require(source_result == policy.load(directory / 'sources-verification.json'), 'source read-back receipt mismatch')
-    return dict(schemaVersion=1, kind='unsigned-csd-review-aggregate', version=version, applicationCommit=commit,
+    return dict(schemaVersion=1, kind='unsigned-csd-producer-aggregate', version=version, applicationCommit=commit,
                 toolchainLockSHA256=lock_sha,
                 reviewInputsSHA256=policy.sha(root / config['reviewInputs']),
                 builderCommit=container['builderCommit'], reviewImageID=container['reviewImageID'],
@@ -198,6 +199,11 @@ def main():
         parser.add_argument('--' + option, type=Path)
     args = parser.parse_args()
     try:
+        spec = importlib.util.spec_from_file_location('custom_mode', args.root / '.github/scripts/release-selection.py')
+        selection = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(selection)
+        selection.custom_version(args.root / 'packaging/package.manifest.json', args.root / 'packaging/linux/release-production.json',
+                                 os.environ.get('CSD_MODE', 'review'), args.version)
         if args.command == 'prepare':
             prepare(args.packages, args.directory, args.version)
         elif args.command == 'extract':

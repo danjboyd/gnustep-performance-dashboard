@@ -103,11 +103,7 @@ jobs:
   linux-custom:
     if: needs.version.outputs.producer == 'custom-csd'
     needs: version
-    runs-on: ubuntu-24.04
-    steps:
-      # Fail closed until the separately reviewed custom-producer integration.
-      # Never fall back to the managed SDK for a custom production manifest.
-      - name: Refuse an unintegrated custom producer
-        run: |
-          echo "::error::Custom unsigned producer handoff requires reviewed integration"
-          exit 1
+    uses: ./.github/workflows/csd-review.yml
+    with:
+      version: ${{ needs.version.outputs.version }}
+      mode: production

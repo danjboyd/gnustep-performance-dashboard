@@ -102,6 +102,54 @@ def copy_custom(custom, work):
         "reviewed lock's builder_inspection_revision, not a new SDK provenance claim.\n")
 
 
+def evidence_module():
+    spec = importlib.util.spec_from_file_location("csd_source_verifier", root / "scripts/verify-csd-sources.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def finish_evidence(custom, work, evidence):
+    """Bind the acquisition core's bytes to the independent hosted verifier."""
+    verifier = evidence_module()
+    sdk = custom["provenance_path"].parent
+    config, lock_path, lock = verifier.policy.settings(root)
+    commit = git(root, "rev-parse", "HEAD")
+    records = verifier.git_sources(root, lock, verifier.policy.load(sdk / "pd-csd-build-sources.json"))
+    for entry in records:
+        entry["archiveFile"] = entry["name"] + "-" + entry["revision"] + ".tar.gz"
+        entry["archiveSHA256"] = check.digest(work / entry["archiveFile"])
+    metadata = work / "metadata"
+    metadata.mkdir()
+    for source in (sdk / "gnustep-toolchain-provenance.json", sdk / "pd-csd-build-sources.json",
+                   sdk / "pd-csd-cache-receipt.json", evidence / "theme-receipt.json", evidence / "container-inputs.json"):
+        shutil.copy2(source, metadata / source.name)
+    licenses = root / "dist/stage/metadata/licenses/host-libraries.txt"
+    shutil.copytree(licenses.parent, work / "licenses")
+    shutil.copy2(licenses, metadata / "host-libraries.txt")
+    binaries = []
+    for package in sorted({line.split("\t")[1].strip() for line in licenses.read_text().splitlines() if "\t" in line}):
+        name, revision = subprocess.check_output(["dpkg-query", "-W", "-f=${source:Package}\t${source:Version}", package], text=True).split("\t")
+        binaries.append(dict(package=package, source=name, revision=revision))
+    index = root / "packaging/linux/csd-v7/backports.json"
+    index_file = "custom-sdk/csd-v7/backports.json"
+    shutil.copy2(index, work / index_file)
+    inputs = json.loads((root / "packaging/release-inputs.json").read_text())
+    manifest = dict(schemaVersion=1, kind="custom-csd-corresponding-source", applicationCommit=commit,
+        applicationLockPath=str(lock_path.relative_to(root)), customToolchainLockSHA256=check.digest(lock_path),
+        lockFile="custom-sdk/" + lock_path.name, gitSources=records,
+        patches=[dict(component=c["name"], lockPath=p["path"], sha256=p["sha256"],
+                      file="custom-sdk/" + p["path"], applicationPath=str((lock_path.parent / p["path"]).relative_to(root)))
+                 for c in lock["components"] for p in c.get("patches", [])],
+        themeSource=dict(inputs["adwaita"], name="adwaita"), builderSource=dict(config["builder"], name="gnustep-cli-new"),
+        packagerSource=dict(inputs["gnustep-packager"], name="gnustep-packager"), fallbackSource=config["fallbackSource"],
+        publicBackportIndex=dict(file=index_file, sha256=check.digest(index)), distributionBinaries=binaries,
+        distributionSources=[dict(name=name, revision=revision) for name, revision in
+                             sorted({(item["source"], item["revision"]) for item in binaries})])
+    (work / "sources.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    return verifier, commit
+
+
 def collect(args):
     version = args.version
     work = args.work or root / "out" / "corresponding-source"
@@ -109,6 +157,18 @@ def collect(args):
     if work.exists() or output.exists():
         raise ValueError("Use fresh source work/output paths; refusing stale output")
     custom = select_custom(args)
+    evidence = getattr(args, "ci_evidence", None)
+    if custom:
+        version_spec = importlib.util.spec_from_file_location("custom_version", Path(__file__).resolve().parents[1] / ".github/scripts/release-selection.py")
+        selection = importlib.util.module_from_spec(version_spec)
+        version_spec.loader.exec_module(selection)
+        selection.custom_version(root / "packaging/package.manifest.json", root / "packaging/linux/release-production.json",
+                                 os.environ.get("CSD_MODE", "review") if evidence else ("review" if "-review" in version else "production"), version)
+    if evidence:
+        check.require(custom is not None, "CI evidence requires explicit custom mode")
+        verifier = evidence_module()
+        verifier.policy.validate_sdk(root, args.sdk_provenance.parent, verifier.policy.load(evidence / "container-inputs.json"))
+        verifier.git_sources(root, custom["lock"], verifier.policy.load(args.sdk_provenance.parent / "pd-csd-build-sources.json"))
     toolchain = Path.home() / ".local/share/gnustep-cli"
     lock = custom["lock"] if custom else json.loads((toolchain / "source-lock.json").read_text())
     work.mkdir(parents=True)
@@ -121,12 +181,13 @@ def collect(args):
         raise ValueError("libobjc2 changed; audit its fallback source before collecting")
     records = []
 
+    auxiliary = json.loads((root / "packaging/linux/csd-ci-inputs.json").read_text())["auxiliarySources"] if custom else [dict(
+        name="appimage-runtime", url="https://github.com/AppImage/type2-runtime.git", revision="caf24f9f712084686bfc24a70b75e50df0aefb9c")]
     for component in lock["components"] + [dict(inputs["adwaita"], name="adwaita"),
             dict(inputs["gnustep-packager"], name="gnustep-packager"),
             dict(name="gnustep-cli-new", url="https://github.com/danjboyd/gnustep-cli-new.git",
                  revision=BUILDER if custom else "e7915a3984f851a4137591899b047f40ee1f7713"),
-            dict(name="appimage-runtime", url="https://github.com/AppImage/type2-runtime.git", revision="caf24f9f712084686bfc24a70b75e50df0aefb9c"),
-            fallback]:
+            fallback] + auxiliary:
         repository = component["url"].removesuffix(".git").removeprefix("https://github.com/")
         revision = component["revision"]
         url = component.get("archiveURL") or f"https://codeload.github.com/{repository}/tar.gz/{revision}"
@@ -177,9 +238,13 @@ def collect(args):
     Dependency licenses and copyright notices are preserved in their archives.
     """)
     (work / "sources.json").write_text(json.dumps(records, indent=2) + "\n")
+    if evidence:
+        verifier, commit = finish_evidence(custom, work, evidence)
     (work / "SHA256SUMS").write_text("".join(
         f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.relative_to(work)}\n"
         for p in sorted(work.rglob("*")) if p.is_file() and p.name != "SHA256SUMS"))
+    if evidence:
+        verifier.verify_tree(work, commit, check.digest(custom["lock_path"]))
     output.parent.mkdir(parents=True, exist_ok=True)
     with tarfile.open(output, "x:gz") as archive:
         archive.add(work, arcname=f"PerformanceDashboard-{version}-sources")
@@ -189,7 +254,7 @@ def collect(args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("version")
-    for name in ("custom-lock", "sdk-provenance", "builder-source", "work", "output"):
+    for name in ("custom-lock", "sdk-provenance", "builder-source", "work", "output", "ci-evidence"):
         parser.add_argument("--" + name, type=Path)
     args = parser.parse_args()
     try:
