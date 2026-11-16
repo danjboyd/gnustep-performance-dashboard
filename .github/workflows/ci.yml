@@ -43,6 +43,7 @@ jobs:
         run: |
           /usr/bin/python3 Tests/release-producer-checks.py
           /usr/bin/python3 Tests/custom-signing-checks.py
+          /usr/bin/python3 Tests/csd-postprepare-checks.py
 
       - name: Cache GNUstep
         id: cache

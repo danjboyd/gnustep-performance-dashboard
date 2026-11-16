@@ -150,6 +150,12 @@ def finish_evidence(custom, work, evidence):
     return verifier, commit
 
 
+def check_source_tools():
+    for command in ('apt-get', 'dpkg-query', 'dpkg-source'):
+        if shutil.which(command) is None:
+            raise ValueError('CI source collection requires apt/dpkg and dpkg-dev: missing ' + command)
+
+
 def collect(args):
     version = args.version
     work = args.work or root / "out" / "corresponding-source"
@@ -165,6 +171,7 @@ def collect(args):
         selection.custom_version(root / "packaging/package.manifest.json", root / "packaging/linux/release-production.json",
                                  os.environ.get("CSD_MODE", "review") if evidence else ("review" if "-review" in version else "production"), version)
     if evidence:
+        check_source_tools()
         check.require(custom is not None, "CI evidence requires explicit custom mode")
         verifier = evidence_module()
         verifier.policy.validate_sdk(root, args.sdk_provenance.parent, verifier.policy.load(evidence / "container-inputs.json"))

@@ -4,7 +4,7 @@ FROM ${SDK_BASE}
 USER root
 RUN sed 's/^Types: deb$/Types: deb-src/' /etc/apt/sources.list.d/debian.sources > /etc/apt/sources.list.d/pd-source.sources \
  && apt-get update \
- && apt-get install -y --no-install-recommends libxrender-dev libxfixes-dev gcc libc6-dev file binutils openssl libunwind8 \
+ && apt-get install -y --no-install-recommends libxrender-dev libxfixes-dev gcc libc6-dev dpkg-dev file binutils openssl libunwind8 \
       libfontconfig-dev libglib2.0-dev xvfb xauth x11-utils fonts-dejavu-core squashfs-tools desktop-file-utils bubblewrap xdotool imagemagick patchelf
 # Keep matching binary/source indexes for exact apt-get source versions.
 ARG CI_UID=1001

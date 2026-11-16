@@ -66,6 +66,8 @@ class FinalReviewChecks(unittest.TestCase):
             selectedPayloadSHA256={'app/test': '2' * 64, 'runtime/System/Library/Themes/Adwaita.theme/Adwaita': '3' * 64}, closure=dict(elfCount=2)))
         self.source_proof = dict(ok=True, applicationCommit=COMMIT, customToolchainLockSHA256=p.sha(self.lock))
         self.write('sources-verification.json', self.source_proof)
+        if getattr(self, 'use_real_gates', False):
+            return
         for target, kwargs in [
             (p, dict(attribute='settings', return_value=({'reviewInputs': 'review-inputs.json'}, self.lock, {}))),
             (p, dict(attribute='cache_key', return_value='exact-cache')),

@@ -68,6 +68,7 @@ jobs:
           /usr/bin/python3 Tests/release-producer-checks.py
           /usr/bin/python3 Tests/csd-source-checks.py
           /usr/bin/python3 Tests/csd-final-review-checks.py
+          /usr/bin/python3 Tests/csd-postprepare-checks.py
       - name: Prepare Debian13 build and consumption image; inventory before compilation
         id: container
         run: bash .github/scripts/csd-review-host.sh prepare
