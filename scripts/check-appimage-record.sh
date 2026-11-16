@@ -28,7 +28,10 @@ work="$(mktemp -d "${TMPDIR:-/tmp}/pd-record-check.XXXXXX")"
 xvfb_pid=""; app_pid=""
 cleanup() {
   [ -n "$app_pid" ] && kill "$app_pid" 2>/dev/null || true
-  [ -n "$xvfb_pid" ] && kill "$xvfb_pid" 2>/dev/null || true
+  if [ -n "$xvfb_pid" ]; then
+    kill "$xvfb_pid" 2>/dev/null || true
+    wait "$xvfb_pid" 2>/dev/null || true
+  fi
   [ -n "${trace:-}" ] && rm -rf "$trace"
   rm -rf "$work"
 }
@@ -36,9 +39,8 @@ trap cleanup EXIT
 
 cc -O0 -g "$repo_root/Tests/fixtures/cburn.c" -o "$work/cburn" -lpthread || die "cannot build the fixture"
 
-exec 3< <(Xvfb -displayfd 4 -screen 0 1280x800x24 -nolisten tcp 4>&1 2>/dev/null)
-xvfb_pid=$!
-read -r -t 10 display_number <&3 || die "Xvfb did not start"
+. "$repo_root/scripts/private-xvfb.sh"
+pd_start_private_xvfb "$work/xvfb.log" || die "private pinned Xvfb did not start"
 
 # GNUstep's temporary directory for this user, where unsaved recordings go.
 traces="/tmp/GNUstepSecure$(id -u)/Performance Dashboard"
@@ -90,7 +92,11 @@ app_pid=""
 runtime="$work/squashfs-root/usr/runtime"
 python3 "$repo_root/Tests/target-config-checks.py" "$work/squashfs-root" "$work/target-config" \
   || die "the bundled gstrace did not preserve the target's caller config"
-python3 "$repo_root/Tests/target-config-gui-checks.py" "$work/squashfs-root" "$work/target-config-gui" \
+# The nested GUI check owns its server; release ours before reusing its number.
+kill "$xvfb_pid" 2>/dev/null || true
+wait "$xvfb_pid" 2>/dev/null || true
+xvfb_pid=""
+PD_CONFIG_GUI_DISPLAY=":$display_number" python3 "$repo_root/Tests/target-config-gui-checks.py" "$work/squashfs-root" "$work/target-config-gui" \
   || die "the generated AppRun/GUI recorder did not preserve the target's caller config"
 info="$(LD_LIBRARY_PATH="$runtime/lib" GNUSTEP_CONFIG_FILE="$runtime/etc/GNUstep/GNUstep.conf" \
   HOME="$work/home" "$runtime/bin/gstrace" info "$trace" 2>/dev/null)"

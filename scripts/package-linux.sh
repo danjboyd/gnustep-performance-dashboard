@@ -38,6 +38,28 @@ manifest=packaging/package.manifest.json
 die() { echo "package-linux: $*" >&2; exit 1; }
 warn() { echo "package-linux: warning: $*" >&2; }
 
+# The custom path is unsigned review only and must pass the same complete
+# input identity gate as staging before fetch/build/stage/runtime.
+csd_mode=0
+if [[ -n "${PD_CSD_TOOLCHAIN_LOCK:-}" ]]; then
+  [ "$release" = 0 ] || die "custom CSD mode is unsigned review only"
+  : "${GNUSTEP_CLI_ROOT:?custom CSD requires its exact SDK prefix}"
+  : "${LIBS_BACK_BUNDLE:?custom CSD requires the SDK backend bundle}"
+  : "${ADWAITA_THEME:?custom CSD requires a same-SDK rebuilt theme}"
+  : "${PD_CSD_BACKEND_SHA256:?custom CSD requires the backend SHA-256}"
+  : "${PD_CSD_ADWAITA_SHA256:?custom CSD requires the theme SHA-256}"
+  : "${PD_CSD_ADWAITA_BUILD_RECEIPT:?custom CSD requires a theme build receipt}"
+  python3 "$repo_root/scripts/check-csd-package.py" inputs \
+    --review-inputs "$repo_root/packaging/linux/v017-review-inputs.json" \
+    --lock "$PD_CSD_TOOLCHAIN_LOCK" --sdk "$GNUSTEP_CLI_ROOT" \
+    --backend "$LIBS_BACK_BUNDLE" --backend-sha256 "$PD_CSD_BACKEND_SHA256" \
+    --theme "$ADWAITA_THEME" --theme-sha256 "$PD_CSD_ADWAITA_SHA256" \
+    --theme-receipt "$PD_CSD_ADWAITA_BUILD_RECEIPT"
+  csd_mode=1
+elif [[ -n "${GNUSTEP_CLI_ROOT:-}" && -f "$GNUSTEP_CLI_ROOT/gnustep-toolchain-provenance.json" ]]; then
+  die "custom SDK requires explicit PD_CSD_TOOLCHAIN_LOCK; refusing before packaging"
+fi
+
 [ "$release" = 0 ] || [ -z "$(git status --porcelain)" ] || die "a release builds only from a clean tree"
 if [ "$release" = 1 ]; then
   [ -n "${PD_VERIFIED_TOOLCHAIN_CACHE:-}" ] || die "release builds use ci-release-linux.sh in a clean Debian 13 build home"
@@ -79,7 +101,10 @@ signing_manifest=""
 work="$(mktemp -d "${TMPDIR:-/tmp}/pd-package.XXXXXX")"
 xvfb_pid=""
 cleanup() {
-  [ -n "$xvfb_pid" ] && kill "$xvfb_pid" 2>/dev/null || true
+  if [ -n "$xvfb_pid" ]; then
+    kill "$xvfb_pid" 2>/dev/null || true
+    wait "$xvfb_pid" 2>/dev/null || true
+  fi
   rm -rf "$work"
   [ -z "$signing_manifest" ] || rm -f "$signing_manifest"
 }
@@ -111,9 +136,8 @@ for command in manifest-check build stage validate; do
 done
 pwsh "$packager" -Manifest "$manifest" -Command package -Backend appimage "${version_args[@]}"
 
-exec 3< <(Xvfb -displayfd 4 -screen 0 1280x800x24 -nolisten tcp 4>&1 2>/dev/null)
-xvfb_pid=$!
-read -r -t 10 display_number <&3 || die "Xvfb did not start"
+. "$repo_root/scripts/private-xvfb.sh"
+pd_start_private_xvfb "$work/xvfb.log" || die "private pinned Xvfb did not start"
 mkdir -p "$work/home" "$work/xdg"
 DISPLAY=":$display_number" GNUSTEP_HOME="$work/home" XDG_DATA_HOME="$work/xdg" XDG_CONFIG_HOME="$work/xdg" \
   DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent \
@@ -121,6 +145,7 @@ DISPLAY=":$display_number" GNUSTEP_HOME="$work/home" XDG_DATA_HOME="$work/xdg" X
   python3 scripts/with-private-home.py "$work/smoke-sandbox" -- \
     pwsh "$packager" -Manifest "$manifest" -Command validate -Backend appimage -RunSmoke "${version_args[@]}"
 kill "$xvfb_pid" 2>/dev/null || true
+wait "$xvfb_pid" 2>/dev/null || true
 xvfb_pid=""
 
 appimage="dist/packages/PerformanceDashboard-$version-x86_64.AppImage"
@@ -135,6 +160,7 @@ build_id() { # file
   readelf -n "$1" 2>/dev/null | sed -n 's/^ *Build ID: *//p' | head -1
 }
 root="$work/squashfs-root/usr"
+python3 "$repo_root/scripts/app-version.py" check --bundle "$root/app/PerformanceDashboard.app" --version "$version"
 if [ "$release" = 1 ]; then
   python3 - "$work/squashfs-root" <<'PYKEY'
 import json, os, pathlib, sys
@@ -156,6 +182,19 @@ agent_id="$(build_id "$root/app/PerformanceDashboard.app/Resources/libgsperf-age
 toolchain_ids="$(for lib in libgnustep-base.so.1.31 libgnustep-gui.so.0.32 libobjc.so.4.6 libdispatch.so; do
   printf '%s=%s\n' "$lib" "$(build_id "$root/runtime/lib/$lib")"
 done)"
+if [[ "$csd_mode" = 1 ]]; then
+  python3 "$repo_root/scripts/write-csd-provenance.py" \
+    --payload "$root" --lock "$PD_CSD_TOOLCHAIN_LOCK" --sdk "$GNUSTEP_CLI_ROOT" \
+    --backend "$LIBS_BACK_BUNDLE" --backend-sha256 "$PD_CSD_BACKEND_SHA256" \
+    --theme "$ADWAITA_THEME" --theme-sha256 "$PD_CSD_ADWAITA_SHA256" \
+    --theme-receipt "$PD_CSD_ADWAITA_BUILD_RECEIPT" \
+    --version "$version" --commit "$commit" --packager-commit "$packager_commit" \
+    --source-dirty "$source_dirty" --source-diff-sha256 "$source_diff_sha256" \
+    --output "dist/packages/PerformanceDashboard-$version-x86_64.provenance.json"
+  echo "package-linux: $appimage checked; custom CSD review provenance written"
+  exit 0
+fi
+
 python3 - "dist/packages/PerformanceDashboard-$version-x86_64.provenance.json" <<PY
 import json, sys, pathlib, subprocess, os
 inputs = json.load(open("packaging/release-inputs.json"))

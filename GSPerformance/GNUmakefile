@@ -1,7 +1,10 @@
 include $(GNUSTEP_MAKEFILES)/common.make
+include ../scripts/package-version.make
+
+ADDITIONAL_OBJCFLAGS += $(PD_PRODUCT_VERSION_CPPFLAGS)
 
 LIBRARY_NAME = libGSPerformance
-VERSION = 0.1.6
+VERSION = 0.1.5
 
 libGSPerformance_OBJC_FILES = \
   GSPTrace.m \
@@ -11,6 +14,7 @@ libGSPerformance_OBJC_FILES = \
   GSPAnalysis.m \
   GSPInstruments.m \
   GSPRecorder.m \
+  GSPChildTask.m \
   GSPExporter.m \
   GSPComparison.m
 

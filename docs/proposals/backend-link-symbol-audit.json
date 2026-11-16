@@ -1,0 +1,12 @@
+{
+  "scope": "static direct-symbol closure evidence, not a relink/runtime proof",
+  "backendSHA256": "d93f60157163cfe63ba1772ef05eb87aac7fee91ebf9b6fda9fddd132c44bdc4",
+  "directNeededDelta": [
+    "libXft.so.2",
+    "libXt.so.6"
+  ],
+  "undefinedSymbolCount": 516,
+  "directSymbolsSatisfiedByXft": [],
+  "directSymbolsSatisfiedByXt": [],
+  "futureRequiredProof": "build with reviewed source patch; exact full link command, expected direct DT_NEEDED set, all transitive resolution and runtime gates"
+}

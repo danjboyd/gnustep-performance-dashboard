@@ -1,0 +1,57 @@
+From f28c9996a1b20ba210222e7a2d0114319c9f2678 Mon Sep 17 00:00:00 2001
+From: rfm <richardfrithmacdonald@gmail.com>
+Date: Sat, 9 May 2026 22:33:18 +0100
+Subject: [PATCH] tweak tls notification posting
+
+---
+ Headers/GNUstepBase/GSTLS.h |  2 ++
+ Source/GSTLS.m              | 18 +++++++++++++-----
+ 2 files changed, 15 insertions(+), 5 deletions(-)
+
+diff --git a/Headers/GNUstepBase/GSTLS.h b/Headers/GNUstepBase/GSTLS.h
+index 504ba57e9..ed56fa854 100644
+--- a/Headers/GNUstepBase/GSTLS.h
++++ b/Headers/GNUstepBase/GSTLS.h
+@@ -58,6 +58,8 @@ GS_EXPORT NSString * const GSTLSVerify;
+ 
+ /** Notification posted whenever a connection (handled by a [GSTLSSession]
+  * instance) to a TLS server fails certificate or host name verification.
++ * This is only sent if the option to turn off strict verification was not
++ * set in the session options.
+  */
+ GS_EXPORT NSString* const GSTLSVerifyFailedNotification;
+ 
+diff --git a/Source/GSTLS.m b/Source/GSTLS.m
+index 3e565b327..08fc8b5a3 100644
+--- a/Source/GSTLS.m
++++ b/Source/GSTLS.m
+@@ -2059,16 +2059,24 @@ retrieve_callback(gnutls_session_t session,
+                 handle, gnutls_strerror(ret));
+               NSLog(@"%p failed verify:\n%@", handle, [self sessionInfo]);
+             }
+-	  if (outgoing)
++          if (requireVerified)
++            {
++              [self disconnect: NO];
++            }
++	  else if (outgoing && nil == [opts objectForKey: GSTLSVerify])
+ 	    {
++	      /* We notify about verification failure on outgoing connections
++	       * if the failure was ignored, unless it was specifically turned
++	       * off by the app (GSTLSVerify set to NO). That is to say, if
++	       * strict verification was turned off by environment variable
++	       * or user default.  This is intended to allow an application
++	       * to catch connection attempts which would have failed if the
++	       * default setting had been to use strict verification.
++	       */
+               [[NSNotificationCenter defaultCenter]
+                 postNotificationName: GSTLSVerifyFailedNotification
+                   object: self];
+ 	    }
+-          if (requireVerified)
+-            {
+-              [self disconnect: NO];
+-            }
+         }
+       else
+         {

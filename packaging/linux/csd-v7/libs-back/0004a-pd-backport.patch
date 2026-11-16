@@ -1,0 +1,268 @@
+From fee64746ef24087861c303c1a69367ea82b3728b Mon Sep 17 00:00:00 2001
+From: Daniel Boyd <danieljboyd@icloud.com>
+Date: Thu, 5 Nov 2026 12:02:05 -0600
+Subject: [PATCH] x11: don't stack a window against the focus when no window
+ has it
+
+PD backport of the public v7 patch below; source/test changes were
+merged onto the pinned PD component. ChangeLog context was rewritten.
+
+Original-public-commit: bc0e9f7637a42b2cb13751245801a66ffb09a458
+Original-public-patch-SHA256: cfb58463b6a1445fdd08b590601ad1cc36a2f57d03857581c6bc68cc54e0bdde
+PD-component-base: bf3b3ced525f08415a20d109f05be1f91492414c
+
+Original description and historical upstream test results follow; these
+results have NOT been repeated for this PD backport:
+
+-orderwindow::: puts a window ordered in front (NSWindowAbove, no other
+window) just below the window that has the input focus.  When no window
+has it, XGetInputFocus answers None or PointerRoot, and the window was
+stacked against PointerRoot (1) or None (0), so the X server answered
+BadWindow and the window wasn't restacked.  This happens whenever the
+focus is at the pointer root, as on an X server with no window manager,
+or when the focused window closes and the focus reverts to it.  Such a
+window is now stacked above the others, as when XGetInputFocus fails.
+
+Testing: Tests/x11/orderfocusroot.m needs a display with no window
+manager (a private Xvfb), where the focus starts at PointerRoot.  It
+orders two windows in, then orders the first in front again, once with
+the focus at PointerRoot and once at None, and checks each time that the
+X server gave no BadWindow on ConfigureWindow and that the window is now
+the topmost child of the root; then that no other X error came.  The
+topmost check guards against a change that only hides the error.
+Without this change four of the five checks fail (both BadWindow checks
+and both topmost checks); with it all five pass.  It doesn't cover a
+window manager that keeps the focus on a window.
+
+AI assistance: this change, its test and this description were written
+with Claude (Anthropic's Claude Code).
+
+PD backport validation: source application only; no build/runtime test.
+PD backport preparation used AI assistance (OpenAI Codex).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ ChangeLog                   |  12 +++
+ Source/x11/XGServerWindow.m |   4 +-
+ Tests/x11/orderfocusroot.m  | 174 ++++++++++++++++++++++++++++++++++++
+ 3 files changed, 189 insertions(+), 1 deletion(-)
+ create mode 100644 Tests/x11/orderfocusroot.m
+
+diff --git a/ChangeLog b/ChangeLog
+index d3e2ed4..749dabb 100644
+--- a/ChangeLog
++++ b/ChangeLog
+@@ -1,3 +1,15 @@
++2026-11-10  Daniel Boyd  <danieljboyd@icloud.com>
++
++	* Source/x11/XGServerWindow.m (-orderwindow:::): Stack a window
++	ordered in front against the focus window only when one has the
++	focus.  With none, the focus is None or PointerRoot, and stacking
++	against PointerRoot gave BadWindow.
++	* Tests/x11/orderfocusroot.m: New test.
++
++	PD backport of public v7 bc0e9f7637a4 onto
++	bf3b3ced525f. Preserve original code and regression tests.
++	Source applicability checked; build/runtime tests not rerun here.
++
+ 2026-11-10  Daniel Boyd  <danieljboyd@icloud.com>
+ 
+ 	* Source/x11/XGServerWindow.m (argb_visual, -_compositorRuns,
+diff --git a/Source/x11/XGServerWindow.m b/Source/x11/XGServerWindow.m
+index 8cf5871..37779c8 100644
+--- a/Source/x11/XGServerWindow.m
++++ b/Source/x11/XGServerWindow.m
+@@ -3213,7 +3213,9 @@ swapColors(unsigned char *image_data, NSBitmapImageRep *rep)
+       int revert, status;
+       status = XGetInputFocus(dpy, &keywin, &revert);
+       other = NULL;
+-      if (status == True)
++      /* With no window focused, the focus is None or PointerRoot, which are
++         no windows to stack against. */
++      if (status == True && keywin != None && keywin != PointerRoot)
+ 	{
+ 	  /* Alloc a temporary window structure */
+ 	  other = GSAutoreleasedBuffer(sizeof(gswindow_device_t));
+diff --git a/Tests/x11/orderfocusroot.m b/Tests/x11/orderfocusroot.m
+new file mode 100644
+index 0000000..a3ba658
+--- /dev/null
++++ b/Tests/x11/orderfocusroot.m
+@@ -0,0 +1,174 @@
++/* Ordering a window in front when no window has the input focus.
++ *
++ * -orderwindow::: puts a window ordered in front with no other window just
++ * below the window that has the input focus.  With no window focused,
++ * XGetInputFocus answers PointerRoot or None, which are no windows; stacking
++ * against them made the X server answer BadWindow, and the window wasn't
++ * restacked at all.
++ *
++ * The test needs a display with no window manager (a private Xvfb), where
++ * the focus is PointerRoot until a client sets it.  Two windows are ordered
++ * in, then the first is ordered in front again, once with the focus at
++ * PointerRoot and once at None.  Each time it checks that the X server gave
++ * no error and that the window is now the topmost child of the root.
++ */
++#import <Foundation/Foundation.h>
++#import "Testing.h"
++#include "config.h"
++
++#if defined(BUILD_SERVER) && defined(SERVER_x11) && BUILD_SERVER == SERVER_x11
++
++#import <AppKit/AppKit.h>
++#import <GNUstepGUI/GSDisplayServer.h>
++#include <X11/Xlib.h>
++#include <X11/Xproto.h>
++
++static int	badWindows = 0;
++static int	otherErrors = 0;
++
++static int
++countErrors(Display *d, XErrorEvent *e)
++{
++  if (e->error_code == BadWindow && e->request_code == X_ConfigureWindow)
++    {
++      badWindows++;
++    }
++  else
++    {
++      otherErrors++;
++    }
++  return 0;
++}
++
++static void
++spin(NSTimeInterval seconds)
++{
++  [[NSRunLoop currentRunLoop]
++    runUntilDate: [NSDate dateWithTimeIntervalSinceNow: seconds]];
++}
++
++/* Whether w is the topmost child of the root that is mapped. */
++static BOOL
++isTopmost(Display *dpy, Window w)
++{
++  Window	root;
++  Window	parent;
++  Window	*children = NULL;
++  unsigned int	n = 0;
++  BOOL		result = NO;
++
++  if (XQueryTree(dpy, DefaultRootWindow(dpy), &root, &parent, &children, &n))
++    {
++      int	i;
++
++      for (i = (int)n - 1; i >= 0; i--)
++	{
++	  XWindowAttributes	a;
++
++	  if (XGetWindowAttributes(dpy, children[i], &a)
++	    && a.map_state == IsViewable)
++	    {
++	      result = (children[i] == w);
++	      break;
++	    }
++	}
++      if (children != NULL)
++	{
++	  XFree(children);
++	}
++    }
++  return result;
++}
++
++static NSWindow *
++makeWindow(NSRect frame)
++{
++  return [[NSWindow alloc] initWithContentRect: frame
++				     styleMask: NSTitledWindowMask
++				       backing: NSBackingStoreBuffered
++					 defer: NO];
++}
++
++int
++main(int argc, const char **argv)
++{
++  START_SET("ordering a window in front with no focus window")
++
++  Display	*dpy;
++  NSWindow	*first;
++  NSWindow	*second;
++  Window	firstWin;
++  Window	focus;
++  int		revert;
++
++  if (getenv("DISPLAY") == NULL || *getenv("DISPLAY") == '\0')
++    {
++      SKIP("no window server available")
++    }
++
++  [NSApplication sharedApplication];
++  dpy = (Display *)[GSCurrentServer() serverDevice];
++
++  first = makeWindow(NSMakeRect(100, 100, 200, 150));
++  second = makeWindow(NSMakeRect(150, 150, 200, 150));
++  firstWin = (Window)[GSCurrentServer() windowDevice: [first windowNumber]];
++
++  [first orderFront: nil];
++  [second orderFront: nil];
++  XSync(dpy, False);
++  spin(0.2);
++
++  XGetInputFocus(dpy, &focus, &revert);
++  if (focus != PointerRoot)
++    {
++      SKIP("the display has a window manager or a focus window")
++    }
++
++  XSetErrorHandler(countErrors);
++
++  /* The focus at PointerRoot, as an X server starts. */
++  badWindows = 0;
++  [first orderFront: nil];
++  XSync(dpy, False);
++  PASS(badWindows == 0,
++    "with the focus at PointerRoot, ordering in front gives no BadWindow (%d)",
++    badWindows);
++  PASS(isTopmost(dpy, firstWin),
++    "with the focus at PointerRoot, the window ordered in front is on top");
++
++  /* The focus at None. */
++  [second orderFront: nil];
++  XSync(dpy, False);
++  XSetInputFocus(dpy, None, RevertToNone, CurrentTime);
++  XSync(dpy, False);
++  badWindows = 0;
++  [first orderFront: nil];
++  XSync(dpy, False);
++  PASS(badWindows == 0,
++    "with the focus at None, ordering in front gives no BadWindow (%d)",
++    badWindows);
++  PASS(isTopmost(dpy, firstWin),
++    "with the focus at None, the window ordered in front is on top");
++
++  PASS(otherErrors == 0, "nor any other X error (%d)", otherErrors);
++
++  XSetInputFocus(dpy, PointerRoot, RevertToPointerRoot, CurrentTime);
++  [first close];
++  [second close];
++
++  END_SET("ordering a window in front with no focus window")
++  return 0;
++}
++
++#else
++
++int
++main(int argc, const char **argv)
++{
++  START_SET("ordering a window in front with no focus window")
++  SKIP("x11 backend only")
++  END_SET("ordering a window in front with no focus window")
++  return 0;
++}
++
++#endif
+-- 
+2.47.3
+

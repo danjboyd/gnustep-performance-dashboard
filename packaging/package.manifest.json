@@ -8,7 +8,7 @@
     "id": "io.github.danjboyd.PerformanceDashboard",
     "name": "PerformanceDashboard",
     "displayName": "Performance Dashboard",
-    "version": "0.1.6",
+    "version": "0.1.7",
     "manufacturer": "Daniel Boyd",
     "summary": "Performance analysis for GNUstep applications.",
     "description": "Performance Dashboard records a GNUstep program and shows where its time and memory go: Time Profiler, Hangs, Allocations, Leaks, Zombies, File Activity, Network and signposts, on a timeline with call trees.",
@@ -68,6 +68,7 @@
         "app/PerformanceDashboard.app/PerformanceDashboard",
         "app/PerformanceDashboard.app/Resources/Info-gnustep.plist",
         "app/PerformanceDashboard.app/Resources/libgsperf-agent.so",
+        "app/PerformanceDashboard.app/Resources/gsp-launch",
         "app/PerformanceDashboard.app/Resources/gstrace-helper",
         "app/PerformanceDashboard.app/Resources/org.gnustep.performancedashboard.policy",
         "metadata/icons/PerformanceDashboard.png",
@@ -79,6 +80,7 @@
         "runtime/etc/GNUstep/GNUstep.conf",
         "runtime/etc/GNUstep/GlobalDefaults.plist",
         "runtime/lib/libGSPerformance.so.0",
+        "runtime/lib/gsp-launch",
         "runtime/lib/libgsperf.so.0",
         "runtime/lib/libgnustep-gui.so.0.32",
         "runtime/System/Library/Bundles/libgnustep-back-032.bundle/libgnustep-back-032",
@@ -150,7 +152,7 @@
     "runtimeNotices": [
       {
         "name": "Performance Dashboard",
-        "version": "0.1.6",
+        "version": "0.1.7",
         "license": "GPL-3.0-or-later",
         "source": "Dashboard, gstrace and gstrace-helper",
         "homepage": "https://github.com/danjboyd/gnustep-performance-dashboard",

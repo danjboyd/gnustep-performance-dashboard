@@ -6,6 +6,13 @@
 #import "TraceBuilder.h"
 #import "Dashboard/PDRecordingStatus.h"
 #include <errno.h>
+#if defined(__linux__)
+#import "GSPerformance/GSPChildTask.h"
+#include <fcntl.h>
+#include <sys/socket.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#endif
 
 /* Exercise path generation at an identical instant, without changing the
    process clock or requiring a recording target. */
@@ -969,6 +976,185 @@ child(GSPCallTreeNode *n, NSString *name)
 }
 
 #if defined(__linux__)
+#if defined(__linux__)
+- (void) testCLILaunchDefaultsToDirectWaitStatus
+{
+  GSPRecordingOptions *options = [GSPRecordingOptions new];
+  XCTAssertFalse(options.useTaskLauncher);
+  options.outputPath = [[NSTemporaryDirectory() stringByAppendingPathComponent:
+    [[NSProcessInfo processInfo] globallyUniqueString]] stringByAppendingPathExtension: @"gstrace"];
+  [_bundles addObject: options.outputPath];
+  GSPRecorder *recorder = [[GSPRecorder alloc] initWithOptions: options];
+  XCTAssertTrue([recorder prepareBundle: NULL]);
+  [recorder writeInfo: YES];
+  NSDictionary *info = [NSDictionary dictionaryWithContentsOfFile:
+    [options.outputPath stringByAppendingPathComponent: @"Info.plist"]];
+  /* Kernel core flag is retained verbatim by the direct wait-status API and
+     metadata; unlike NSTask's normalized result it is not synthesized. */
+  int coreStatus = SIGSEGV | 0x80;
+  [recorder setValue: @(coreStatus) forKey: @"exitStatus"];
+  [recorder writeInfo: YES];
+  info = [NSDictionary dictionaryWithContentsOfFile:
+    [options.outputPath stringByAppendingPathComponent: @"Info.plist"]];
+  XCTAssertEqual(recorder.exitStatus, coreStatus);
+  XCTAssertTrue(WCOREDUMP(recorder.exitStatus));
+  XCTAssertEqualObjects([info objectForKey: @"ExitStatus"], @(coreStatus));
+  XCTAssertEqualObjects([info objectForKey: @"ExitStatusSource"], @"waitpid");
+  XCTAssertEqualObjects([info objectForKey: @"ExitStatusCoreDumpKnown"], @YES);
+  XCTAssertNil([info objectForKey: @"TargetSession"]);
+  options.useTaskLauncher = YES;
+  [recorder writeInfo: YES];
+  info = [NSDictionary dictionaryWithContentsOfFile:
+    [options.outputPath stringByAppendingPathComponent: @"Info.plist"]];
+  XCTAssertEqualObjects([info objectForKey: @"ExitStatusSource"], @"NSTask");
+  XCTAssertEqualObjects([info objectForKey: @"ExitStatusCoreDumpKnown"], @NO);
+  XCTAssertEqualObjects([info objectForKey: @"TargetSession"], @"independent");
+}
+
+/* The child waits for a parent-owned pipe barrier. Drain an unrelated task
+   first, then let Foundation collect our registered child before polling it. */
+- (void) testTaskRecorderMakesBareTargetAbsoluteBeforeLaunch
+{
+  GSPRecordingOptions *options = [GSPRecordingOptions new];
+  options.useTaskLauncher = YES;
+  options.executablePath = @"pd-bare-target";
+  options.workingDirectory = @"/bin";
+  options.outputPath = [[NSTemporaryDirectory() stringByAppendingPathComponent:
+    [[NSProcessInfo processInfo] globallyUniqueString]] stringByAppendingPathExtension: @"gstrace"];
+  [_bundles addObject: options.outputPath];
+  GSPRecorder *recorder = [[GSPRecorder alloc] initWithOptions: options];
+  XCTAssertTrue([recorder prepareBundle: NULL]);
+  XCTAssertEqualObjects(options.executablePath,
+    [[[NSFileManager defaultManager] currentDirectoryPath]
+      stringByAppendingPathComponent: @"pd-bare-target"]);
+  XCTAssertTrue([options.executablePath isAbsolutePath]);
+  XCTAssertEqualObjects(options.workingDirectory, @"/bin");
+}
+
+- (void) testRegisteredChildKeepsStatusAfterRunLoopReaps
+{
+  NSString *helper = [[GSPRecorder agentLibraryPath] stringByDeletingLastPathComponent];
+  helper = [helper stringByAppendingPathComponent: @"gsp-launch"];
+  int input[2], writer[2];
+  XCTAssertEqual(pipe(input), 0);
+  fcntl(input[0], F_SETFD, FD_CLOEXEC);
+  fcntl(input[1], F_SETFD, FD_CLOEXEC);
+  XCTAssertEqual(socketpair(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC, 0, writer), 0);
+  int null = open("/dev/null", O_RDWR | O_CLOEXEC);
+  int fds[4] = {input[0], null, null, writer[1]};
+  GSPChildTask *child = [GSPChildTask new];
+  NSError *error = nil;
+  BOOL launched = [child launchHelper: helper executable: @"/bin/sh"
+    arguments: @[@"-c", @"read answer; exit 3"] environment: @{} workingDirectory: nil
+    descriptors: fds error: &error];
+  close(input[0]); close(writer[1]); close(null);
+  XCTAssertTrue(launched, @"%@", error);
+  if (launched)
+    {
+      NSTask *unrelated = [NSTask new];
+      [unrelated setLaunchPath: @"/bin/true"];
+      [unrelated launch];
+      [unrelated waitUntilExit];
+      XCTAssertEqual([unrelated terminationStatus], 0);
+      XCTAssertEqual(write(input[1], "release\n", 8), 8);
+      NSString *proc = [NSString stringWithFormat: @"/proc/%d", child.pid];
+      NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow: 3];
+      while ([[NSFileManager defaultManager] fileExistsAtPath: proc]
+             && [deadline timeIntervalSinceNow] > 0)
+        [[NSRunLoop currentRunLoop] runMode: NSDefaultRunLoopMode
+          beforeDate: [NSDate dateWithTimeIntervalSinceNow: 0.01]];
+      XCTAssertFalse([[NSFileManager defaultManager] fileExistsAtPath: proc],
+                     @"Foundation must collect the child before the adapter reads it");
+      int status = -1;
+      BOOL collected = [child pollStatus: &status];
+      XCTAssertTrue(collected);
+      XCTAssertEqual(status, 3 << 8);
+      int unused;
+      errno = 0;
+      XCTAssertEqual(waitpid(child.pid, &unused, WNOHANG), -1);
+      XCTAssertEqual(errno, ECHILD);
+      if (!collected) kill(child.pid, SIGKILL);
+    }
+  close(input[1]); close(writer[0]);
+}
+
+/* Exercise the actual recorder/agent transport, not just normalized NSTask
+   status. This is headless; AppKit/package qualification is a separate gate. */
+- (void) testTaskRecorderReceivesAgentCompletionWithActiveNSTask
+{
+  GSPRecordingOptions *options = [GSPRecordingOptions new];
+  options.executablePath = @"/bin/sleep";
+  options.arguments = @[@"0.15"];
+  options.instrumentIdentifiers = @[@"time-profiler"];
+  options.captureOutput = YES;
+  options.useTaskLauncher = YES;
+  options.automaticMinimumFreeSpace = NO;
+  options.outputPath = [[NSTemporaryDirectory() stringByAppendingPathComponent:
+    [[NSProcessInfo processInfo] globallyUniqueString]] stringByAppendingPathExtension: @"gstrace"];
+  [_bundles addObject: options.outputPath];
+  GSPRecorder *recorder = [[GSPRecorder alloc] initWithOptions: options];
+  NSError *error = nil;
+  BOOL launched = [recorder start: &error];
+  XCTAssertTrue(launched, @"%@", error);
+  if (!launched) return;
+  NSTask *unrelated = [NSTask new];
+  [unrelated setLaunchPath: @"/bin/true"];
+  [unrelated launch];
+  [unrelated waitUntilExit];
+  NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow: 5];
+  while (recorder.isRecording && [deadline timeIntervalSinceNow] > 0)
+    [[NSRunLoop currentRunLoop] runMode: NSDefaultRunLoopMode
+      beforeDate: [NSDate dateWithTimeIntervalSinceNow: 0.01]];
+  if (recorder.isRecording)
+    {
+      kill(recorder.pid, SIGKILL);
+      [recorder waitUntilFinished];
+    }
+  XCTAssertFalse(recorder.isRecording);
+  XCTAssertEqual(recorder.exitStatus, 0);
+  XCTAssertNil(recorder.recordingError);
+  NSDictionary *info = [NSDictionary dictionaryWithContentsOfFile:
+    [options.outputPath stringByAppendingPathComponent: @"Info.plist"]];
+  XCTAssertEqualObjects([info objectForKey: @"CaptureStatus"], @"complete");
+  XCTAssertEqualObjects([info objectForKey: @"ExitStatusSource"], @"NSTask");
+  XCTAssertNil([info objectForKey: @"WaitPIDErrno"]);
+}
+
+- (void) testChildExecFailureIsNotTargetExit125
+{
+  NSString *helper = [[[GSPRecorder agentLibraryPath] stringByDeletingLastPathComponent]
+    stringByAppendingPathComponent: @"gsp-launch"];
+  int writer[2];
+  XCTAssertEqual(socketpair(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC, 0, writer), 0);
+  int null = open("/dev/null", O_RDWR | O_CLOEXEC);
+  int fds[4] = {null, null, null, writer[1]};
+  NSError *error = nil;
+  GSPChildTask *missingHelper = [GSPChildTask new];
+  XCTAssertFalse([missingHelper launchHelper: @"/no/such/pd-helper" executable: @"/bin/true"
+    arguments: @[] environment: @{} workingDirectory: nil descriptors: fds error: &error]);
+  XCTAssertNotNil(error);
+  GSPChildTask *bare = [GSPChildTask new];
+  XCTAssertFalse([bare launchHelper: helper executable: @"true" arguments: @[]
+    environment: @{ @"PATH": @"/bin" } workingDirectory: @"/bin" descriptors: fds error: &error]);
+  XCTAssertEqual([error code], EINVAL);
+  GSPChildTask *bad = [GSPChildTask new];
+  XCTAssertFalse([bad launchHelper: helper executable: @"/no/such/pd-target"
+    arguments: @[] environment: @{} workingDirectory: nil descriptors: fds error: &error]);
+  XCTAssertEqual([error code], ENOENT);
+  GSPChildTask *good = [GSPChildTask new];
+  XCTAssertTrue(([good launchHelper: helper executable: @"/bin/sh"
+    arguments: @[@"-c", @"exit 125"] environment: @{} workingDirectory: nil
+    descriptors: fds error: &error]));
+  int status = -1;
+  NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow: 3];
+  while (![good pollStatus: &status] && [deadline timeIntervalSinceNow] > 0)
+    [[NSRunLoop currentRunLoop] runMode: NSDefaultRunLoopMode
+      beforeDate: [NSDate dateWithTimeIntervalSinceNow: 0.01]];
+  XCTAssertEqual(status, 125 << 8);
+  close(null); close(writer[0]); close(writer[1]);
+}
+#endif
+
 - (void) testWaitFailureKeepsErrnoAndUnavailableStatus
 {
   for (NSNumber *code in @[@ECHILD, @EINVAL])

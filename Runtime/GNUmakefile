@@ -55,7 +55,10 @@ install: all
 	install -m 644 include/GSPerformance/*.h $(DESTDIR)$(HEADER_PREFIX)/GSPerformance/
 	install -m 644 include/os/*.h $(DESTDIR)$(HEADER_PREFIX)/os/
 else
-all: $(OBJDIR)/libgsperf-agent.so $(OBJDIR)/libgsperf.so
+all: $(OBJDIR)/libgsperf-agent.so $(OBJDIR)/libgsperf.so $(OBJDIR)/gsp-launch
+
+$(OBJDIR)/gsp-launch: gsp_launch.c gsp_launch_protocol.h | $(OBJDIR)
+	$(CC) $(ALL_CFLAGS) -o $@ gsp_launch.c
 
 $(OBJDIR)/%.o: %.c gsp_internal.h include/GSPerformance/gsp_format.h \
                include/GSPerformance/gsp_signpost.h gsp_writer_io.h \
@@ -75,7 +78,7 @@ $(OBJDIR)/libgsperf.so: $(OBJDIR)/libgsperf.so.0
 install: all
 	install -d $(DESTDIR)$(PREFIX) $(DESTDIR)$(HEADER_PREFIX)/GSPerformance \
 	  $(DESTDIR)$(HEADER_PREFIX)/os
-	install -m 755 $(OBJDIR)/libgsperf-agent.so $(DESTDIR)$(PREFIX)/
+	install -m 755 $(OBJDIR)/libgsperf-agent.so $(OBJDIR)/gsp-launch $(DESTDIR)$(PREFIX)/
 	install -m 755 $(OBJDIR)/libgsperf.so.0 $(DESTDIR)$(PREFIX)/
 	ln -sf libgsperf.so.0 $(DESTDIR)$(PREFIX)/libgsperf.so
 	install -m 644 include/GSPerformance/*.h \

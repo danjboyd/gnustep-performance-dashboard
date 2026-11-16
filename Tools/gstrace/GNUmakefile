@@ -1,4 +1,7 @@
 include $(GNUSTEP_MAKEFILES)/common.make
+include ../../scripts/package-version.make
+
+ADDITIONAL_OBJCFLAGS += $(PD_PRODUCT_VERSION_CPPFLAGS)
 
 TOOL_NAME = gstrace
 gstrace_OBJC_FILES = main.m

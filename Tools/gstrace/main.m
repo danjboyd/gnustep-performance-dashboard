@@ -14,7 +14,10 @@
 #  include <GSPerformance/gsp_capture.h>
 #endif
 
-#define GSTRACE_VERSION "0.1.6"
+#ifndef PD_PRODUCT_VERSION
+#error "The build must supply the effective package version."
+#endif
+#define GSTRACE_VERSION PD_PRODUCT_VERSION
 
 static volatile sig_atomic_t interrupted;
 

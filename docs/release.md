@@ -153,6 +153,28 @@ components, theme, packaging tools, AppImage runtime and the exact source
 versions of staged Debian libraries. The archive includes a source inventory,
 checksums and build instructions. Publish it alongside every binary release.
 
+Custom-SDK candidates must use the reviewed lock and the actual SDK provenance;
+the generic collector refuses staged custom metadata or `PD_CSD_TOOLCHAIN_LOCK`.
+From a clean, committed application checkout and clean builder checkout at the
+reviewed revision, use fresh work and output paths:
+
+```sh
+python3 scripts/collect-release-sources.py 0.1.7 \
+  --custom-lock packaging/linux/v017-custom-toolchain.lock.proposed.json \
+  --sdk-provenance "$PD_SDK/gnustep-toolchain-provenance.json" \
+  --builder-source "$PD_BUILDER_SOURCE" \
+  --work "$PD_NEW_SOURCE_WORK" --output "$PD_NEW_SOURCE_ARCHIVE"
+```
+
+This performs source acquisition in the disposable Debian builder, including
+Debian sources; it is not an offline check. The custom bundle includes ordered
+SDK patches, the application patch/applied-source tie, SDK provenance, and the
+reviewed builder source. Follow `custom-sdk/APPLYING-PATCHES.txt`; the CSD
+application patch is already applied. SDK provenance currently does not record
+a builder revision: the bundled recipe is checked against the reviewed lock's
+builder identity. Inspect the resulting archive and compare its inventory and
+hashes to the candidate before publication.
+
 Additional package acceptance commands:
 
 ```sh

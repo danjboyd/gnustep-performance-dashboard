@@ -22,6 +22,7 @@ PerformanceDashboard_RESOURCE_FILES += ../Runtime/obj/gsperf-agent.dll
 else
 PerformanceDashboard_RESOURCE_FILES += \
   ../Runtime/obj/libgsperf-agent.so \
+  ../Runtime/obj/gsp-launch \
   ../Tools/gstrace-helper/gstrace-helper \
   ../Tools/gstrace-helper/org.gnustep.performancedashboard.policy
 endif
@@ -71,6 +72,7 @@ updater:
 
 # GPStandardUpdaterController looks for the helper beside the executable.
 after-all::
+	python3 ../scripts/app-version.py stamp --bundle PerformanceDashboard.app
 ifneq (,$(WINDOWS))
 ifeq ($(PD_ENABLE_SIGNPOSTS),1)
 	cp ../Runtime/obj/gsperf.dll PerformanceDashboard.app/

@@ -1,0 +1,16 @@
+{
+  "oldLocalReviewBackendRejected": true,
+  "oldBackendSHA256": "d93f60157163cfe63ba1772ef05eb87aac7fee91ebf9b6fda9fddd132c44bdc4",
+  "reason": "backend DT_NEEDED differs from exact retained baseline plus XFixes",
+  "scope": "readelf-only static rejection; old payload not executed or changed",
+  "checks": {
+    "pinnedBuilderLockAndPatchValidation": "passed",
+    "reviewInputManifest": "passed",
+    "newMutationMethods": 7,
+    "existingCSDPackageMethods": 9,
+    "existingCSDProvenanceMethods": 9,
+    "shellSyntax": "passed",
+    "productBuilds": 0,
+    "fullProductSuite": "not run"
+  }
+}

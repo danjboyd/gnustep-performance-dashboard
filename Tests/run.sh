@@ -51,6 +51,13 @@ else
   fail "unit tests"
 fi
 
+echo "== Effective application version"
+if python3 "$ROOT/Tests/app-version-checks.py"; then
+  pass "application bundle version matches effective manifest; stale versions refused"
+else
+  fail "application bundle version"
+fi
+
 echo "== Symbol coverage CLI scenarios"
 if python3 "$ROOT/Tests/symbol-summary-checks.py" >"$OUT/symbol-summary.log" 2>&1; then
   pass "symbol coverage: allocation-only, CPU-weighted, embedding and CSV scenarios"
@@ -60,6 +67,37 @@ else
 fi
 
 if [ "$(uname -s)" = Linux ]; then
+  echo "== Offline CSD harness contracts"
+  if python3 "$ROOT/Tests/csd-harness-checks.py"; then
+    pass "CSD harness: nested make overrides and reserved-display refusal"
+  else
+    fail "CSD harness contracts"
+  fi
+  echo "== Static custom CSD packaging gates"
+  if python3 "$ROOT/Tests/csd-package-checks.py"; then
+    pass "custom CSD inputs and static payload gates"
+  else
+    fail "custom CSD packaging gates"
+  fi
+  echo "== Static custom CSD provenance"
+  if python3 "$ROOT/Tests/csd-provenance-checks.py"; then
+    pass "custom CSD provenance identities and missing-input refusal"
+  else
+    fail "custom CSD provenance"
+  fi
+  echo "== Combined v0.1.7 CSD review identities and exact dependencies"
+  if python3 "$ROOT/Tests/v017-review-input-checks.py"; then
+    pass "combined CSD patch order, application identity and hard direct-library gate"
+  else
+    fail "combined CSD review identities"
+  fi
+  echo "== Linux task-launch descriptor handoff"
+  if python3 "$ROOT/Tests/launch-helper-checks.py" "$ROOT/Runtime/obj/gsp-launch"; then
+    pass "task launch: descriptors, environment, startup failures and no leaks"
+  else
+    fail "task launch descriptor handoff"
+
+  fi
   echo "== Linux CLI target exit status"
   if python3 "$ROOT/Tests/cli-exit-checks.py" "$GSTRACE" "$OUT/cli-exit"; then
     pass "CLI: target exit codes, requested stop and SIGKILL escalation"

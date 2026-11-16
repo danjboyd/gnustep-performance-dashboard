@@ -79,18 +79,29 @@ def target_pid():
         except OSError: pass
     return None
 
-read_fd, write_fd = os.pipe()
+display = os.environ.get('PD_CONFIG_GUI_DISPLAY', ':152')
+assert re.fullmatch(r':[1-9][0-9]*', display) and display != ':120', 'reserved/invalid private display'
+assert not Path('/tmp/.X'+display[1:]+'-lock').exists() and not Path('/tmp/.X11-unix/X'+display[1:]).exists(), 'private display already occupied'
 with (root/'xvfb.log').open('w') as log:
-    xvfb = subprocess.Popen(['Xvfb', '-displayfd', str(write_fd), '-screen', '0',
-        '1280x800x24', '-nolisten', 'tcp'], pass_fds=(write_fd,), stdout=log, stderr=log)
-os.close(write_fd)
+    xvfb = subprocess.Popen(['Xvfb', display, '-screen', '0',
+        '1280x800x24', '-nolisten', 'tcp'], stdout=log, stderr=log)
+print('Private GUI config display', display, 'owned PID', xvfb.pid, flush=True)
 results = []
 try:
-    import select
-    assert select.select([read_fd], [], [], 10)[0], 'private Xvfb did not start'
-    display = ':'+os.read(read_fd, 32).decode().strip()
-    assert re.fullmatch(r':\d+', display)
-    assert display != ':120', 'persistent desktop must never be used'
+    import ctypes
+    library = ctypes.CDLL('libX11.so.6')
+    library.XOpenDisplay.argtypes = [ctypes.c_char_p]
+    library.XOpenDisplay.restype = ctypes.c_void_p
+    library.XCloseDisplay.argtypes = [ctypes.c_void_p]
+    for _ in range(100):
+        assert xvfb.poll() is None, 'owned Xvfb exited'
+        connection = library.XOpenDisplay(display.encode())
+        if connection:
+            library.XCloseDisplay(connection)
+            break
+        time.sleep(.1)
+    else:
+        raise AssertionError('owned private Xvfb not ready')
     for mode in (mode_filter,):
         env = {k: v for k, v in os.environ.items() if not k.startswith(('GP_HOST_', 'PD_TARGET_', 'GSP_'))
                and k not in ('APPDIR', 'APPIMAGE', 'ARGV0', 'OWD', 'GNUSTEP_CONFIG_FILE', 'WAYLAND_DISPLAY')}
@@ -158,7 +169,6 @@ try:
         results.append(case)
         print(case['status'], mode, flush=True)
 finally:
-    os.close(read_fd)
     xvfb.terminate()
     try: xvfb.wait(timeout=3)
     except subprocess.TimeoutExpired: xvfb.kill(); xvfb.wait(timeout=3)

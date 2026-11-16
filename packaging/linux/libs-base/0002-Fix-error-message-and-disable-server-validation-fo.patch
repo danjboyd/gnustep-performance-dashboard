@@ -1,0 +1,36 @@
+From 09b7efcb312df2ac601f641c41dff0868c822bbb Mon Sep 17 00:00:00 2001
+From: rfm <richardfrithmacdonald@gmail.com>
+Date: Fri, 8 May 2026 13:55:47 +0100
+Subject: [PATCH] Fix error message and disable server validation for tests
+ (until they are updated)
+
+---
+ Source/GSTLS.m    | 2 +-
+ Tests/GNUmakefile | 1 +
+ 2 files changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/Source/GSTLS.m b/Source/GSTLS.m
+index 80890dae5..e8dcf9d87 100644
+--- a/Source/GSTLS.m
++++ b/Source/GSTLS.m
+@@ -2566,7 +2566,7 @@ retrieve_callback(gnutls_session_t session,
+       if (NO == found)
+         {
+           str = [NSString stringWithFormat:
+-            @"TLS verification: certificate's owner does not match '%@'",
++            @"TLS verification: certificate's hostname does not match '%@'",
+             names];
+           ASSIGN(problem, str);
+           gnutls_x509_crt_deinit(cert);
+diff --git a/Tests/GNUmakefile b/Tests/GNUmakefile
+index e30b411f3..d0d30a132 100644
+--- a/Tests/GNUmakefile
++++ b/Tests/GNUmakefile
+@@ -72,6 +72,7 @@ check::
+ 		export ADDITIONAL_LDFLAGS;\
+ 		export LD_LIBRARY_PATH;\
+ 	fi; \
++	export GS_TLS_VERIFY_S=NO;\
+ 	export GNUSTEP_LOCAL_ADDITIONAL_MAKEFILES;\
+ 	export ADDITIONAL_INCLUDE_DIRS;\
+ 	export ADDITIONAL_LIB_DIRS;\

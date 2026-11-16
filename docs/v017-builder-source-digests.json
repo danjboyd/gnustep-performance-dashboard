@@ -1,0 +1,17 @@
+{
+  "scope": "source bytes only; recommendation for lead review, not build authority",
+  "publicBuilderCommit": "4d5504bbedf076f824c952f4ab198d09547c8c3c",
+  "fileSHA256": {
+    "docs/custom-toolchains.md": "66195290f07ac7ffebf45176a8ac34ede57e34bcb8e7592ceebea1df79d41b4a",
+    "toolchains/linux-amd64-clang/Dockerfile": "f1724f492922e1cb4497eea1993c7be746b0292a16a288c3fff36f753001a5b7",
+    "scripts/dev/build-custom-toolchain-in-container.sh": "b92dc4662d9f17bae269c8f580c9e9d0da4fccf221067463356b93e61e70de00",
+    "src/gnustep_cli_shared/custom_toolchain.py": "5d59737ff63fc00aa87e65cc3bd86202b17126caf433058eb2eb617adc98c310",
+    "src/gnustep_cli_shared/runtime_library_path.py": "986e5d6225e2fc2a51dd46862afea7fc48e67db80329c0fa8f8ef31ba0b89ca2",
+    "scripts/internal/build_infra.py": "f61dd4eb288ea9ec3446fc836b6e69bcdf60c678be15e3f398cd40be0cda161f",
+    "src/gnustep_cli_shared/build_infra.py": "e57f2321fd0a30fa48ea41999f937353e57c2b4779e85c97a9972e115e6be350"
+  },
+  "containerReference": "debian:13 (tag in inspected recipe)",
+  "resolvedImageDigest": null,
+  "resolvedPackageInventory": null,
+  "unrun": "No image pull/build, dependency installation, compiler or product runtime performed"
+}

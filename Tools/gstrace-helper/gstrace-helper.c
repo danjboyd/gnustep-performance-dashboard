@@ -41,7 +41,10 @@
 
 #include "GSPerformance/gsp_format.h"
 
-#define HELPER_VERSION "0.1.6"
+#ifndef PD_PRODUCT_VERSION
+#error "The build must supply the effective package version."
+#endif
+#define HELPER_VERSION PD_PRODUCT_VERSION
 #define INSTALL_PATH "/usr/local/libexec/gstrace-helper"
 #define POLICY_DIR "/usr/share/polkit-1/actions"
 #define POLICY_NAME "org.gnustep.performancedashboard.policy"

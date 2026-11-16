@@ -1,0 +1,47 @@
+About version fix proposal, 2026-11-12 (local, not runtime-qualified)
+
+Frozen28's About text and source Info both hard-code0.1.5. Its package manifest
+also says0.1.5. Passing -PackageVersion0.1.7-review correctly changes the effective
+packager manifest, update configuration and artifact name, but our build/stage
+scripts ignored the packager's GP_PACKAGE_VERSION. Thus the corrected CSD
+artifact80d85857 has stale About metadata. The frozen input and artifact remain
+unchanged; the proposal is a new local branch from28.
+
+Retained published v016 AppImageSHA256
+2e08097d5a4bd3e0446c4143f5ee60effa602a17227953c95b7570e9944d5f86
+was reverified offline. Its app binary has literal Version0.1.6; its generated
+Info has ApplicationRelease/FullVersionID0.1.6. Source642253fb made that manual
+bump. v016 is unaffected by the observed stale0.1.5 issue. This inspection did
+not launch or mutate the published artifact. The new checker requires all four
+version keys on future stamped builds; old v016 has only the two GNUstep keys.
+
+Proposed behavior
+Every successful app build stamps its built Info plist with the effective
+GP_PACKAGE_VERSION from the packager, or package.version for plain make.
+CFBundleShortVersionString/CFBundleVersion/ApplicationRelease/FullVersionID
+must all match. No tracked source plist is rewritten. Incremental builds
+restamp even when the executable need not relink. About reads main-bundle info,
+with ApplicationRelease fallback for older bundle conventions, and an honest
+unknown if metadata is absent. No numeric About literal remains.
+Stage refuses a stale/mismatched bundle before mutating the stage root. Final
+AppImage extraction checks again against the command's effective package
+version. This covers -PackageVersion review versions as well as plain builds.
+The effective environment contract was inspected in pinned packager a5c384b1,
+Get-GpPipelineCommandEnvironment; stale caller GP_PACKAGE_VERSION is replaced
+by its effective manifest before invoking build/stage commands.
+
+The new source-only tests exercise GNUstep ASCII/XML/binary metadata, preserved
+nonversion entries, incremental restamping, invalid values, duplicate refusal,
+and an actual checker subprocess that fails a deliberately stale plist and
+passes only after correct stamping. Source-wiring checks reject a restored
+numeric About literal. No compiler, app, GUI or package was run for this fix.
+Compiled/About visual qualification requires the lead's new laptop slot.
+
+The stage checksum in the proposed combined input manifest and its unrendered
+receipt template is refreshed because the version check changes that reviewed
+source file. The SDK lock/16SDK patches, CSD patch bytes/order and the original
+frozen manifest remain untouched. This is a new proposed review identity, not
+a claim that the changed source still has the old reviewed hash.
+
+Release-prep manifest0.1.7 is a separate commit, as requested. Harness corrections
+and display logging are also separate. No push, tag, rebuild or publication.

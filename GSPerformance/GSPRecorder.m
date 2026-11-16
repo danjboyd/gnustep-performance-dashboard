@@ -4,6 +4,7 @@
 #endif
 #import "GSPRecorder.h"
 #import "GSPInstruments.h"
+#import "GSPChildTask.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -33,7 +34,10 @@
 
 NSString * const GSPRecorderErrorDomain = @"GSPRecorderErrorDomain";
 
-#define GSP_VERSION @"0.1.6"
+#ifndef PD_PRODUCT_VERSION
+#error "The build must supply the effective package version."
+#endif
+#define GSP_VERSION [NSString stringWithUTF8String: PD_PRODUCT_VERSION]
 #define CTL_STOP 1
 #define CTL_LEAKS 2
 #define CTL_MARK 3
@@ -90,6 +94,7 @@ make_error(NSInteger code, NSString *message)
   uint64_t _observedAvailableBytes;
   BOOL _captureComplete;
 #if defined(__linux__)
+  GSPChildTask *_childTask;
   int _waitErrno;
   int _statusFD;
   NSMutableDictionary *_completedStreams;
@@ -519,8 +524,15 @@ under(NSString *value, NSString *root)
   /* A relative target path would be looked up in the target's working
      directory; make it absolute now (and in Info.plist) instead.  */
   NSString *exe = _options.executablePath;
+  BOOL resolveBare = NO;
+#if defined(__linux__)
+  /* The GUI task protocol requires an absolute target, including bare names.
+     Resolve against the recorder cwd as with other relative target paths;
+     neither the adapter nor helper searches PATH. Keep CLI behavior intact. */
+  resolveBare = _options.useTaskLauncher;
+#endif
   if (!_options.attachPID && [exe length] && ![exe isAbsolutePath]
-      && [exe rangeOfString: @"/"].location != NSNotFound)
+      && (resolveBare || [exe rangeOfString: @"/"].location != NSNotFound))
     _options.executablePath = [[[fm currentDirectoryPath]
       stringByAppendingPathComponent: exe] stringByStandardizingPath];
 
@@ -582,6 +594,11 @@ under(NSString *value, NSString *root)
         }
       if (!_options.attachPID)
         {
+          [info setObject: _options.useTaskLauncher ? @"NSTask" : @"waitpid"
+                   forKey: @"ExitStatusSource"];
+          [info setObject: @(!_options.useTaskLauncher) forKey: @"ExitStatusCoreDumpKnown"];
+          if (_options.useTaskLauncher)
+            [info setObject: @"independent" forKey: @"TargetSession"];
           [info setObject: _stopTrigger ?: @"exited" forKey: @"StopTrigger"];
           [info setObject: _captureComplete ? @"complete" : @"incomplete"
                    forKey: @"CaptureStatus"];
@@ -835,7 +852,7 @@ bundle_bytes(int fd, unsigned depth, uint64_t *total)
 }
 #endif
 
-- (BOOL) launch: (NSError **)error
+- (BOOL) launchDirect: (NSError **)error
 {
   NSString *problem = [GSPRecorder preloadProblemForExecutable: _options.executablePath];
   if (problem != nil)
@@ -954,6 +971,105 @@ bundle_bytes(int fd, unsigned depth, uint64_t *total)
       return NO;
     }
   return YES;
+}
+
+#if defined(__linux__)
+- (BOOL) launchWithTask: (NSError **)error
+{
+  NSString *problem = [GSPRecorder preloadProblemForExecutable: _options.executablePath];
+  if (problem != nil)
+    {
+      if (error)
+        *error = make_error(2, problem);
+      return NO;
+    }
+  NSString *agent = [GSPRecorder agentLibraryPath];
+  if (agent == nil)
+    {
+      if (error)
+        *error = make_error(3, @"Cannot find libgsperf-agent.so. Set GSP_AGENT_PATH or install the runtime.");
+      return NO;
+    }
+  /* Resolve beside the original packaged agent, before stableAgentPath copies
+     just that library out of an AppImage mount. No PATH lookup. */
+  NSString *helper = [[agent stringByDeletingLastPathComponent]
+                        stringByAppendingPathComponent: @"gsp-launch"];
+  int inheritedStdio[3];
+  for (unsigned i = 0; i < 3; i++)
+    {
+      int flags = fcntl(i, F_GETFD);
+      inheritedStdio[i] = flags < 0 || (flags & FD_CLOEXEC) ? -1 : (int)i;
+    }
+  agent = [GSPRecorder stableAgentPath: agent];
+
+  int statusPair[2];
+  if (socketpair(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC | SOCK_NONBLOCK, 0, statusPair) != 0)
+    {
+      if (error) *error = make_error(errno, @"Cannot create recorder status channel.");
+      return NO;
+    }
+  _statusFD = statusPair[0];
+
+  NSMutableDictionary *add = [NSMutableDictionary dictionary];
+  [add addEntriesFromDictionary: GSPAgentEnvironmentForInstruments(
+     _options.instrumentIdentifiers, _options.sampleIntervalMicroseconds,
+     _options.leakIntervalSeconds)];
+  [add setObject: _tracePath forKey: @"GSP_OUTPUT"];
+  [add setObject: [NSString stringWithFormat: @"%d", getpid()] forKey: @"GSP_RECORDER_PID"];
+  if (_options.followChildren)
+    [add setObject: @"1" forKey: @"GSP_FOLLOW_CHILDREN"];
+  NSDictionary *base = [GSPRecorder targetEnvironmentWithAdditions: add];
+  NSMutableDictionary *env = [base mutableCopy];
+  /* The agent goes first in LD_PRELOAD, before any the user sets (--env)
+     or the environment has, rather than being replaced by them.  */
+  [env addEntriesFromDictionary: _options.environment];
+  [env setObject: @"4" forKey: @"GSP_STATUS_FD"];
+  NSString *preload = [env objectForKey: @"LD_PRELOAD"];
+  [env setObject: [preload length] ? [NSString stringWithFormat: @"%@:%@", agent, preload]
+                                   : agent
+          forKey: @"LD_PRELOAD"];
+
+  int descriptors[4] = {inheritedStdio[0], inheritedStdio[1], inheritedStdio[2], statusPair[1]};
+  int output = -1, input = -1;
+  if (_options.captureOutput)
+    {
+      NSString *path = [_tracePath stringByAppendingPathComponent: @"output.txt"];
+      output = open([path fileSystemRepresentation], O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
+      input = open("/dev/null", O_RDONLY | O_CLOEXEC);
+      if (output < 0 || input < 0)
+        {
+          int saved = errno;
+          if (output >= 0) close(output);
+          if (input >= 0) close(input);
+          close(statusPair[0]); close(statusPair[1]); _statusFD = -1;
+          if (error) *error = make_error(saved, @"Cannot open target stdio.");
+          return NO;
+        }
+      descriptors[0] = input;
+      descriptors[1] = descriptors[2] = output;
+    }
+  _startDate = [NSDate date];
+  _childTask = [GSPChildTask new];
+  BOOL launched = [_childTask launchHelper: helper executable: _options.executablePath
+    arguments: _options.arguments environment: env workingDirectory: _options.workingDirectory
+    descriptors: descriptors error: error];
+  close(statusPair[1]);
+  if (output >= 0) close(output);
+  if (input >= 0) close(input);
+  if (!launched)
+    { close(_statusFD); _statusFD = -1; _childTask = nil; return NO; }
+  _pid = [_childTask pid];
+  return YES;
+}
+
+#endif
+
+- (BOOL) launch: (NSError **)error
+{
+#if defined(__linux__)
+  if (_options.useTaskLauncher) return [self launchWithTask: error];
+#endif
+  return [self launchDirect: error];
 }
 
 - (BOOL) attach: (NSError **)error
@@ -1111,8 +1227,17 @@ send_control(int pid, int request)
             }
 #endif
           int status = 0;
-          pid_t r = waitpid(waitFor, &status, WNOHANG);
-          int waitErrno = r < 0 ? errno : 0;
+          pid_t r;
+          int waitErrno = 0;
+#if defined(__linux__)
+          if (!_options.attachPID && _options.useTaskLauncher)
+            {
+              r = [_childTask pollStatus: &status] ? waitFor : 0;
+              if (r && status == -1) { r = -1; waitErrno = EIO; }
+            }
+          else
+#endif
+            { r = waitpid(waitFor, &status, WNOHANG); waitErrno = r < 0 ? errno : 0; }
           if (r == waitFor)
             {
               _exitStatus = status;
@@ -1226,6 +1351,7 @@ send_control(int pid, int request)
           [self validateCompletedStreams];
           close(_statusFD);
           _statusFD = -1;
+          _childTask = nil;
         }
 #endif
       _recording = NO;
