@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "builder": {
+    "url": "https://github.com/danjboyd/gnustep-cli-new.git",
+    "repository": "danjboyd/gnustep-cli-new",
+    "revision": "4d5504bbedf076f824c952f4ab198d09547c8c3c"
+  },
+  "lock": "packaging/linux/v017-custom-toolchain.lock.proposed.json",
+  "jobs": 2,
+  "containerRecipe": "linux-amd64-clang",
+  "actions": {
+    "checkout": "11d5960a326750d5838078e36cf38b85af677262",
+    "cache": "0057852bfaa89a56745cba8c7296529d2fc39830",
+    "upload-artifact": "ea165f8d65b6e75b540449e92b4886f43607fa02"
+  },
+  "fallbackSource": {
+    "name": "robin-map-fallback",
+    "url": "https://github.com/Tessil/robin-map.git",
+    "tag": "v1.4.0",
+    "revision": "4ec1bf19c6a96125ea22062f38c2cf5b958e448e",
+    "archiveURL": "https://codeload.github.com/Tessil/robin-map/tar.gz/4ec1bf19c6a96125ea22062f38c2cf5b958e448e",
+    "archiveSHA256": "4968947bd2e908854481519ec422823af4161a286ff1e16943293b753e80cb3f",
+    "upstreamBuildDescription": {
+      "libobjc2Revision": "b67709ad7851973fde127022d8ac6a710c82b1d5",
+      "url": "https://raw.githubusercontent.com/gnustep/libobjc2/b67709ad7851973fde127022d8ac6a710c82b1d5/CMakeLists.txt",
+      "sha256": "3773ad146b8af9a8ffd1af0d8a2b80541d8702bf6c3bc3b652b214b459d64b1c",
+      "recordedExcerpt": "find_package(tsl-robin-map)\n\nif (NOT tsl-robin-map_FOUND)\n\tFetchContent_Declare(\n\t\trobinmap\n\t\tGIT_REPOSITORY https://github.com/Tessil/robin-map/\n\t\tGIT_TAG        v1.4.0)\n\n\tFetchContent_MakeAvailable(robinmap)"
+    }
+  },
+  "auxiliarySources": [
+    {
+      "name": "appimagetool",
+      "url": "https://github.com/AppImage/appimagetool.git",
+      "revision": "8c8c91f762b412a19f4e8d2c4b35afb98f2d7c81"
+    },
+    {
+      "name": "appimage-runtime",
+      "url": "https://github.com/AppImage/type2-runtime.git",
+      "revision": "caf24f9f712084686bfc24a70b75e50df0aefb9c"
+    },
+    {
+      "name": "tools-xctest",
+      "url": "https://github.com/danjboyd/tools-xctest.git",
+      "revision": "8ff9317d54e6bee57dc266cd9ba288c426790b40"
+    }
+  ],
+  "reviewInputs": "packaging/linux/v017-review-inputs.json"
+}

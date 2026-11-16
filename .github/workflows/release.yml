@@ -39,6 +39,12 @@ jobs:
           python3 .github/scripts/release-selection.py \
             --ref "$GITHUB_REF" --version "$VERSION" >> "$GITHUB_OUTPUT"
 
+      - name: Summarize selected unsigned producer
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          PRODUCER: ${{ steps.version.outputs.producer }}
+        run: echo "Performance Dashboard $VERSION ($PRODUCER) from ${GITHUB_SHA::7}" >> "$GITHUB_STEP_SUMMARY"
+
   linux-managed:
     if: needs.version.outputs.producer == 'managed'
     needs: version

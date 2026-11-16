@@ -37,7 +37,10 @@ jobs:
             libcurl4-gnutls-dev libjpeg-dev libtiff-dev libpng-dev \
             libcairo2-dev libfreetype-dev libfontconfig-dev \
             libx11-dev libxext-dev libxft-dev libxrender-dev libxt-dev libxmu-dev \
-            libunwind8 python3 libglib2.0-dev imagemagick
+            libunwind8 python3 python3-yaml libglib2.0-dev imagemagick
+
+      - name: Unsigned release producer boundary
+        run: /usr/bin/python3 Tests/release-producer-checks.py
 
       - name: Cache GNUstep
         id: cache

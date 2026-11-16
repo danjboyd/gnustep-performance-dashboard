@@ -1,0 +1,87 @@
+# Source-only implementation until Dan approves an exact future dispatch.
+name: Custom CSD unsigned review
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Unsigned review version (must end in -review or -review.N)
+        required: true
+        default: 0.1.7-review
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: csd-review-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  linux-csd-review:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      CSD_VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify combined application inputs before builder fetch or cache use
+        run: python3 scripts/check-csd-package.py review-inputs packaging/linux/v017-review-inputs.json
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: danjboyd/gnustep-cli-new
+          ref: 4d5504bbedf076f824c952f4ab198d09547c8c3c
+          path: out/csd-ci/builder
+          persist-credentials: false
+      - name: Static policy and source tests
+        run: |
+          sudo apt-get -q update
+          sudo apt-get -q -y install python3-yaml
+          /usr/bin/python3 Tests/v017-review-input-checks.py
+          /usr/bin/python3 Tests/robin-source-checks.py
+          /usr/bin/python3 Tests/csd-package-checks.py
+          /usr/bin/python3 Tests/csd-provenance-checks.py
+          /usr/bin/python3 Tests/csd-ci-checks.py
+          /usr/bin/python3 Tests/csd-source-checks.py
+          /usr/bin/python3 Tests/csd-final-review-checks.py
+      - name: Prepare Debian13 build and consumption image; inventory before compilation
+        id: container
+        run: bash .github/scripts/csd-review-host.sh prepare
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        id: sdk-cache
+        with:
+          path: out/csd-ci/sdk
+          key: ${{ steps.container.outputs.cache_key }}
+      - name: Build or verify exact custom SDK
+        env:
+          SDK_CACHE_HIT: ${{ steps.sdk-cache.outputs.cache-hit }}
+        run: bash .github/scripts/csd-review-host.sh sdk
+      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        if: steps.sdk-cache.outputs.cache-hit != 'true' && github.repository == 'danjboyd/gnustep-performance-dashboard' && (github.event_name == 'workflow_dispatch')
+        with:
+          path: out/csd-ci/sdk
+          key: ${{ steps.container.outputs.cache_key }}
+      - name: Same-SDK theme receipt and unsigned AppImage; hard CSD and dependency gates
+        run: bash .github/scripts/csd-review-host.sh review
+      - name: Keep unsigned review only
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: custom-csd-unsigned-review
+          path: dist/ci/csd-review
+          if-no-files-found: error
+          retention-days: 7
+      - name: Keep inventory and failure evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: custom-csd-review-evidence
+          path: |
+            out/csd-ci/container-inputs.json
+            out/csd-ci/logs
+            Tests/out
+            dist/logs
+          if-no-files-found: warn
+          retention-days: 7

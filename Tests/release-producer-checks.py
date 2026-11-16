@@ -64,6 +64,12 @@ class ProducerChecks(unittest.TestCase):
         self.assertEqual(jobs['linux-custom']['if'], "needs.version.outputs.producer == 'custom-csd'")
         self.assertIn('exit 1', jobs['linux-custom']['steps'][0]['run'])
         self.assertNotIn('release', jobs)
+        ci_text = (ROOT / '.github/workflows/ci.yml').read_text()
+        self.assertIn('/usr/bin/python3 Tests/release-producer-checks.py', ci_text)
+        self.assertIn('python3-yaml', ci_text)
+        self.assertIn('python3 Tests/release-assembly-checks.py', ci_text)
+        self.assertIn('python3 Tests/update-signing-checks.py', ci_text)
+        self.assertIn('GITHUB_STEP_SUMMARY', text)
         config = json.loads((ROOT / 'packaging/linux/release-production.json').read_text())
         self.assertEqual(config['linuxProducer'], 'custom-csd')
 
