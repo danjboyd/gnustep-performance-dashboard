@@ -19,7 +19,7 @@ REPLY = struct.Struct("=Ii")
 MAGIC = 0x47534C31
 
 
-def launch(strings, argc, envc, fds, mask=7, *, magic=MAGIC, ignored=0):
+def launch(strings, argc, envc, fds, mask=7, *, magic=MAGIC, ignored=0, send_payload=True):
     parent, child = socket.socketpair(socket.AF_UNIX, socket.SOCK_SEQPACKET)
     parent.settimeout(3)
     # Deliberately inherit an unrelated descriptor above NSTask's close range;
@@ -36,7 +36,7 @@ def launch(strings, argc, envc, fds, mask=7, *, magic=MAGIC, ignored=0):
         header = HEADER.pack(magic, 1, len(payload), argc, envc, mask, 0, 0, ignored)
         parent.sendmsg([header], [(socket.SOL_SOCKET, socket.SCM_RIGHTS,
                                    array.array("i", fds))])
-        if magic == MAGIC:
+        if magic == MAGIC and send_payload:
             for offset in range(0, len(payload), 16384):
                 parent.sendall(payload[offset:offset + 16384])
         first = REPLY.unpack(parent.recv(REPLY.size))
@@ -100,7 +100,11 @@ print('stderr too', file=sys.stderr)
     proc, first, second = launch(["", "/bin/true"], 1, 0,
                                 [null, null, null, status_child.fileno()], magic=0)
     assert first == (0, errno.EPROTO) and proc.wait(timeout=3) == 125
-    proc, first, second = launch(["", "/bin/true"], 1, 0, [status_child.fileno()])
+    # Invalid ancillary framing is rejected before payload reads. Sending a
+    # payload here races close with unread SOCK_SEQPACKET data and can reset
+    # the socket before the parent receives the explicit EPROTO reply.
+    proc, first, second = launch(["", "/bin/true"], 1, 0, [status_child.fileno()],
+                                 send_payload=False)
     assert first == (0, errno.EPROTO) and proc.wait(timeout=3) == 125
     print("PASS malformed framing and incomplete SCM_RIGHTS fail closed")
     args = [sys.executable, "-c", "import os; assert not os.path.exists('/proc/self/fd/0')"]
