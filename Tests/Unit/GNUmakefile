@@ -1,7 +1,7 @@
 include $(GNUSTEP_MAKEFILES)/common.make
 
 XCTEST_BUNDLE_NAME = GSPerformanceTests
-GSPerformanceTests_OBJC_FILES = GSPerformanceTests.m TraceBuilder.m
+GSPerformanceTests_OBJC_FILES = GSPerformanceTests.m TraceBuilder.m PDWelcomeModelTests.m ../../Dashboard/PDWelcomeModel.m
 
 ADDITIONAL_OBJCFLAGS += -fobjc-arc -Wall
 ADDITIONAL_INCLUDE_DIRS += -I../../Runtime/include -I../..
