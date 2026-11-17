@@ -2,6 +2,10 @@
 #import "PDAppController.h"
 #import "PDTraceWindowController.h"
 #import "PDRecordPanel.h"
+#import "PDWelcomeArguments.h"
+#import "PDWelcomeProcessProvider.h"
+#include <stdio.h>
+#include <stdlib.h>
 #import "PDTimelineView.h"
 #import <GSPerformance/GSPerformance.h>
 #import "GPStandardUpdaterController.h"
@@ -19,6 +23,7 @@
 @implementation PDAppController
 {
   NSMutableArray *_windows;
+  PDWelcomeHistory *_welcomeHistory;
   BOOL _openedAtLaunch;
   NSFileHandle *_terminationPipe;
   /* nil unless packaged: the packager writes the updater's configuration */
@@ -33,6 +38,8 @@
   if ((self = [super init]) != nil)
     {
       _windows = [NSMutableArray array];
+      _welcomeHistory = [[PDWelcomeHistory alloc] initWithDefaults: [NSUserDefaults standardUserDefaults]
+        fileExists: ^BOOL(NSString *path) { return [[NSFileManager defaultManager] fileExistsAtPath: path]; }];
 #if PD_ENABLE_SIGNPOSTS
       _openTraceLog = os_log_create("org.gnustep.PerformanceDashboard",
         OS_LOG_CATEGORY_POINTS_OF_INTEREST);
@@ -73,7 +80,7 @@ add_item(NSMenu *menu, NSString *title, SEL action, NSString *key, id target)
   add_item(file, @"New Recording…", @selector(newRecording:), @"n", self);
   add_item(file, @"Open…", @selector(openTrace:), @"o", self);
   NSMenu *recent = [[NSMenu alloc] initWithTitle: @"Open Recent"];
-  for (NSString *path in [[NSUserDefaults standardUserDefaults] arrayForKey: @"PDRecentTraces"])
+  for (NSString *path in [_welcomeHistory recentTraces])
     {
       NSMenuItem *r = add_item(recent, [path lastPathComponent], @selector(openRecent:), nil, self);
       [r setRepresentedObject: path];
@@ -176,6 +183,26 @@ termination_signal(int sig)
 #if !defined(_WIN32)
   [self installTerminationHandler];
 #endif
+  /* Explicit recording aliases bypass the picker, but retain the same options
+     and GUI task launch path as interactive recordings. Legacy -PDRecordTarget
+     defaults below continue to work when no alias was supplied. */
+#if defined(__linux__)
+  BOOL handled = NO;
+  NSError *argumentError = nil;
+  GSPRecordingOptions *aliased = [PDWelcomeArguments optionsFromArguments:
+    [[NSProcessInfo processInfo] arguments] provider: [PDWelcomeProcessProvider new]
+    handled: &handled error: &argumentError];
+  if (handled)
+    {
+      if (aliased == nil)
+        {
+          fprintf(stderr, "Performance Dashboard: %s\n", [[argumentError localizedDescription] UTF8String]);
+          exit(2);
+        }
+      [self startRecordingWithOptions: aliased];
+      return;
+    }
+#endif
   [self startUpdater];
   /* Automation (tests, screenshots): -PDRecordTarget path
      [-PDRecordTemplate name] [-PDRecordArguments "a b"] [-PDRecordTimeLimit s] */
@@ -236,13 +263,7 @@ termination_signal(int sig)
 
 - (void) remember: (NSString *)path
 {
-  NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
-  NSMutableArray *recent = [[d arrayForKey: @"PDRecentTraces"] mutableCopy] ?: [NSMutableArray array];
-  [recent removeObject: path];
-  [recent insertObject: path atIndex: 0];
-  while ([recent count] > 10)
-    [recent removeLastObject];
-  [d setObject: recent forKey: @"PDRecentTraces"];
+  [_welcomeHistory noteTrace: path];
 }
 
 - (BOOL) openTraceAtPath: (NSString *)path
@@ -308,6 +329,7 @@ termination_signal(int sig)
 
 - (void) startRecordingWithOptions: (GSPRecordingOptions *)o
 {
+  [_welcomeHistory noteTarget: o mode: o.attachPID ? PDWelcomeAttach : PDWelcomeLaunch];
   PDTraceWindowController *wc = [[PDTraceWindowController alloc] initWithRecordingOptions: o];
   [_windows addObject: wc];
   [wc showWindow: self];

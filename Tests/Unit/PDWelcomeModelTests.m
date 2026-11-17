@@ -1,6 +1,11 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #import <XCTest/XCTest.h>
 #import "Dashboard/PDWelcomeModel.h"
+#import "Dashboard/PDWelcomeProcessProvider.h"
+#import "Dashboard/PDWelcomeArguments.h"
+#if defined(__linux__)
+#include <unistd.h>
+#endif
 
 @interface WelcomeFakeProvider : NSObject <PDWelcomeTargetProvider>
 @property (nonatomic, copy) NSArray *snapshot;
@@ -236,5 +241,70 @@ process(int pid, NSString *name, PDGNUstepIdentity identity)
   XCTAssertFalse(_history.showAtLaunch);
   _history.showAtLaunch = YES;
   XCTAssertTrue(_history.showAtLaunch);
+}
+- (void) testGUIAliasesPreserveTargetArgumentsAndTemplate
+{
+  BOOL handled = NO;
+  NSArray *argv = [NSArray arrayWithObjects: @"PerformanceDashboard", @"--template", @"Allocations",
+    @"--launch", @"/Apps/Gorm.app", @"one two", @"--template", @"target-value", nil];
+  GSPRecordingOptions *o = [PDWelcomeArguments optionsFromArguments: argv provider: _provider handled: &handled error: NULL];
+  XCTAssertTrue(handled);
+  XCTAssertEqualObjects(o.templateName, @"Allocations");
+  NSArray *expected = [NSArray arrayWithObjects: @"one two", @"--template", @"target-value", nil];
+  XCTAssertEqualObjects(o.arguments, expected);
+  XCTAssertEqualObjects(o.executablePath, @"/Apps/Gorm.app/Gorm");
+}
+- (void) testGUIAttachAliasUsesLiveIdentityAndSystemProfilerDefault
+{
+  PDWelcomeProcess *p = process(25, @"Gorm", PDGNUstepYes);
+  _provider.snapshot = [NSArray arrayWithObject: p];
+  [_provider.identities setObject: p.identity forKey: @25];
+  BOOL handled = NO;
+  GSPRecordingOptions *o = [PDWelcomeArguments optionsFromArguments:
+    [NSArray arrayWithObjects: @"app", @"--attach", @"25", nil]
+    provider: _provider handled: &handled error: NULL];
+  XCTAssertTrue(handled);
+  XCTAssertEqual(o.attachPID, 25);
+  XCTAssertEqualObjects(o.templateName, @"System Time Profiler");
+}
+- (void) testInvalidGUIAliasesRefuseAndLegacyArgumentsStayUnhandled
+{
+  for (NSArray *argv in [NSArray arrayWithObjects:
+    [NSArray arrayWithObjects: @"app", @"--attach", @"0", nil],
+    [NSArray arrayWithObjects: @"app", @"--attach", @"25oops", nil],
+    [NSArray arrayWithObjects: @"app", @"--launch", nil],
+    [NSArray arrayWithObjects: @"app", @"--template", @"Leaks", nil], nil])
+    {
+      BOOL handled = NO;
+      NSError *error = nil;
+      XCTAssertNil([PDWelcomeArguments optionsFromArguments: argv provider: _provider handled: &handled error: &error]);
+      XCTAssertTrue(handled);
+      XCTAssertNotNil(error);
+    }
+  BOOL handled = YES;
+  NSArray *legacy = [NSArray arrayWithObjects: @"app", @"-PDRecordTarget", @"/bin/sleep", nil];
+  XCTAssertNil([PDWelcomeArguments optionsFromArguments: legacy
+    provider: _provider handled: &handled error: NULL]);
+  XCTAssertFalse(handled);
+}
+#if defined(__linux__)
+- (void) testRealLinuxProviderReadsIncarnationAndLaunchPreconditions
+{
+  PDWelcomeProcessProvider *provider = [PDWelcomeProcessProvider new];
+  XCTAssertTrue([[provider currentIdentityForPID: getpid()] length] > 0);
+  XCTAssertNil([provider currentIdentityForPID: 0]);
+  XCTAssertNil([provider currentIdentityForPID: -1]);
+  XCTAssertNil([provider launchProblemForExecutable: @"/bin/sh"]);
+  XCTAssertNotNil([provider launchProblemForExecutable: @"/no-such-PD-welcome-test-executable"]);
+  XCTAssertTrue([[provider executableForPath: @"relative-program"] isAbsolutePath]);
+}
+#endif
+- (void) testLegacyLaunchHistoryMigratesAndPrunesMissingPaths
+{
+  [_defaults setObject: [NSArray arrayWithObjects: @"/apps/Gorm.app", @"/missing/old", nil] forKey: @"PDRecentTargets"];
+  NSArray *recent = [_history recentTargets];
+  XCTAssertEqual([recent count], (NSUInteger)1);
+  XCTAssertEqualObjects([[recent objectAtIndex: 0] objectForKey: @"mode"], @"launch");
+  XCTAssertEqualObjects([[recent objectAtIndex: 0] objectForKey: @"path"], @"/apps/Gorm.app");
 }
 @end

@@ -4,6 +4,9 @@ APP_NAME = PerformanceDashboard
 PerformanceDashboard_OBJC_FILES = \
   main.m \
   PDAppController.m \
+  PDWelcomeModel.m \
+  PDWelcomeProcessProvider.m \
+  PDWelcomeArguments.m \
   PDTraceWindowController.m \
   PDTimelineView.m \
   PDTrackRenderer.m \

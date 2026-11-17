@@ -32,6 +32,18 @@
 - (NSArray *) prunedEntriesForKey: (NSString *)key targets: (BOOL)targets
 {
   id saved = [_defaults objectForKey: key];
+  if (targets && saved == nil)
+    {
+      /* Carry forward existing launch history without persisting stale PIDs. */
+      NSMutableArray *migrated = [NSMutableArray array];
+      id legacy = [_defaults objectForKey: @"PDRecentTargets"];
+      if ([legacy isKindOfClass: [NSArray class]])
+        for (id path in legacy)
+          if ([path isKindOfClass: [NSString class]])
+            [migrated addObject: [NSDictionary dictionaryWithObjectsAndKeys:
+              path, @"path", @"launch", @"mode", @"Time Profiler", @"template", nil]];
+      saved = migrated;
+    }
   NSMutableArray *kept = [NSMutableArray array];
   NSMutableSet *seen = [NSMutableSet set];
   if ([saved isKindOfClass: [NSArray class]])
