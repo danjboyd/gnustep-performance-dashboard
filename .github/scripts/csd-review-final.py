@@ -28,7 +28,7 @@ EVIDENCE = {'container-inputs.json', 'theme-receipt.json', 'backend-closure.json
 def names(version):
     require(re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+(?:-review(?:\.[0-9]+)?)?', version), 'valid unsigned review or production version required')
     base = 'PerformanceDashboard-' + version + '-x86_64'
-    return {base + suffix for suffix in ('.AppImage', '.AppImage.zsync', '.provenance.json', '.update-feed.json', '.metadata.json', '.diagnostics.txt')}
+    return {base + suffix for suffix in ('.AppImage', '.AppImage.zsync', '.provenance.json', '.update-feed.json', '.metadata.json', '.diagnostics.txt', '.themes.json')}
 
 
 def exact_files(directory, expected):
@@ -169,6 +169,13 @@ def inventory(root, directory, version, with_receipt=False):
         record = metadata['artifacts'][field]
         require(Path(record['path']).name == file.name and record['sha256'] == policy.sha(file)
                 and record['sizeBytes'] == file.stat().st_size, 'packager metadata bytes mismatch')
+    themes = policy.load(directory / (base + '.themes.json'))
+    theme_app = themes['appimage']
+    require(themes['schema'] == 1 and themes['package']['version'] == version
+            and theme_app['fileName'] == app.name
+            and theme_app['sha256'] == policy.sha(app)
+            and theme_app['sizeBytes'] == app.stat().st_size,
+            'packager theme sidecar bytes/version mismatch')
     source_result = verify_sources(root, directory / source_name, commit, lock_sha, {
         'metadata/' + name: policy.sha(directory / name) for name in
         ('container-inputs.json', 'theme-receipt.json', 'pd-csd-cache-receipt.json')

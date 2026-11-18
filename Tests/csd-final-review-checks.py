@@ -57,6 +57,9 @@ class FinalReviewChecks(unittest.TestCase):
         self.metadata = dict(package=dict(version=VERSION), artifacts={field: dict(path=str(file), **final.file_record(file))
             for field, file in [('appImage', app), ('zsync', zsync), ('updateFeed', self.directory / (BASE + '.update-feed.json'))]})
         self.write(BASE + '.metadata.json', self.metadata)
+        self.themes = dict(schema=1, package=dict(version=VERSION),
+            appimage=dict(fileName=app.name, **final.file_record(app)))
+        self.write(BASE + '.themes.json', self.themes)
         self.write('container-inputs.json', self.container)
         self.write('pd-csd-cache-receipt.json', self.cache)
         self.write('theme-receipt.json', self.theme)
@@ -86,12 +89,25 @@ class FinalReviewChecks(unittest.TestCase):
         (self.directory / final.RECEIPT).write_text(final.canonical(record))
         return record
 
-    def test_positive_canonical_aggregate_covers_all_thirteen_files(self):
+    def test_positive_canonical_aggregate_covers_all_fourteen_files(self):
         record = self.receipt()
-        self.assertEqual(len(record['files']), 13)
+        self.assertEqual(len(record['files']), 14)
         self.assertEqual(record['applicationCommit'], COMMIT)
         self.assertEqual(record['reviewImageID'], self.container['reviewImageID'])
         self.assertRegex(final.verify_receipt(self.root, self.directory, VERSION), r'^[0-9a-f]{64}$')
+
+    def test_theme_sidecar_binds_the_exact_appimage_and_version(self):
+        for field, bad in [('fileName', 'other.AppImage'), ('sha256', '0' * 64), ('sizeBytes', 1)]:
+            changed = copy.deepcopy(self.themes)
+            changed['appimage'][field] = bad
+            self.write(BASE + '.themes.json', changed)
+            with self.assertRaisesRegex(ValueError, 'theme sidecar bytes/version'):
+                self.receipt()
+        changed = copy.deepcopy(self.themes)
+        changed['package']['version'] = '0.0.0'
+        self.write(BASE + '.themes.json', changed)
+        with self.assertRaisesRegex(ValueError, 'theme sidecar bytes/version'):
+            self.receipt()
 
     def test_numeric_unsigned_receipt_still_binds_exact_source_commit(self):
         with patch.dict(globals(), VERSION='0.1.7', BASE='PerformanceDashboard-0.1.7-x86_64'):
@@ -99,7 +115,7 @@ class FinalReviewChecks(unittest.TestCase):
             record = self.receipt()
             self.assertEqual(record['version'], '0.1.7')
             self.assertEqual(record['applicationCommit'], COMMIT)
-            self.assertEqual(len(record['files']), 13)
+            self.assertEqual(len(record['files']), 14)
             self.provenance['commit'] = 'b' * 40
             self.write(BASE + '.provenance.json', self.provenance)
             with self.assertRaisesRegex(ValueError, 'version/commit/clean-source'):
