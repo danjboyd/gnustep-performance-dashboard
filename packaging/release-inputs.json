@@ -11,10 +11,10 @@
     "revision": "b74231f84bc139a50ad50459acfaed10a07a4642"
   },
   "gnustep-packager": {
-    "comment": "Packager v0.1.10: bound version signatures, preserved caller environment and CLI v0.1.5 compatibility; local adoption remains unqualified until private gates pass.",
+    "comment": "Packager v0.1.12: loader search-path diagnostics use the packager default warn policy; pinned tag verified against the full revision.",
     "url": "https://github.com/danjboyd/gnustep-packager.git",
-    "tag": "v0.1.10",
-    "revision": "a5c384b1fb6b252dc414b5420f4301cd32a181da"
+    "tag": "v0.1.12",
+    "revision": "4c456abcb5d70bf8f140bcb22dde026f14a524fb"
   },
   "appimagetool": {
     "comment": "gnustep-packager's default is appimagetool's moving continuous build; 0.1.3 was made with build 295 (8c8c91f). Release 1.9.1 is build 296 from the same commit. scripts/fetch-appimagetool.sh installs it where the packager looks, and the packager takes the AppImage runtime from it.",
