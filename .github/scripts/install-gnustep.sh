@@ -10,6 +10,8 @@ SRC=${SRC:-${RUNNER_TEMP:-/tmp}/gnustep-src}
 JOBS=$(nproc)
 
 LIBOBJC2_TAG=v2.3
+# Match the published CLI and the immutable custom release SDK lock.
+LIBDISPATCH_REV=4ce40128f607a6eb7b58077a06b7464c1518a30d
 MAKE_TAG=make-2_9_3
 BASE_TAG=base-1_31_1
 GUI_TAG=gui-0_32_0
@@ -37,6 +39,23 @@ echo "::endgroup::"
 LIBS="$PREFIX/System/Library/Libraries"
 export CPPFLAGS="-I$PREFIX/include" LDFLAGS="-L$LIBS -fuse-ld=lld"
 export LD_LIBRARY_PATH="$LIBS${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
+# Foundation includes dispatch/dispatch.h only when it is available. Trellis
+# uses dispatch_once, so install the dependency before configuring Base rather
+# than relying on a developer's SDK or transitive host headers/libraries.
+echo "::group::libdispatch $LIBDISPATCH_REV"
+git init -q "$SRC/libdispatch"
+git -C "$SRC/libdispatch" remote add origin https://github.com/swiftlang/swift-corelibs-libdispatch.git
+git -C "$SRC/libdispatch" fetch -q --depth 1 origin "$LIBDISPATCH_REV"
+git -C "$SRC/libdispatch" checkout -q --detach FETCH_HEAD
+[[ "$(git -C "$SRC/libdispatch" rev-parse HEAD)" == "$LIBDISPATCH_REV" ]]
+cmake -S "$SRC/libdispatch" -B "$SRC/libdispatch/build" -G Ninja \
+  -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX="$PREFIX" \
+  -DCMAKE_INSTALL_LIBDIR=System/Library/Libraries -DCMAKE_PREFIX_PATH="$PREFIX" \
+  -DBUILD_TESTING=OFF
+cmake --build "$SRC/libdispatch/build" -j"$JOBS"
+cmake --install "$SRC/libdispatch/build"
+echo "::endgroup::"
 
 echo "::group::gnustep-make $MAKE_TAG"
 clone gnustep tools-make "$MAKE_TAG"
