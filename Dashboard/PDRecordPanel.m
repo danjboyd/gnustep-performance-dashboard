@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #import "PDRecordPanel.h"
+#import "PDWelcomeModel.h"
 #import "PDTheme.h"
 
 #include <sys/stat.h>
@@ -122,8 +123,11 @@ make_button(NSString *title, NSRect frame, id target, SEL action)
   _target = [[NSComboBox alloc] initWithFrame: NSMakeRect(132, y, 470, 24)];
   [_target setEditable: YES];
   [_target setCompletes: YES];
-  [_target addItemsWithObjectValues:
-    [[NSUserDefaults standardUserDefaults] arrayForKey: @"PDRecentTargets"] ?: [NSArray array]];
+  PDWelcomeHistory *history = [[PDWelcomeHistory alloc] initWithDefaults: [NSUserDefaults standardUserDefaults]
+    fileExists: ^BOOL(NSString *path) { return [[NSFileManager defaultManager] fileExistsAtPath: path]; }];
+  for (NSDictionary *entry in [history recentTargets])
+    if ([[entry objectForKey: @"mode"] isEqual: @"launch"])
+      [_target addItemWithObjectValue: [entry objectForKey: @"path"]];
   [_target setTarget: self];
   [_target setAction: @selector(targetChanged:)];
   [c addSubview: _target];
@@ -250,15 +254,9 @@ make_button(NSString *title, NSRect frame, id target, SEL action)
   [d setObject: t.name forKey: @"PDLastTemplate"];
   NSString *target = [exe length] ? exe : [_target stringValue];
   [d setObject: target forKey: @"PDLastTarget"];
-  NSMutableArray *recent = [[d arrayForKey: @"PDRecentTargets"] mutableCopy] ?: [NSMutableArray array];
-  if ([target length])
-    {
-      [recent removeObject: target];
-      [recent insertObject: target atIndex: 0];
-      while ([recent count] > 10)
-        [recent removeLastObject];
-      [d setObject: recent forKey: @"PDRecentTargets"];
-    }
+  PDWelcomeHistory *history = [[PDWelcomeHistory alloc] initWithDefaults: d
+    fileExists: ^BOOL(NSString *path) { return [[NSFileManager defaultManager] fileExistsAtPath: path]; }];
+  [history noteTarget: o mode: PDWelcomeLaunch];
   [d setObject: [_args stringValue] forKey: @"PDLastArguments"];
   [d setObject: [_env stringValue] forKey: @"PDLastEnvironment"];
   [d setObject: [_cwd stringValue] forKey: @"PDLastDirectory"];

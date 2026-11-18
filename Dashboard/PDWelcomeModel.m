@@ -31,7 +31,8 @@
 }
 - (NSArray *) prunedEntriesForKey: (NSString *)key targets: (BOOL)targets
 {
-  id saved = [_defaults objectForKey: key];
+  id original = [_defaults objectForKey: key];
+  id saved = original;
   if (targets && saved == nil)
     {
       /* Carry forward existing launch history without persisting stale PIDs. */
@@ -60,12 +61,32 @@
         if ([seen containsObject: identity])
           continue;
         [seen addObject: identity];
-        [kept addObject: entry];
+        if (targets)
+          {
+            id name = [entry objectForKey: @"template"];
+            GSPTemplate *t = [name isKindOfClass: [NSString class]] ? [GSPTemplate templateNamed: name] : nil;
+            [kept addObject: @{ @"path": path, @"mode": mode,
+              @"template": t.name ?: ([mode isEqual: @"attach"] ? @"System Time Profiler" : @"Time Profiler") }];
+          }
+        else
+          [kept addObject: path];
         if ([kept count] == 10)
           break;
       }
-  [_defaults setObject: kept forKey: key];
+  if (![original isEqual: kept])
+    [_defaults setObject: kept forKey: key];
+  if (targets)
+    [self syncLegacyLaunchTargets: kept];
   return [kept copy];
+}
+- (void) syncLegacyLaunchTargets: (NSArray *)entries
+{
+  NSMutableArray *paths = [NSMutableArray array];
+  for (NSDictionary *entry in entries)
+    if ([[entry objectForKey: @"mode"] isEqual: @"launch"])
+      [paths addObject: [entry objectForKey: @"path"]];
+  if (![[_defaults objectForKey: @"PDRecentTargets"] isEqual: paths])
+    [_defaults setObject: paths forKey: @"PDRecentTargets"];
 }
 - (NSArray *) recentTargets
 {
@@ -95,7 +116,9 @@
   [recent insertObject: entry atIndex: 0];
   while ([recent count] > 10)
     [recent removeLastObject];
-  [_defaults setObject: recent forKey: @"PDRecentRecordingTargets"];
+  if (![[_defaults objectForKey: @"PDRecentRecordingTargets"] isEqual: recent])
+    [_defaults setObject: recent forKey: @"PDRecentRecordingTargets"];
+  [self syncLegacyLaunchTargets: recent];
 }
 - (void) noteTrace: (NSString *)path
 {
@@ -237,10 +260,10 @@
   options.instrumentIdentifiers = t.instrumentIdentifiers;
   options.executablePath = _mode == PDWelcomeAttach ? _selectedProcess.executablePath
     : [_provider executableForPath: _executablePath];
-  options.arguments = _arguments;
-  options.environment = _environment;
-  options.workingDirectory = [_workingDirectory length] ? _workingDirectory
-    : [options.executablePath stringByDeletingLastPathComponent];
+  options.arguments = _mode == PDWelcomeAttach ? [NSArray array] : _arguments;
+  options.environment = _mode == PDWelcomeAttach ? [NSDictionary dictionary] : _environment;
+  options.workingDirectory = _mode == PDWelcomeAttach ? nil : ([_workingDirectory length] ? _workingDirectory
+    : [options.executablePath stringByDeletingLastPathComponent]);
   options.timeLimit = _timeLimit;
   options.sampleIntervalMicroseconds = _sampleIntervalMicroseconds;
   options.perfFrequency = _perfFrequency;

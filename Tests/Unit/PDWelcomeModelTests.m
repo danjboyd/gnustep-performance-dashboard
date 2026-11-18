@@ -13,6 +13,15 @@
 @property (nonatomic, copy) NSString *attachProblem;
 @property (nonatomic, copy) NSString *launchProblem;
 @end
+
+@interface WelcomeCountingDefaults : NSObject
+@property (nonatomic, strong) NSMutableDictionary *values;
+@property (nonatomic) NSUInteger writes;
+@end
+@implementation WelcomeCountingDefaults
+- (id) objectForKey: (id)key { return [_values objectForKey: key]; }
+- (void) setObject: (id)object forKey: (id)key { _writes++; [_values setObject: object forKey: key]; }
+@end
 @implementation WelcomeFakeProvider
 - (instancetype) init
 {
@@ -152,9 +161,15 @@ process(int pid, NSString *name, PDGNUstepIdentity identity)
   XCTAssertEqualObjects([_model recordDisabledReason], @"Not available when attaching on Linux");
   XCTAssertNil([_model recordingOptionsWithError: NULL]);
   _model.templateName = @"System Time Profiler";
+  _model.arguments = [NSArray arrayWithObject: @"launch-only"];
+  _model.environment = [NSDictionary dictionaryWithObject: @"value" forKey: @"LAUNCH_ONLY"];
+  _model.workingDirectory = @"/launch-only";
   GSPRecordingOptions *options = [_model recordingOptionsWithError: NULL];
   XCTAssertNotNil(options);
   XCTAssertEqual(options.attachPID, 25);
+  XCTAssertEqual([options.arguments count], (NSUInteger)0);
+  XCTAssertEqual([options.environment count], (NSUInteger)0);
+  XCTAssertNil(options.workingDirectory);
   XCTAssertEqualObjects(options.instrumentIdentifiers, [NSArray arrayWithObject: GSPInstrumentSystemProfiler]);
 }
 - (void) testPIDReuseAndExitAreRefusedImmediatelyBeforeRecord
@@ -216,7 +231,27 @@ process(int pid, NSString *name, PDGNUstepIdentity identity)
   [_defaults setObject: [NSArray arrayWithObjects: @42, entry, entry,
     [NSDictionary dictionaryWithObjectsAndKeys: @"/missing/app", @"path", @"launch", @"mode", nil], nil]
     forKey: @"PDRecentRecordingTargets"];
-  XCTAssertEqualObjects([_history recentTargets], [NSArray arrayWithObject: entry]);
+  NSDictionary *canonical = @{ @"path": @"/app", @"mode": @"launch", @"template": @"Time Profiler" };
+  XCTAssertEqualObjects([_history recentTargets], [NSArray arrayWithObject: canonical]);
+}
+- (void) testHistoryPrunesUnknownKeysOnceAndKeepsLegacyLaunchListInSync
+{
+  WelcomeCountingDefaults *defaults = [WelcomeCountingDefaults new];
+  defaults.values = [NSMutableDictionary dictionaryWithObject: @[
+    @{ @"path": @"/app", @"mode": @"launch", @"template": @"Time Profiler", @"pid": @42, @"extra": @"discard" }]
+    forKey: @"PDRecentRecordingTargets"];
+  PDWelcomeHistory *history = [[PDWelcomeHistory alloc] initWithDefaults: defaults fileExists: ^BOOL(NSString *path) { return YES; }];
+  NSArray *first = [history recentTargets];
+  XCTAssertEqual([[first objectAtIndex: 0] count], (NSUInteger)3);
+  XCTAssertEqualObjects([defaults objectForKey: @"PDRecentTargets"], [NSArray arrayWithObject: @"/app"]);
+  NSUInteger writes = defaults.writes;
+  XCTAssertTrue(writes > 0);
+  XCTAssertEqualObjects([history recentTargets], first);
+  XCTAssertEqual(defaults.writes, writes);
+  GSPRecordingOptions *options = [GSPRecordingOptions new];
+  options.executablePath = @"/app"; options.templateName = @"Time Profiler";
+  [history noteTarget: options mode: PDWelcomeLaunch];
+  XCTAssertEqual(defaults.writes, writes);
 }
 - (void) testRecentsAreBoundedAndDoNotSaveAttachPIDs
 {
