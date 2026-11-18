@@ -85,9 +85,15 @@ int main(int argc, const char **argv)
       CHECK(window != nil, "TRLoader binds real owner/outlets");
       [window showForMode: PDWelcomeLaunch];
       CHECK([window valueForKey: @"refreshTimer"] == nil, "launch mode has no process timer");
-      CHECK(![[window.moreTemplates itemAtIndex: 0] isEnabled], "More placeholder is disabled");
-      CHECK([[[window.moreTemplates itemWithTitle: @"System Time Profiler"] toolTip] length] > 0,
-        "disabled More template has a reason");
+      CHECK([[window.moreTemplates itemAtIndex: 0] isEnabled], "More placeholder keeps the popup looking enabled");
+      NSMenuItem *systemItem = nil, *zombiesItem = nil;
+      for (NSMenuItem *item in [window.moreTemplates itemArray])
+        {
+          if ([[item representedObject] isEqual: @"System Time Profiler"]) systemItem = item;
+          if ([[item representedObject] isEqual: @"Zombies"]) zombiesItem = item;
+        }
+      CHECK([[systemItem title] rangeOfString: @"requires attaching"].location != NSNotFound,
+        "disabled More template explains its reason in the title");
       CHECK([window.leaksTemplate state] == NSOnState, "last valid launch template restored");
       CHECK(![window.recordButton isEnabled], "Record disabled without a target");
       CHECK([window.cpuTemplate target] == window && [window.cpuTemplate action] == @selector(chooseTemplate:), "Trellis target/action binding");
@@ -108,6 +114,8 @@ int main(int argc, const char **argv)
       CHECK(spy.recorded.timeLimit == 1.5 && spy.recorded.sampleIntervalMicroseconds == 2000, "advanced timing options");
       CHECK(![[window window] isVisible], "Record dismisses welcome window");
       [window chooseAttach: window.attachMode];
+      CHECK(![zombiesItem isEnabled] && [[zombiesItem title] rangeOfString: @"Not available when attaching on Linux"].location != NSNotFound,
+        "attach More list shows disabled reasons");
       CHECK([window valueForKey: @"refreshTimer"] != nil, "attach mode refreshes processes");
       NSTableView *table = (NSTableView *)[window.processScroll documentView];
       CHECK([table isKindOfClass: [NSTableView class]], "native process table");
@@ -153,6 +161,19 @@ int main(int argc, const char **argv)
       [window.showAtLaunch setState: NSOnState];
       [window launchPreferenceChanged: nil];
       CHECK(history.showAtLaunch, "launch preference on");
+      GSPRecordingOptions *recent = [GSPRecordingOptions new];
+      recent.executablePath = @"/apps/Gorm"; recent.templateName = @"System Time Profiler"; recent.attachPID = 41;
+      [history noteTarget: recent mode: PDWelcomeAttach];
+      [window showForMode: PDWelcomeLaunch];
+      [window recentTarget: [[window.recentTargetsBox subviews] objectAtIndex: 0]];
+      CHECK(model.mode == PDWelcomeAttach && [window valueForKey: @"refreshTimer"] != nil,
+        "recent attach target starts process refresh");
+      recent.executablePath = @"/bin/sleep"; recent.templateName = @"Time Profiler"; recent.attachPID = 0;
+      [history noteTarget: recent mode: PDWelcomeLaunch];
+      [window showForMode: PDWelcomeAttach];
+      [window recentTarget: [[window.recentTargetsBox subviews] objectAtIndex: 0]];
+      CHECK(model.mode == PDWelcomeLaunch && [window valueForKey: @"refreshTimer"] == nil,
+        "recent launch target stops process refresh");
       [[window window] setContentSize: NSMakeSize(900, 680)];
       [window.root layoutTrellis];
       [[NSRunLoop currentRunLoop] runUntilDate: [NSDate dateWithTimeIntervalSinceNow: 0.15]];

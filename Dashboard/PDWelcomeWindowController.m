@@ -131,17 +131,24 @@
       [button setState: [[button title] isEqual: _model.templateName] ? NSOnState : NSOffState];
     }
   for (NSMenuItem *item in [_moreTemplates itemArray])
-    if ([GSPTemplate templateNamed: [item title]])
-      {
-        NSString *reason = [_model templateDisabledReason: [item title]];
-        [item setEnabled: reason == nil];
-        [item setToolTip: reason];
-      }
-  [[_moreTemplates itemAtIndex: 0] setEnabled: NO];
-  if ([[PDWelcomeModel moreTemplateNames] containsObject: _model.templateName])
-    [_moreTemplates selectItemWithTitle: _model.templateName];
-  else
-    [_moreTemplates selectItemAtIndex: 0];
+    {
+      NSString *name = [item representedObject] ?: [item title];
+      GSPTemplate *t = [GSPTemplate templateNamed: name];
+      if (t == nil)
+        continue;
+      [item setRepresentedObject: t.name];
+      NSString *reason = [_model templateDisabledReason: t.name];
+      [item setEnabled: reason == nil];
+      [item setToolTip: reason];
+      [item setTitle: reason ? [NSString stringWithFormat: @"%@ — %@", t.name, reason] : t.name];
+    }
+  /* A disabled selected placeholder makes Adwaita gray the entire popup. */
+  [[_moreTemplates itemAtIndex: 0] setEnabled: YES];
+  NSInteger selectedTemplate = 0;
+  for (NSInteger i = 1; i < [_moreTemplates numberOfItems]; i++)
+    if ([[[_moreTemplates itemAtIndex: i] representedObject] isEqual: _model.templateName])
+      { selectedTemplate = i; break; }
+  [_moreTemplates selectItemAtIndex: selectedTemplate];
   BOOL launch = _model.mode == PDWelcomeLaunch;
   [_argumentsField setEnabled: launch];
   [_environmentField setEnabled: launch];
@@ -208,7 +215,7 @@
 - (void) chooseAttach: (id)sender { [self showForMode: PDWelcomeAttach]; }
 - (void) chooseTemplate: (id)sender
 {
-  NSString *name = sender == _moreTemplates ? [_moreTemplates titleOfSelectedItem] : [sender title];
+  NSString *name = sender == _moreTemplates ? [[_moreTemplates selectedItem] representedObject] : [sender title];
   if ([GSPTemplate templateNamed: name] && [_model templateDisabledReason: name] == nil)
     _model.templateName = name;
   [self updateControls];
@@ -327,14 +334,12 @@
     { [self rebuildRecents]; return; }
   NSString *path = [entry objectForKey: @"path"];
   BOOL attach = [[entry objectForKey: @"mode"] isEqual: @"attach"];
-  _model.mode = attach ? PDWelcomeAttach : PDWelcomeLaunch;
   NSString *name = [entry objectForKey: @"template"];
   _model.templateName = [name isKindOfClass: [NSString class]] && [GSPTemplate templateNamed: name]
     ? name : (attach ? @"System Time Profiler" : @"Time Profiler");
   [_targetPath setStringValue: path];
   _model.selectedProcess = nil;
-  [self fieldsChanged: nil];
-  [self refresh: nil];
+  [self showForMode: attach ? PDWelcomeAttach : PDWelcomeLaunch];
   if (attach)
     {
       NSArray *matches = [_model.processes filteredArrayUsingPredicate: [NSPredicate predicateWithBlock:
