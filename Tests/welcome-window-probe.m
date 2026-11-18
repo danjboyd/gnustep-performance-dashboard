@@ -84,6 +84,10 @@ int main(int argc, const char **argv)
       PDWelcomeWindowController *window = [[PDWelcomeWindowController alloc] initWithModel: model appController: (PDAppController *)spy];
       CHECK(window != nil, "TRLoader binds real owner/outlets");
       [window showForMode: PDWelcomeLaunch];
+      CHECK([window valueForKey: @"refreshTimer"] == nil, "launch mode has no process timer");
+      CHECK(![[window.moreTemplates itemAtIndex: 0] isEnabled], "More placeholder is disabled");
+      CHECK([[[window.moreTemplates itemWithTitle: @"System Time Profiler"] toolTip] length] > 0,
+        "disabled More template has a reason");
       CHECK([window.leaksTemplate state] == NSOnState, "last valid launch template restored");
       CHECK(![window.recordButton isEnabled], "Record disabled without a target");
       CHECK([window.cpuTemplate target] == window && [window.cpuTemplate action] == @selector(chooseTemplate:), "Trellis target/action binding");
@@ -104,6 +108,7 @@ int main(int argc, const char **argv)
       CHECK(spy.recorded.timeLimit == 1.5 && spy.recorded.sampleIntervalMicroseconds == 2000, "advanced timing options");
       CHECK(![[window window] isVisible], "Record dismisses welcome window");
       [window chooseAttach: window.attachMode];
+      CHECK([window valueForKey: @"refreshTimer"] != nil, "attach mode refreshes processes");
       NSTableView *table = (NSTableView *)[window.processScroll documentView];
       CHECK([table isKindOfClass: [NSTableView class]], "native process table");
       CHECK([table numberOfRows] == 3, "GNUstep filter retains unknown identities");
@@ -130,6 +135,7 @@ int main(int argc, const char **argv)
       [window filtersChanged: nil];
       CHECK([table numberOfRows] == 4, "All processes includes non-GNUstep");
       [window chooseLaunch: window.launchMode];
+      CHECK([window valueForKey: @"refreshTimer"] == nil, "leaving attach stops process timer");
       CHECK([window.cpuTemplate state] == NSOnState, "launch radio restores a supported template");
       [window.showAdvanced setState: NSOnState];
       [window advancedChanged: nil];

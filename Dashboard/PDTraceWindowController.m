@@ -35,7 +35,6 @@
 
   NSButton *_recordButton;
   NSButton *_leaksButton;
-  NSTextField *_targetLabel;
   NSPopUpButton *_targetPicker;
   NSTextField *_statusLabel;
   NSPopUpButton *_processPopup;
@@ -101,10 +100,7 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
   [bar setAutoresizingMask: NSViewWidthSizable | NSViewMinYMargin];
   _recordButton = push_button(@"Record", NSMakeRect(8, 6, 96, 28), self, @selector(toggleRecording:));
   [bar addSubview: _recordButton];
-  _targetLabel = label(NSMakeRect(112, 18, 420, 18), [PDTheme boldLabelFont]);
-  [bar addSubview: _targetLabel];
-  [_targetLabel setHidden: YES];
-  _targetPicker = [[NSPopUpButton alloc] initWithFrame: NSMakeRect(112, 18, 160, 20) pullsDown: YES];
+  _targetPicker = [[NSPopUpButton alloc] initWithFrame: NSMakeRect(112, 18, 420, 20) pullsDown: YES];
   [_targetPicker addItemWithTitle: @"Target…"];
   [_targetPicker addItemWithTitle: @"Launch an App…"];
   [_targetPicker addItemWithTitle: @"Attach to a Running App…"];
@@ -206,7 +202,7 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
       _loadCompletion = [completion copy];
       [self buildWindow];
       [[self window] setTitle: @"Opening Trace…"];
-      [_targetLabel setStringValue: [path lastPathComponent]];
+      [[_targetPicker itemAtIndex: 0] setTitle: [path lastPathComponent]];
       [_statusLabel setStringValue: @"Reading trace and preparing analyses…"];
       [_recordButton setEnabled: NO];
       [_mainSplit setHidden: YES];
@@ -338,6 +334,7 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
 {
   NSArray *procs = _trace.processes;
   [_processPopup setHidden: [procs count] < 2];
+  [self resizeTargetPicker];
   if ([procs count] < 2)
     return;
   NSInteger selected = _renderer.process.pid;
@@ -379,10 +376,10 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
   NSString *title = [NSString stringWithFormat: @"%@ — %@", [self targetName], [self templateName]];
   [[self window] setTitle: _recorder.isRecording
     ? [title stringByAppendingString: @" (Recording)"] : title];
-  [_targetLabel setStringValue: [NSString stringWithFormat: @"%@  ·  %@",
-    [self targetName], [self templateName]]];
-  [[_targetPicker itemAtIndex: 0] setTitle: [_targetLabel stringValue]];
-  [_targetPicker setToolTip: [_targetLabel stringValue]];
+  NSString *caption = [NSString stringWithFormat: @"%@  ·  %@", [self targetName], [self templateName]];
+  [[_targetPicker itemAtIndex: 0] setTitle: caption];
+  [_targetPicker setToolTip: caption];
+  [self resizeTargetPicker];
   if (_recorder.isRecording)
     {
       double t = -[_recordStart timeIntervalSinceNow];
@@ -471,15 +468,35 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
   return [dir stringByAppendingPathComponent: name];
 }
 
+- (void) resizeTargetPicker
+{
+  if (_targetPicker == nil)
+    return;
+  CGFloat edge = [[_targetPicker superview] bounds].size.width - 310;
+  if (![_processPopup isHidden])
+    edge = MIN(edge, [_processPopup frame].origin.x);
+  if (![_leaksButton isHidden])
+    edge = MIN(edge, [_leaksButton frame].origin.x);
+  CGFloat width = MAX(100, edge - [_targetPicker frame].origin.x - 8);
+  [_targetPicker setFrameSize: NSMakeSize(width, 20)];
+  [_statusLabel setFrameSize: NSMakeSize(width, 16)];
+}
+- (void) windowDidResize: (NSNotification *)notification { [self resizeTargetPicker]; }
 - (void) chooseRecordingTarget: (id)sender
 {
   NSInteger choice = [_targetPicker indexOfSelectedItem];
-  /* Keep the existing compact launch and attach panels as direct toolbar
-     entries; a new recording gets its own trace window. */
+#if defined(__linux__)
+  if (choice == 1 || choice == 2)
+    [(PDAppController *)[NSApp delegate] showWelcomeForMode:
+      choice == 1 ? PDWelcomeLaunch : PDWelcomeAttach];
+#else
+  /* Other platforms retain their existing compact panels. The opened-trace
+     Record action below also retains its existing panel path. */
   GSPRecordingOptions *options = choice == 1 ? [PDRecordPanel runPanelWithTemplate: nil]
     : (choice == 2 ? [PDAttachPanel runPanel] : nil);
   if (options)
     [(PDAppController *)[NSApp delegate] startRecordingWithOptions: options];
+#endif
 }
 
 - (void) startRecording: (id)sender

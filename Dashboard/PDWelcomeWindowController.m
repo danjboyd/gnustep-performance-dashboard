@@ -102,11 +102,14 @@
     _model.templateName = @"Time Profiler";
   [self fieldsChanged: nil];
   [self rebuildRecents];
-  [self refresh: nil];
+  if (mode == PDWelcomeAttach)
+    [self refresh: nil];
+  else
+    { [_refreshTimer invalidate]; _refreshTimer = nil; }
   [self showWindow: nil];
   [[self window] makeKeyAndOrderFront: nil];
   [_root layoutTrellis];
-  if (_refreshTimer == nil)
+  if (mode == PDWelcomeAttach && _refreshTimer == nil)
     _refreshTimer = [NSTimer scheduledTimerWithTimeInterval: 2 target: self
       selector: @selector(refresh:) userInfo: nil repeats: YES];
 }
@@ -129,7 +132,12 @@
     }
   for (NSMenuItem *item in [_moreTemplates itemArray])
     if ([GSPTemplate templateNamed: [item title]])
-      [item setEnabled: [_model templateDisabledReason: [item title]] == nil];
+      {
+        NSString *reason = [_model templateDisabledReason: [item title]];
+        [item setEnabled: reason == nil];
+        [item setToolTip: reason];
+      }
+  [[_moreTemplates itemAtIndex: 0] setEnabled: NO];
   if ([[PDWelcomeModel moreTemplateNames] containsObject: _model.templateName])
     [_moreTemplates selectItemWithTitle: _model.templateName];
   else
@@ -147,6 +155,8 @@
 }
 - (void) refresh: (id)sender
 {
+  if (_model.mode != PDWelcomeAttach)
+    return;
   _model.activeRecordingPIDs = [_appController activeRecordingPIDs] ?: [NSSet set];
   _updating = YES;
   [_model refreshProcesses];

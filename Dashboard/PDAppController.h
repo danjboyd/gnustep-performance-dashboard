@@ -4,6 +4,9 @@
 
 #import <AppKit/AppKit.h>
 #import <GSPerformance/GSPerformance.h>
+#if defined(__linux__)
+#import "PDWelcomeModel.h"
+#endif
 
 @interface PDAppController : NSObject <NSApplicationDelegate>
 - (void) newRecording: (id)sender;
@@ -13,4 +16,7 @@
 - (BOOL) openTraceAtPath: (NSString *)path;
 - (void) startRecordingWithOptions: (GSPRecordingOptions *)options;
 - (NSSet *) activeRecordingPIDs;
+#if defined(__linux__)
+- (void) showWelcomeForMode: (PDWelcomeTargetMode)mode;
+#endif
 @end
