@@ -214,6 +214,14 @@ most five seconds; fork children turn all tracking off.
 
 ## PerformanceDashboard.app
 
+The Linux welcome model uses a provider snapshot with PID and `/proc` starttime,
+and rechecks that incarnation when Record creates the options. This detects
+stale selections and PID reuse before dispatch. The helper currently accepts
+only a PID; no process handle or expected starttime is handed through to it.
+A process may therefore exit or be replaced between the final model check and
+the helper's kernel operation. Closing that boundary needs a helper protocol
+change; the UI check does not claim an atomic attachment guarantee.
+
 Existing trace opens use an unpublished worker-owned reader and renderer to
 parse/index records, prepare initial analyses, embedded symbols and the first
 CPU tree. The main thread shows standard progress controls and then adopts
