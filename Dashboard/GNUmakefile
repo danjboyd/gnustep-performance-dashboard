@@ -92,7 +92,9 @@ ifeq (,$(WINDOWS))
 before-all:: trellis
 trellis:
 	@test -f "$(TRELLIS_ROOT)/GNUmakefile" || { echo "Set TRELLIS_ROOT to the pinned Trellis source checkout" >&2; exit 1; }
-	@$(MAKE) -C "$(TRELLIS_ROOT)" hot_reload=no
+	@$(MAKE) -C "$(TRELLIS_ROOT)" hot_reload=no \
+	  libTrellisEngine_LIBRARIES_DEPEND_UPON="-ldispatch $(FND_LIBS) $(OBJC_LIBS)" \
+	  libTrellis_LIBRARIES_DEPEND_UPON="-lTrellisEngine -ldispatch $(GUI_LIBS) $(FND_LIBS) $(OBJC_LIBS)"
 	@mkdir -p "$(CURDIR)/../out/trellis-runtime"
 	@for lib in libTrellis.so.0 libTrellisEngine.so.0; do \
 	  ln -sfn "$(abspath $(TRELLIS_ROOT))/obj/$$lib" "$(CURDIR)/../out/trellis-runtime/$$lib"; \

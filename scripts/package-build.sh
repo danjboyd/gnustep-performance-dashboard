@@ -21,7 +21,11 @@ set -u
 export TRELLIS_ROOT="${TRELLIS_ROOT:-$("$repo_root/scripts/pinned-checkout.sh" gnustep-trellis "$repo_root/out/gnustep-trellis")}"
 "$repo_root/scripts/pinned-checkout.sh" --verify gnustep-trellis "$TRELLIS_ROOT"
 make -C "$TRELLIS_ROOT" clean hot_reload=no
-make -C "$TRELLIS_ROOT" -j"${PD_BUILD_JOBS:-2}" hot_reload=no
+# Both libraries call dispatch directly. Declare their dependencies here too:
+# packaging builds Trellis before entering Dashboard/GNUmakefile.
+make -C "$TRELLIS_ROOT" -j"${PD_BUILD_JOBS:-2}" hot_reload=no \
+  'libTrellisEngine_LIBRARIES_DEPEND_UPON=-ldispatch $(FND_LIBS) $(OBJC_LIBS)' \
+  'libTrellis_LIBRARIES_DEPEND_UPON=-lTrellisEngine -ldispatch $(GUI_LIBS) $(FND_LIBS) $(OBJC_LIBS)'
 python3 "$repo_root/scripts/trellis-package.py" receipt "$TRELLIS_ROOT" \
   --output "$TRELLIS_ROOT/obj/pd-build-receipt.json"
 
