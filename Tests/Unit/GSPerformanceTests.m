@@ -29,6 +29,29 @@
 @end
 
 #if defined(__linux__)
+/* Hold final metadata publication open so completion ordering is observed
+   deterministically, without trying to win a polling/scheduling race. */
+@interface FinalMetadataGateRecorder : GSPRecorder
+@property (nonatomic, strong) NSCondition *metadataGate;
+@property (nonatomic) BOOL enteredFinalWrite;
+@property (nonatomic) BOOL releaseFinalWrite;
+@end
+@implementation FinalMetadataGateRecorder
+- (void) writeInfo: (BOOL)final
+{
+  if (final)
+    {
+      [_metadataGate lock];
+      _enteredFinalWrite = YES;
+      [_metadataGate broadcast];
+      while (!_releaseFinalWrite)
+        [_metadataGate wait];
+      [_metadataGate unlock];
+    }
+  [super writeInfo: final];
+}
+@end
+
 @interface RecorderCompletionObserver : NSObject <GSPRecorderDelegate>
 @property (nonatomic, strong) NSError *error;
 @property (nonatomic) NSUInteger completions;
@@ -1118,6 +1141,41 @@ child(GSPCallTreeNode *n, NSString *name)
   XCTAssertEqualObjects([info objectForKey: @"CaptureStatus"], @"complete");
   XCTAssertEqualObjects([info objectForKey: @"ExitStatusSource"], @"NSTask");
   XCTAssertNil([info objectForKey: @"WaitPIDErrno"]);
+}
+
+- (void) testRecordingRemainsActiveUntilFinalMetadataIsPublished
+{
+  GSPRecordingOptions *options = [GSPRecordingOptions new];
+  options.executablePath = @"/bin/sleep";
+  options.arguments = @[@"0.01"];
+  options.instrumentIdentifiers = @[@"time-profiler"];
+  options.captureOutput = YES;
+  options.automaticMinimumFreeSpace = NO;
+  options.outputPath = [[NSTemporaryDirectory() stringByAppendingPathComponent:
+    [[NSProcessInfo processInfo] globallyUniqueString]] stringByAppendingPathExtension: @"gstrace"];
+  [_bundles addObject: options.outputPath];
+  FinalMetadataGateRecorder *recorder = [[FinalMetadataGateRecorder alloc] initWithOptions: options];
+  recorder.metadataGate = [NSCondition new];
+  NSError *error = nil;
+  BOOL launched = [recorder start: &error];
+  XCTAssertTrue(launched, @"%@", error);
+  if (!launched) return;
+  [recorder.metadataGate lock];
+  NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow: 5];
+  while (!recorder.enteredFinalWrite && [recorder.metadataGate waitUntilDate: deadline]) {}
+  BOOL entered = recorder.enteredFinalWrite;
+  BOOL activeDuringWrite = recorder.isRecording;
+  recorder.releaseFinalWrite = YES;
+  [recorder.metadataGate broadcast];
+  [recorder.metadataGate unlock];
+  [recorder waitUntilFinished];
+  XCTAssertTrue(entered, @"final metadata writer must reach the controlled gate");
+  XCTAssertTrue(activeDuringWrite, @"recording must remain true until final Info.plist is written");
+  XCTAssertFalse(recorder.isRecording);
+  NSDictionary *info = [NSDictionary dictionaryWithContentsOfFile:
+    [options.outputPath stringByAppendingPathComponent: @"Info.plist"]];
+  XCTAssertEqualObjects([info objectForKey: @"CaptureStatus"], @"complete");
+  XCTAssertEqualObjects([info objectForKey: @"ExitStatusSource"], @"waitpid");
 }
 
 - (void) testChildExecFailureIsNotTargetExit125

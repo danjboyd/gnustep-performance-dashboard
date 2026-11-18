@@ -52,6 +52,7 @@
 @property (nonatomic, readonly) GSPRecordingOptions *options;
 @property (nonatomic, weak) id<GSPRecorderDelegate> delegate;
 @property (nonatomic, readonly) int pid;
+/* Stays true through final metadata publication (or its recorded write error). */
 @property (nonatomic, readonly) BOOL isRecording;
 @property (nonatomic, readonly) NSDate *startDate;
 @property (nonatomic, readonly) int exitStatus;    /* wait-compatible status, -1 unknown */

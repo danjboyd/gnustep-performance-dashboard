@@ -1354,8 +1354,9 @@ send_control(int pid, int request)
           _childTask = nil;
         }
 #endif
-      _recording = NO;
       [self writeInfo: YES];
+      /* Polling clients may read the trace as soon as recording becomes false. */
+      _recording = NO;
       [_done lock];
       _finished = YES;
       [_done broadcast];
@@ -1734,8 +1735,8 @@ remote_agent_export(HANDLE process, NSString *agent, const char *name)
       GetExitCodeProcess(proc, &code);
       _exitStatus = code == STILL_ACTIVE ? 0 : (int)code;
       CloseHandle(proc);
-      _recording = NO;
       [self writeInfo: YES];
+      _recording = NO;
       [_done lock];
       _finished = YES;
       [_done broadcast];
