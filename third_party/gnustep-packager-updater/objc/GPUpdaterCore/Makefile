@@ -21,13 +21,13 @@ $(LIB_NAME): $(OBJECTS)
 	ar rcs $@ $(OBJECTS)
 
 Source/GPUpdater.o: Source/GPUpdater.m Headers/GPUpdater.h Headers/GPUpdaterDownload.h
-	clang $(OBJCFLAGS) -I$(INCLUDE_DIR) -c $< -o $@
+	clang $(OBJCFLAGS) $(GP_EXTRA_OBJCFLAGS) -I$(INCLUDE_DIR) -c $< -o $@
 
 Source/GPUpdaterDownload.o: Source/GPUpdaterDownload.m Headers/GPUpdaterDownload.h Source/GPUpdaterWinHTTP.h
-	clang $(OBJCFLAGS) -I$(INCLUDE_DIR) -c $< -o $@
+	clang $(OBJCFLAGS) $(GP_EXTRA_OBJCFLAGS) -I$(INCLUDE_DIR) -c $< -o $@
 
 Source/GPUpdaterApplyOutcome.o: Source/GPUpdaterApplyOutcome.m Headers/GPUpdaterApplyOutcome.h
-	clang $(OBJCFLAGS) -I$(INCLUDE_DIR) -c $< -o $@
+	clang $(OBJCFLAGS) $(GP_EXTRA_OBJCFLAGS) -I$(INCLUDE_DIR) -c $< -o $@
 
 Source/GPUpdaterWinHTTP.o: Source/GPUpdaterWinHTTP.c Source/GPUpdaterWinHTTP.h
 	clang -O2 -c $< -o $@

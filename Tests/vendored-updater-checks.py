@@ -21,6 +21,10 @@ class VendoredChecks(unittest.TestCase):
                 compatibility = b'OBJCFLAGS += -DHAVE_MODE_T\n'
                 self.assertEqual(content.count(compatibility), 1)
                 content = content.replace(compatibility, b'')
+                extra = b' $(GP_EXTRA_OBJCFLAGS)'
+                expected_occurrences = {'GPUpdaterCore/Makefile': 3, 'GPUpdaterUI/Makefile': 1, 'gp-update-helper/Makefile': 2}
+                self.assertEqual(content.count(extra), expected_occurrences[name])
+                content = content.replace(extra, b'')
                 makefiles += 1
             self.assertEqual(hashlib.sha256(content).hexdigest(), expected, name)
         self.assertEqual(makefiles, 3)

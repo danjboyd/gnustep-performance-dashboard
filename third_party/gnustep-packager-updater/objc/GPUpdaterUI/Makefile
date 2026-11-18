@@ -23,7 +23,7 @@ $(LIB_NAME): $(OBJECTS)
 	ar rcs $@ $(OBJECTS)
 
 Source/GPStandardUpdaterController.o: Source/GPStandardUpdaterController.m Headers/GPStandardUpdaterController.h ../GPUpdaterCore/Headers/GPUpdater.h Source/GPUpdaterUIShell.h
-	clang $(OBJCFLAGS) -I$(INCLUDE_DIR) -I$(CORE_INCLUDE_DIR) -c $< -o $@
+	clang $(OBJCFLAGS) $(GP_EXTRA_OBJCFLAGS) -I$(INCLUDE_DIR) -I$(CORE_INCLUDE_DIR) -c $< -o $@
 
 Source/GPUpdaterUIShell.o: Source/GPUpdaterUIShell.c Source/GPUpdaterUIShell.h
 	clang -O2 -c $< -o $@

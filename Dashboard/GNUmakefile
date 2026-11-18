@@ -1,5 +1,7 @@
 include $(GNUSTEP_MAKEFILES)/common.make
 
+GNUSTEP_CONFIG ?= $(GNUSTEP_SYSTEM_TOOLS)/gnustep-config
+
 APP_NAME = PerformanceDashboard
 PerformanceDashboard_OBJC_FILES = \
   main.m \
@@ -97,9 +99,9 @@ endif
 .PHONY: updater
 before-all:: updater
 updater:
-	@$(MAKE) -C "$(UPDATER_CORE_DIR)" OBJCFLAGS="$(shell gnustep-config --objc-flags) -DHAVE_MODE_T $(PD_SOURCE_PREFIX_MAPS)"
-	@$(MAKE) -C "$(UPDATER_UI_DIR)" OBJCFLAGS="$(shell gnustep-config --objc-flags) -DHAVE_MODE_T $(PD_SOURCE_PREFIX_MAPS)"
-	@$(MAKE) -C "$(UPDATER_HELPER_DIR)"
+	@$(MAKE) -C "$(UPDATER_CORE_DIR)" GNUSTEP_CONFIG="$(GNUSTEP_CONFIG)" GP_EXTRA_OBJCFLAGS="$(PD_SOURCE_PREFIX_MAPS)"
+	@$(MAKE) -C "$(UPDATER_UI_DIR)" GNUSTEP_CONFIG="$(GNUSTEP_CONFIG)" GP_EXTRA_OBJCFLAGS="$(PD_SOURCE_PREFIX_MAPS)"
+	@$(MAKE) -C "$(UPDATER_HELPER_DIR)" GNUSTEP_CONFIG="$(GNUSTEP_CONFIG)" GP_EXTRA_OBJCFLAGS="$(PD_SOURCE_PREFIX_MAPS)"
 
 # GPStandardUpdaterController looks for the helper beside the executable.
 after-all::
@@ -116,6 +118,6 @@ endif
 	fi
 
 after-clean::
-	@$(MAKE) -C "$(UPDATER_CORE_DIR)" clean
-	@$(MAKE) -C "$(UPDATER_UI_DIR)" clean
-	@$(MAKE) -C "$(UPDATER_HELPER_DIR)" clean
+	@$(MAKE) -C "$(UPDATER_CORE_DIR)" GNUSTEP_CONFIG="$(GNUSTEP_CONFIG)" clean
+	@$(MAKE) -C "$(UPDATER_UI_DIR)" GNUSTEP_CONFIG="$(GNUSTEP_CONFIG)" clean
+	@$(MAKE) -C "$(UPDATER_HELPER_DIR)" GNUSTEP_CONFIG="$(GNUSTEP_CONFIG)" clean
