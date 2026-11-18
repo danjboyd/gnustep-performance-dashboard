@@ -43,6 +43,10 @@ class PostPrepareChecks(unittest.TestCase):
                          'packaging/linux/v017-backend-needed.json', 'packaging/linux/release-production.json',
                          'packaging/package.manifest.json'):
             target = repo / relative; target.parent.mkdir(parents=True, exist_ok=True); shutil.copy2(ROOT / relative, target)
+        # The synthetic producer remains a fixed 0.1.7 scenario.
+        manifest = repo / 'packaging/package.manifest.json'
+        value = json.loads(manifest.read_text()); value['package']['version'] = '0.1.7'
+        self.write(manifest, value)
         for name in ('gnustep-toolchain-provenance.json', 'pd-csd-build-sources.json', 'pd-csd-cache-receipt.json'):
             shutil.copy2(src.tree / 'metadata' / name, sdk / name)
         provenance = json.loads((sdk / 'gnustep-toolchain-provenance.json').read_text())
@@ -124,8 +128,8 @@ class PostPrepareChecks(unittest.TestCase):
             (output / final.RECEIPT).write_text(final.canonical(receipt))
             self.assertRegex(final.verify_receipt(repo, output, '0.1.7'), '^[0-9a-f]{64}$')
         self.assertEqual(receipt['applicationCommit'], sources.COMMIT)
-        self.assertEqual(len(receipt['files']), 13)
-        self.assertEqual(len(list(output.iterdir())), 14)  # 13 files plus canonical receipt
+        self.assertEqual(len(receipt['files']), 14)
+        self.assertEqual(len(list(output.iterdir())), 15)  # 14 files plus canonical receipt
         self.assertIn('path: dist/ci/csd-review', (ROOT / '.github/workflows/csd-review.yml').read_text())
 
     def test_source_tools_are_installed_and_missing_dpkg_source_fails_before_acquisition(self):
