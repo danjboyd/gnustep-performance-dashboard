@@ -21,7 +21,12 @@ class ProducerChecks(unittest.TestCase):
         self.addCleanup(tmp.cleanup)
         self.production = Path(tmp.name) / 'production.json'
         self.production.write_text(json.dumps({'schemaVersion': 1, 'linuxProducer': 'custom-csd'}))
-        self.manifest = ROOT / 'packaging/package.manifest.json'
+        # Selection scenarios use a fixed release fixture, independent of the
+        # development branch's current product version.
+        self.manifest = Path(tmp.name) / 'manifest.json'
+        manifest = json.loads((ROOT / 'packaging/package.manifest.json').read_text())
+        manifest['package']['version'] = '0.1.7'
+        self.manifest.write_text(json.dumps(manifest))
 
     def test_custom_branch_tag_and_explicit_review_version(self):
         for ref, override, expected in [('refs/heads/release/v0.1.7', '', '0.1.7'),
