@@ -89,7 +89,7 @@ readable. The broader lifetime-aware mapping design above remains future work.
 The reader caches addr2line file-ID verification by path, device/inode, size,
 mtime and ctime (including nanoseconds where available), invalidating on file
 replacement or change. Configured debug roots are parsed once per setting.
-A fixed 65,536-comparison budget bounds image-overlap work; exhaustion marks
+A fixed 8,388,608-comparison budget bounds image-overlap work; exhaustion marks
 all stream images ambiguous. Loaded-note parsing honors 4/8-byte alignment
 and ELF PF_R ranges; PF_R is not a guarantee against later mprotect changes.
 Agent image deduplication retains a bounded path fingerprint and length rather

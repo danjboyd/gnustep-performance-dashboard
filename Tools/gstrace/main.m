@@ -1108,7 +1108,7 @@ cmd_symbolicate(NSArray *args)
             [NSString stringWithFormat: @"symbols-%d.plist", p.pid]];
           [table writeToFile: file atomically: YES];
           out([NSString stringWithFormat: @"%@: %lu symbols\n", [file lastPathComponent],
-               (unsigned long)[table[@"Symbols"] count]]);
+               (unsigned long)[(table[@"Symbols"] ?: table) count]]);
         }
     }
   GSPProcess *p = t.targetProcess;

@@ -1002,15 +1002,39 @@ child(GSPCallTreeNode *n, NSString *name)
   XCTAssertNil([GSPSymbolicator buildIDForImageAtPath: path]);
 }
 
+- (void) testFiveHundredNonoverlappingImagesKeepMatchedSymbols
+{
+  NSString *path = [NSTemporaryDirectory() stringByAppendingPathComponent: [[NSUUID UUID] UUIDString]];
+  NSData *identifier = [NSData dataWithBytes: "1111" length: 4];
+  [symbol_elf_fixture(identifier, YES) writeToFile: path atomically: YES];
+  @try
+    {
+      TraceBuilder *builder = [[TraceBuilder alloc] initWithPID: 4242];
+      for (NSUInteger i = 0; i < 500; i++)
+        [builder image: path.UTF8String base: i * 0x10000
+                 start: i * 0x10000 + 0x1000 end: i * 0x10000 + 0x2000 buildID: identifier];
+      [builder end: builder.start + MS];
+      GSPTrace *trace = [self traceFrom: builder name: @"plugin-image-inventory" instruments: nil];
+      XCTAssertEqual(trace.targetProcess.images.count, (NSUInteger)500);
+      for (NSUInteger i = 0; i < 500; i++)
+        {
+          XCTAssertFalse([trace.targetProcess.images[i] identityAmbiguous]);
+          XCTAssertEqualObjects([trace.targetProcess.symbolicator symbolForAddress: i * 0x10000 + 0x1104].name,
+                                @"hidden_runtime");
+        }
+    }
+  @finally { [[NSFileManager defaultManager] removeItemAtPath: path error: NULL]; }
+}
+
 - (void) testLargeImageInventoryBoundsAmbiguityWork
 {
   TraceBuilder *builder = [[TraceBuilder alloc] initWithPID: 4242];
-  for (NSUInteger i = 0; i < 4096; i++)
+  for (NSUInteger i = 0; i < 8192; i++)
     [builder image: "/missing/image.so" base: 0x1000 * i
              start: 0x1000 * i end: 0x1000 * i + 0x800];
   [builder end: builder.start + MS];
   GSPTrace *trace = [self traceFrom: builder name: @"large-image-inventory" instruments: nil];
-  XCTAssertEqual(trace.targetProcess.images.count, (NSUInteger)4096);
+  XCTAssertEqual(trace.targetProcess.images.count, (NSUInteger)8192);
   for (GSPImage *image in trace.targetProcess.images)
     XCTAssertTrue(image.identityAmbiguous);
 }

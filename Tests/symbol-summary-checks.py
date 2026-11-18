@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import plistlib
+import re
 import struct
 import subprocess
 import sys
@@ -64,7 +65,8 @@ with tempfile.TemporaryDirectory(prefix="pd-symbol-cli-") as tmp:
         csv=run("export",path,"--format","csv","--table","allocations")
         assert csv.startswith("time,free_time,address,size,category,tid,responsible\n"),csv
         assert "Symbols:" not in csv
-        run("symbolicate",path,"--embed")
+        embedded=run("symbolicate",path,"--embed")
+        assert re.search(r"symbols-4242\.plist: [1-9][0-9]* symbols", embedded), embedded
         after=run("info",path)
         assert [l for l in info.splitlines() if "Symbols:" in l]==[l for l in after.splitlines() if "Symbols:" in l]
         # GNUstep writes its legacy text plist; the unit test checks parsed keys.

@@ -365,7 +365,7 @@ payload_string(const uint8_t *p, size_t max)
           if (!_imageIdentityOverflow)
             for (GSPImage *old in _images)
               {
-                if (_imageIdentityComparisons++ >= 65536)
+                if (_imageIdentityComparisons++ >= (NSUInteger)4096 * 4096 / 2)
                   {
                     _imageIdentityOverflow = YES;
                     for (GSPImage *known in _images)
