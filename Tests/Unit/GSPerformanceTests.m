@@ -14,9 +14,10 @@
 #include <unistd.h>
 #endif
 
-#if defined(__linux__)
 #include "GSPerformance/GSPELF.h"
+#if defined(__linux__)
 #include <zlib.h>
+#endif
 #include <stdlib.h>
 #include <string.h>
 
@@ -65,7 +66,6 @@ symbol_elf_fixture(NSData *buildID, BOOL richer)
     }
   return data;
 }
-#endif
 
 /* Exercise path generation at an identical instant, without changing the
    process clock or requiring a recording target. */
@@ -1101,6 +1101,27 @@ child(GSPCallTreeNode *n, NSString *name)
   [self checkRuntimeDebugSymbolsWithID: identifier imageID: [NSData data] expected: NO layout: NO];
 }
 #endif
+
+- (void) testBuildIDVerificationUsesNativeUnicodePath
+{
+  NSFileManager *fm = [NSFileManager defaultManager];
+  NSString *directory = [NSTemporaryDirectory() stringByAppendingPathComponent: [[NSUUID UUID] UUIDString]];
+  NSString *path = [directory stringByAppendingPathComponent: @"symbols-é-測試.so"];
+  NSData *identifier = [NSData dataWithBytes: "1234" length: 4];
+  XCTAssertTrue([fm createDirectoryAtPath: directory withIntermediateDirectories: YES attributes: nil error: NULL]);
+  @try
+    {
+      XCTAssertTrue([symbol_elf_fixture(identifier, YES) writeToFile: path atomically: YES]);
+      XCTAssertEqualObjects([GSPSymbolicator buildIDForImageAtPath: path], identifier);
+      XCTAssertNil([GSPSymbolicator buildIDForImageAtPath: directory]);
+      XCTAssertTrue([fm removeItemAtPath: path error: NULL]);
+      XCTAssertNil([GSPSymbolicator buildIDForImageAtPath: path]);
+    }
+  @finally
+    {
+      [fm removeItemAtPath: directory error: NULL];
+    }
+}
 
 - (void) testSymbolNames
 {

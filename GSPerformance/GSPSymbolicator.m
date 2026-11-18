@@ -441,9 +441,19 @@ debuglink_crc(NSData *data)
 static NSArray *
 file_stamp(NSString *path)
 {
+#if defined(_WIN32)
+  /* GNUstep native paths are UTF-16 here; the narrow CRT stat loses Unicode. */
+  struct _stat64 st;
+  if (_wstat64((const wchar_t *)path.fileSystemRepresentation, &st) != 0
+      || !S_ISREG(st.st_mode))
+#else
   struct stat st;
   if (stat(path.fileSystemRepresentation, &st) != 0 || !S_ISREG(st.st_mode))
+#endif
     return nil;
+  /* Windows CRT times have second resolution, st_ino may be zero, and
+     st_ctime is creation time. Its fallback stamp uses device/size/times;
+     Linux/macOS retain inode and subsecond modification/change identity. */
   long modifiedNS = 0, changedNS = 0;
 #if defined(__linux__)
   modifiedNS = st.st_mtim.tv_nsec; changedNS = st.st_ctim.tv_nsec;
