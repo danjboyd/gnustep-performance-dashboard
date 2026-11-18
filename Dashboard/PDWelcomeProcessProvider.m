@@ -1,5 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
+#define _GNU_SOURCE 1
 #import "PDWelcomeProcessProvider.h"
+#include <string.h>
+#include <limits.h>
 #if defined(__linux__)
 # include <sys/stat.h>
 # include <unistd.h>
@@ -7,22 +10,90 @@
 #endif
 
 @implementation PDWelcomeProcessProvider
+{
+  NSMutableDictionary *_mapsCache;
+}
++ (NSString *) identityFromStatData: (NSData *)data
+{
+  const unsigned char *bytes = [data bytes];
+  NSUInteger end = [data length];
+  while (end > 0 && bytes[end - 1] != ')')
+    end--;
+  if (end == 0 || end == [data length])
+    return nil;
+  NSString *tail = [[NSString alloc] initWithBytes: bytes + end length: [data length] - end
+    encoding: NSASCIIStringEncoding];
+  if (tail == nil)
+    return nil;
+  NSArray *fields = [[tail componentsSeparatedByCharactersInSet:
+    [NSCharacterSet whitespaceAndNewlineCharacterSet]] filteredArrayUsingPredicate:
+      [NSPredicate predicateWithBlock: ^BOOL(NSString *value, NSDictionary *bindings) { return [value length] != 0; }]];
+  if ([fields count] <= 19)
+    return nil;
+  NSString *identity = [fields objectAtIndex: 19];
+  return [identity length] && [identity rangeOfCharacterFromSet:
+    [[NSCharacterSet decimalDigitCharacterSet] invertedSet]].location == NSNotFound ? identity : nil;
+}
++ (NSString *) processNameFromData: (NSData *)data
+{
+  if (data == nil)
+    return nil;
+  NSString *name = [[NSString alloc] initWithData: data encoding: NSUTF8StringEncoding];
+  if (name == nil)
+    name = [[NSString alloc] initWithData: data encoding: NSISOLatin1StringEncoding];
+  return [name stringByTrimmingCharactersInSet: [NSCharacterSet newlineCharacterSet]];
+}
++ (NSNumber *) realUIDFromStatusData: (NSData *)data
+{
+  if (data == nil)
+    return nil;
+  NSString *text = [[NSString alloc] initWithData: data encoding: NSISOLatin1StringEncoding];
+  for (NSString *line in [text componentsSeparatedByString: @"\n"])
+    if ([line hasPrefix: @"Uid:"])
+      {
+        long long uid = -1;
+        NSScanner *scanner = [NSScanner scannerWithString: [line substringFromIndex: 4]];
+        if ([scanner scanLongLong: &uid] && uid >= 0 && uid <= UINT_MAX)
+          return [NSNumber numberWithUnsignedInt: (unsigned)uid];
+      }
+  return nil;
+}
++ (NSString *) attachProblemForRealUID: (NSNumber *)uid currentUID: (unsigned)currentUID
+                       helperAvailable: (BOOL)available
+{
+  if (uid != nil && [uid unsignedIntValue] != currentUID)
+    return @"Owned by another user";
+  return available ? nil : @"Profiling helper not installed";
+}
+- (NSData *) processMapsDataForPID: (int)pid
+{
+  return [NSData dataWithContentsOfFile: [NSString stringWithFormat: @"/proc/%d/maps", pid]];
+}
+- (PDGNUstepIdentity) GNUstepIdentityForPID: (int)pid identity: (NSString *)identity
+{
+  if (_mapsCache == nil)
+    _mapsCache = [NSMutableDictionary dictionary];
+  NSDictionary *cached = [_mapsCache objectForKey: @(pid)];
+  if ([[cached objectForKey: @"identity"] isEqual: identity])
+    return [[cached objectForKey: @"status"] unsignedIntegerValue];
+  NSData *maps = [self processMapsDataForPID: pid];
+  PDGNUstepIdentity status = maps == nil ? PDGNUstepUnknown : PDGNUstepNo;
+#if defined(__linux__)
+  if ([maps length] > 0 && (memmem([maps bytes], [maps length], "libgnustep-base", sizeof("libgnustep-base") - 1)
+      || memmem([maps bytes], [maps length], "libgnustep-gui", sizeof("libgnustep-gui") - 1)))
+    status = PDGNUstepYes;
+#endif
+  if (identity)
+    [_mapsCache setObject: @{ @"identity": identity, @"status": @(status) } forKey: @(pid)];
+  return status;
+}
 - (NSString *) currentIdentityForPID: (int)pid
 {
 #if defined(__linux__)
   if (pid <= 0)
     return nil;
   NSString *path = [NSString stringWithFormat: @"/proc/%d/stat", pid];
-  NSString *text = [NSString stringWithContentsOfFile: path encoding: NSUTF8StringEncoding error: NULL];
-  NSRange end = [text rangeOfString: @") " options: NSBackwardsSearch];
-  if (text == nil || end.location == NSNotFound)
-    return nil;
-  NSArray *fields = [[[text substringFromIndex: NSMaxRange(end)]
-    componentsSeparatedByCharactersInSet: [NSCharacterSet whitespaceAndNewlineCharacterSet]]
-    filteredArrayUsingPredicate: [NSPredicate predicateWithBlock:
-      ^BOOL(NSString *value, NSDictionary *bindings) { return [value length] != 0; }]];
-  /* After comm, field 3 (state) is index 0; field 22 (starttime) is 19. */
-  return [fields count] > 19 ? [fields objectAtIndex: 19] : nil;
+  return [[self class] identityFromStatData: [NSData dataWithContentsOfFile: path]];
 #else
   return nil;
 #endif
@@ -32,6 +103,7 @@
   NSMutableArray *processes = [NSMutableArray array];
 #if defined(__linux__)
   NSFileManager *fm = [NSFileManager defaultManager];
+  NSMutableSet *seenPIDs = [NSMutableSet set];
   for (NSString *entry in [fm contentsOfDirectoryAtPath: @"/proc" error: NULL])
     {
       if ([entry length] == 0 || [entry rangeOfCharacterFromSet:
@@ -44,12 +116,8 @@
       if (![identity length])
         continue;
       NSString *dir = [@"/proc" stringByAppendingPathComponent: entry];
-      struct stat st;
-      if (stat([dir fileSystemRepresentation], &st) != 0)
-        continue;
-      NSString *name = [[NSString stringWithContentsOfFile: [dir stringByAppendingPathComponent: @"comm"]
-        encoding: NSUTF8StringEncoding error: NULL]
-        stringByTrimmingCharactersInSet: [NSCharacterSet newlineCharacterSet]];
+      NSString *name = [[self class] processNameFromData: [NSData dataWithContentsOfFile:
+        [dir stringByAppendingPathComponent: @"comm"]]];
       if (![name length])
         continue;
       PDWelcomeProcess *process = [PDWelcomeProcess new];
@@ -58,36 +126,35 @@
       process.identity = identity;
       process.executablePath = [fm pathContentOfSymbolicLinkAtPath:
         [dir stringByAppendingPathComponent: @"exe"]] ?: @"";
-      NSString *maps = [NSString stringWithContentsOfFile: [dir stringByAppendingPathComponent: @"maps"]
-        encoding: NSUTF8StringEncoding error: NULL];
-      process.GNUstepIdentity = maps == nil ? PDGNUstepUnknown
-        : ([maps rangeOfString: @"libgnustep-base"].location != NSNotFound
-           || [maps rangeOfString: @"libgnustep-gui"].location != NSNotFound ? PDGNUstepYes : PDGNUstepNo);
-      if (st.st_uid != getuid())
+      process.GNUstepIdentity = [self GNUstepIdentityForPID: pid identity: identity];
+      [seenPIDs addObject: @(pid)];
+      NSNumber *uid = [[self class] realUIDFromStatusData: [NSData dataWithContentsOfFile:
+        [dir stringByAppendingPathComponent: @"status"]]];
+      if (uid != nil && [uid unsignedIntValue] != getuid())
         process.unavailableReason = @"Owned by another user";
       if ([[self currentIdentityForPID: pid] isEqual: identity])
         [processes addObject: process];
     }
+  for (NSNumber *pid in [[_mapsCache allKeys] copy])
+    if (![seenPIDs containsObject: pid])
+      [_mapsCache removeObjectForKey: pid];
 #endif
   return processes;
 }
 - (NSString *) attachProblemForProcess: (PDWelcomeProcess *)process
 {
 #if defined(__linux__)
-  struct stat st;
   NSString *dir = [NSString stringWithFormat: @"/proc/%d", process.pid];
-  if (stat([dir fileSystemRepresentation], &st) != 0)
+  if (![[NSFileManager defaultManager] fileExistsAtPath: dir])
     return @"The process is no longer available.";
-  if (st.st_uid != getuid())
-    return @"Owned by another user";
+  NSNumber *uid = [[self class] realUIDFromStatusData: [NSData dataWithContentsOfFile:
+    [dir stringByAppendingPathComponent: @"status"]]];
   BOOL direct = [GSPRecorder canAttachWithoutPrivileges] || getenv("GSP_HELPER_DIRECT") != NULL;
   NSString *helper = direct ? ([GSPRecorder bundledHelperPath] ?: [GSPRecorder installedHelperPath])
     : [GSPRecorder installedHelperPath];
-  if (helper == nil)
-    return @"Profiling helper not installed";
   /* Do not invent a ptrace/perf permission result. The existing helper performs
      the real attempt and reports its precise failure through GSPRecorder. */
-  return nil;
+  return [[self class] attachProblemForRealUID: uid currentUID: getuid() helperAvailable: helper != nil];
 #else
   return @"Process discovery for this platform is not available in this provider.";
 #endif
