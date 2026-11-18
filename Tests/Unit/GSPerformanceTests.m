@@ -18,8 +18,20 @@
 #if defined(__linux__)
 #include <zlib.h>
 #endif
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+
+/* ELF gABI values used by this fixture. Keep these file-local: platforms
+   without <elf.h> need not define constants unused by the production reader. */
+enum
+{
+  FixtureSHTSymtab = 2,
+  FixtureSHTStrtab = 3,
+  FixtureSHTNote = 7,
+  FixtureSHTDynsym = 11,
+  FixtureSTTFunc = 2
+};
 
 /* Tiny real ELF tables exercise the reader without compiler/debug packages. */
 static NSData *
@@ -42,15 +54,15 @@ symbol_elf_fixture(NSData *buildID, BOOL richer)
   memcpy(bytes + 140, "GNU", 4);
   if (buildID.length)
     memcpy(bytes + 144, buildID.bytes, buildID.length);
-  sections[1].sh_type = SHT_NOTE;
+  sections[1].sh_type = FixtureSHTNote;
   sections[1].sh_offset = 128;
   sections[1].sh_size = 16 + ((buildID.length + 3) & ~3u);
   const char names[] = "\0exported\0hidden_runtime\0another_hidden\0";
   memcpy(bytes + 256, names, sizeof(names));
-  sections[2].sh_type = SHT_STRTAB;
+  sections[2].sh_type = FixtureSHTStrtab;
   sections[2].sh_offset = 256;
   sections[2].sh_size = sizeof(names);
-  sections[3].sh_type = richer ? SHT_SYMTAB : SHT_DYNSYM;
+  sections[3].sh_type = richer ? FixtureSHTSymtab : FixtureSHTDynsym;
   sections[3].sh_offset = 512;
   sections[3].sh_size = (richer ? 3 : 1) * sizeof(Elf64_Sym);
   sections[3].sh_link = 2;
@@ -59,7 +71,7 @@ symbol_elf_fixture(NSData *buildID, BOOL richer)
   for (unsigned k = 0; k < (richer ? 3u : 1u); k++)
     {
       symbols[k].st_name = k == 0 ? 1 : k == 1 ? 10 : 25;
-      symbols[k].st_info = STT_FUNC;
+      symbols[k].st_info = FixtureSTTFunc;
       symbols[k].st_shndx = 1;
       symbols[k].st_value = 0x1000 + k * 0x100;
       symbols[k].st_size = 0x40;
@@ -1055,7 +1067,7 @@ child(GSPCallTreeNode *n, NSString *name)
   Elf64_Shdr *sections = (Elf64_Shdr *)(bytes + 1024);
   const char names[] = "\0.gnu_debuglink\0.shstrtab\0";
   memcpy(bytes + 768, names, sizeof(names));
-  sections[4].sh_type = SHT_STRTAB; sections[4].sh_offset = 768;
+  sections[4].sh_type = FixtureSHTStrtab; sections[4].sh_offset = 768;
   sections[4].sh_size = sizeof(names);
   sections[5].sh_type = SHT_PROGBITS; sections[5].sh_name = 1;
   sections[5].sh_offset = 832; sections[5].sh_size = 16;
