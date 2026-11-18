@@ -200,8 +200,12 @@ def main():
     for path in list(elf_files(os.path.join(stage, "app"))) + list(elf_files(os.path.join(stage, "runtime"))):
         subprocess.run(["strip", "--strip-unneeded", path], check=True)
         slot = Elf(path).runpath_slot()
-        if slot is None or slot[1].startswith("$ORIGIN"):
+        app_executable = os.path.join(stage, "app", "PerformanceDashboard.app", "PerformanceDashboard")
+        if slot is None or (slot[1].startswith("$ORIGIN") and path != app_executable):
             continue
+        # The app's build-tree paths are deliberately ORIGIN-relative for a
+        # path-independent linker build ID. Remove those build-only directories
+        # from its final payload too, even though they are already relative.
         relative = os.path.relpath(runtime_lib, os.path.dirname(path))
         old = set_runpath(path, "$ORIGIN/" + relative)
         print(f"stage-linux-runtime: RUNPATH {os.path.relpath(path, stage)}: {old} -> $ORIGIN/{relative}")

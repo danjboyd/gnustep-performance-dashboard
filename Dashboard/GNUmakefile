@@ -39,10 +39,13 @@ main.m_FILE_FILTER_OUT_FLAGS = -fobjc-arc
 ADDITIONAL_INCLUDE_DIRS += -I../Runtime/include -I..
 ADDITIONAL_LIB_DIRS += -L../GSPerformance/obj -L../Runtime/obj
 ADDITIONAL_GUI_LIBS += -lGSPerformance
+PD_SOURCE_PREFIX_MAPS = -ffile-prefix-map=$(abspath $(CURDIR)/..)=/PerformanceDashboard
+ADDITIONAL_OBJCFLAGS += $(PD_SOURCE_PREFIX_MAPS)
 
 ifeq (,$(WINDOWS))
 # Trellis is built separately with ARC; main.m keeps its existing MRC pool.
 TRELLIS_ROOT ?= $(CURDIR)/../out/gnustep-trellis
+PD_SOURCE_PREFIX_MAPS += -ffile-prefix-map=$(abspath $(TRELLIS_ROOT))=/gnustep-trellis
 PerformanceDashboard_OBJC_FILES += PDWelcomeWindowController.m
 PerformanceDashboard_RESOURCE_FILES += Resources/WelcomeWindow.trellis
 ADDITIONAL_INCLUDE_DIRS += -I$(TRELLIS_ROOT)/Source/Engine -I$(TRELLIS_ROOT)/Source/View
@@ -72,9 +75,9 @@ ADDITIONAL_GUI_LIBS += -lwinhttp -lshell32
 endif
 ifeq (,$(WINDOWS))
 # the build tree, and the packaged layout (app/ next to runtime/lib)
-# The leading build path follows a supplied checkout. Staging replaces the
-# complete build RUNPATH with its payload-relative runtime path.
-ADDITIONAL_LDFLAGS += -Wl,-rpath,'$(abspath $(TRELLIS_ROOT))/obj:$$ORIGIN/../../GSPerformance/obj:$$ORIGIN/../../Runtime/obj:$$ORIGIN/../../runtime/lib'
+# A generated build-tree library directory follows any supplied checkout
+# without encoding its absolute location in the app's linker build ID.
+ADDITIONAL_LDFLAGS += -Wl,-rpath,'$$ORIGIN/../../out/trellis-runtime:$$ORIGIN/../../GSPerformance/obj:$$ORIGIN/../../Runtime/obj:$$ORIGIN/../../runtime/lib'
 endif
 
 include $(GNUSTEP_MAKEFILES)/application.make
@@ -85,13 +88,17 @@ before-all:: trellis
 trellis:
 	@test -f "$(TRELLIS_ROOT)/GNUmakefile" || { echo "Set TRELLIS_ROOT to the pinned Trellis source checkout" >&2; exit 1; }
 	@$(MAKE) -C "$(TRELLIS_ROOT)" hot_reload=no
+	@mkdir -p "$(CURDIR)/../out/trellis-runtime"
+	@for lib in libTrellis.so.0 libTrellisEngine.so.0; do \
+	  ln -sfn "$(abspath $(TRELLIS_ROOT))/obj/$$lib" "$(CURDIR)/../out/trellis-runtime/$$lib"; \
+	done
 endif
 
 .PHONY: updater
 before-all:: updater
 updater:
-	@$(MAKE) -C "$(UPDATER_CORE_DIR)"
-	@$(MAKE) -C "$(UPDATER_UI_DIR)"
+	@$(MAKE) -C "$(UPDATER_CORE_DIR)" OBJCFLAGS="$(shell gnustep-config --objc-flags) -DHAVE_MODE_T $(PD_SOURCE_PREFIX_MAPS)"
+	@$(MAKE) -C "$(UPDATER_UI_DIR)" OBJCFLAGS="$(shell gnustep-config --objc-flags) -DHAVE_MODE_T $(PD_SOURCE_PREFIX_MAPS)"
 	@$(MAKE) -C "$(UPDATER_HELPER_DIR)"
 
 # GPStandardUpdaterController looks for the helper beside the executable.
