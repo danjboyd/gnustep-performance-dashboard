@@ -112,6 +112,7 @@ class CSDSourceChecks(unittest.TestCase):
             + source.policy.sha(file) + ' ' + str(file.stat().st_size) + ' ' + file.name + '\n')
         self.manifest = dict(schemaVersion=1, applicationCommit=COMMIT, applicationLockPath=self.config['lock'],
             customToolchainLockSHA256=self.lock_sha, lockFile=copy_lock, gitSources=records, patches=patches,
+            trellisSource=dict(inputs['gnustep-trellis'], name='gnustep-trellis'),
             themeSource=dict(inputs['adwaita'], name='adwaita'),
             builderSource=dict(self.config['builder'], name='gnustep-cli-new'),
             packagerSource=dict(inputs['gnustep-packager'], name='gnustep-packager'), fallbackSource=fallback,
@@ -130,7 +131,7 @@ class CSDSourceChecks(unittest.TestCase):
     def test_complete_synthetic_archive_has_16_sdk_patches_and_exact_theme_builder_fallback(self):
         result = self.verify()
         self.assertEqual(result['patchCount'], 16)
-        self.assertEqual(result['gitSourceCount'], 14)
+        self.assertEqual(result['gitSourceCount'], 15)
         by_name = {value['name']: value for value in self.manifest['gitSources']}
         self.assertEqual(by_name['adwaita']['revision'], self.manifest['themeSource']['revision'])
         self.assertEqual(by_name['gnustep-cli-new']['revision'], self.config['builder']['revision'])
@@ -140,7 +141,7 @@ class CSDSourceChecks(unittest.TestCase):
             target.add(self.tree, arcname='sources')
         self.assertTrue(source.verify_bundle(archive, COMMIT, self.lock_sha)['ok'])
 
-    def test_shared_collector_handoff_preserves_strong_fourteen_source_receipt(self):
+    def test_shared_collector_handoff_preserves_strong_fifteen_source_receipt(self):
         spec = importlib.util.spec_from_file_location('shared_core', ROOT / 'scripts/collect-release-sources.py')
         core = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(core)
@@ -161,7 +162,7 @@ class CSDSourceChecks(unittest.TestCase):
             verifier, commit = core.finish_evidence(custom, work, self.tree / 'metadata')
         verifier.write_checksums(work)
         result = verifier.verify_tree(work, commit, self.lock_sha)
-        self.assertEqual(result['gitSourceCount'], 14)
+        self.assertEqual(result['gitSourceCount'], 15)
         self.assertEqual(result['patchCount'], 16)
         self.assertEqual(result['applicationCommit'], COMMIT)
         # The compatibility CLI must delegate, not acquire any sources itself.
@@ -215,6 +216,19 @@ class CSDSourceChecks(unittest.TestCase):
         self.manifest['gitSources'] = [v for v in self.manifest['gitSources'] if v['name'] != 'adwaita']
         self.save()
         with self.assertRaisesRegex(ValueError, 'corresponding source: adwaita'):
+            self.verify()
+
+    def test_missing_trellis_source_refused(self):
+        self.manifest['gitSources'] = [v for v in self.manifest['gitSources'] if v['name'] != 'gnustep-trellis']
+        self.save()
+        with self.assertRaisesRegex(ValueError, 'corresponding source: gnustep-trellis'):
+            self.verify()
+
+    def test_changed_trellis_revision_refused(self):
+        entry = next(v for v in self.manifest['gitSources'] if v['name'] == 'gnustep-trellis')
+        entry['revision'] = '0' * 40
+        self.save()
+        with self.assertRaisesRegex(ValueError, 'corresponding source: gnustep-trellis'):
             self.verify()
 
     def test_csd_patch_missing_or_changed_refused(self):

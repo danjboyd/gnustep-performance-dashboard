@@ -141,6 +141,7 @@ def finish_evidence(custom, work, evidence):
         patches=[dict(component=c["name"], lockPath=p["path"], sha256=p["sha256"],
                       file="custom-sdk/" + p["path"], applicationPath=str((lock_path.parent / p["path"]).relative_to(root)))
                  for c in lock["components"] for p in c.get("patches", [])],
+        trellisSource=dict(inputs["gnustep-trellis"], name="gnustep-trellis"),
         themeSource=dict(inputs["adwaita"], name="adwaita"), builderSource=dict(config["builder"], name="gnustep-cli-new"),
         packagerSource=dict(inputs["gnustep-packager"], name="gnustep-packager"), fallbackSource=config["fallbackSource"],
         publicBackportIndex=dict(file=index_file, sha256=check.digest(index)), distributionBinaries=binaries,
@@ -190,7 +191,8 @@ def collect(args):
 
     auxiliary = json.loads((root / "packaging/linux/csd-ci-inputs.json").read_text())["auxiliarySources"] if custom else [dict(
         name="appimage-runtime", url="https://github.com/AppImage/type2-runtime.git", revision="caf24f9f712084686bfc24a70b75e50df0aefb9c")]
-    for component in lock["components"] + [dict(inputs["adwaita"], name="adwaita"),
+    for component in lock["components"] + [dict(inputs["gnustep-trellis"], name="gnustep-trellis"),
+            dict(inputs["adwaita"], name="adwaita"),
             dict(inputs["gnustep-packager"], name="gnustep-packager"),
             dict(name="gnustep-cli-new", url="https://github.com/danjboyd/gnustep-cli-new.git",
                  revision=BUILDER if custom else "e7915a3984f851a4137591899b047f40ee1f7713"),

@@ -16,6 +16,9 @@ licenses and notices. In particular, third_party/gnustep-packager-updater is
 MIT with its bundled Monocypher under BSD-2-Clause OR CC0-1.0. The AppImage
 contains separately licensed GNUstep libraries, tools, themes and distribution
 libraries; see its usr/metadata/licenses directory for those notices.
+The Linux welcome window links the separate Trellis and TrellisEngine shared
+libraries under LGPL-2.1-or-later. Their notice is Trellis.txt in that directory;
+their matching pinned source accompanies the Linux corresponding-source archive.
 
 The GPL application license does not change the license of applications being
 profiled. Observe the LGPL terms when distributing our libraries or agent.

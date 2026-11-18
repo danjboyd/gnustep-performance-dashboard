@@ -20,6 +20,18 @@ recording prerequisites, including host libunwind and binutils.
 
 ## Local gates and packaging
 
+The v0.1.8 welcome-window work adds the pinned `gnustep-trellis` checkout from
+`packaging/release-inputs.json`. `package-build.sh` builds it separately with
+ARC and `hot_reload=no`, and writes a receipt for both shared libraries.
+`package-stage.sh` copies their dependency closure, the welcome resource and
+the LGPL notice, then compares source and staged build IDs and resource bytes.
+Provenance records both library identities and the receipt. The custom Linux
+corresponding-source inventory now requires fifteen Git sources, including
+Trellis; omitting it or substituting its revision fails verification.
+Before any release, verify that every exact source archive is accessible
+without credentials through the existing public-codeload verifier. Adding
+this dependency does not waive that gate or authorize publication.
+
 In a shell with GNUstep.sh sourced:
 
 ```sh

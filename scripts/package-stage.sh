@@ -37,6 +37,7 @@ app_source="$repo_root/Dashboard/PerformanceDashboard.app"
 gnustep_root="${GNUSTEP_CLI_ROOT:-$HOME/.local/share/gnustep-cli}"
 gnustep_library="$gnustep_root/Local/Library"
 gnustep_tools="$gnustep_root/Local/Tools"
+export TRELLIS_ROOT="${TRELLIS_ROOT:-$repo_root/out/gnustep-trellis}"
 
 require() {
   if [[ ! -e "$1" ]]; then
@@ -77,6 +78,10 @@ if [[ ! -x "$app_source/PerformanceDashboard" ]]; then
   "$repo_root/scripts/package-build.sh"
 fi
 python3 "$repo_root/scripts/app-version.py" check --bundle "$app_source"
+"$repo_root/scripts/pinned-checkout.sh" --verify gnustep-trellis "$TRELLIS_ROOT"
+require "$TRELLIS_ROOT/obj/pd-build-receipt.json" "scripts/package-build.sh Trellis build receipt"
+python3 "$repo_root/scripts/trellis-package.py" source "$TRELLIS_ROOT"
+require "$app_source/Resources/WelcomeWindow.trellis" "welcome layout resource"
 for built in "$app_source/Resources/gsp-launch" "$app_source/Resources/libgsperf-agent.so" "$app_source/Resources/gstrace-helper" \
              "$repo_root/GSPerformance/obj/libGSPerformance.so.0" "$repo_root/Tools/gstrace/obj/gstrace"; do
   require "$built" "scripts/package-build.sh"
@@ -138,6 +143,7 @@ cp "$app_source/Resources/gsp-launch" "$runtime/lib/gsp-launch"
 # Resources links only libc, so nothing is added for it.
 python3 "$repo_root/scripts/stage-linux-runtime.py" "$stage_root" \
   "$repo_root/GSPerformance/obj" "$repo_root/Runtime/obj" \
+  "$TRELLIS_ROOT/obj" \
   "$gnustep_library/Libraries" "$gnustep_root/lib"
 
 # GNUstep.conf with paths relative to itself (gnustep-base resolves './' and
@@ -231,6 +237,8 @@ notice PerformanceDashboard.txt "Performance Dashboard, performance analysis for
   "GPL-3.0-or-later" "https://github.com/danjboyd/gnustep-performance-dashboard" "$repo_root/COPYING"
 notice GSPerformance.txt "GSPerformance, recording agent, signpost/logging libraries and public headers" \
   "LGPL-2.1-or-later" "https://github.com/danjboyd/gnustep-performance-dashboard" "$repo_root/COPYING.LIB"
+notice Trellis.txt "Trellis (libTrellis and libTrellisEngine)" "LGPL-2.1-or-later" \
+  "https://github.com/danjboyd/gnustep-trellis" "$TRELLIS_ROOT/COPYING.LIB"
 notice GNUstep-base.txt "GNUstep Base (libgnustep-base)" "LGPL-2.1-or-later" \
   "https://github.com/gnustep/libs-base" "$license_texts/libs-base-COPYING.LIB"
 notice GNUstep-gui.txt "GNUstep GUI (libgnustep-gui)" "LGPL-2.1-or-later" \
@@ -258,6 +266,8 @@ cat > "$stage_root/metadata/stage-summary.json" <<EOF
 EOF
 
 printf 'package-stage: staged %s (%s)\n' "$stage_root" "$(du -sh "$stage_root" | cut -f1)"
+cp "$TRELLIS_ROOT/obj/pd-build-receipt.json" "$stage_root/metadata/trellis-build-receipt.json"
+python3 "$repo_root/scripts/trellis-package.py" verify "$stage_root"
 
 # A relocatable CLI entry point also scrubs the packaged runtime from targets.
 mv "$stage_root/runtime/bin/gstrace" "$stage_root/runtime/bin/gstrace-bin"

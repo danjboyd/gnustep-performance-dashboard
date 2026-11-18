@@ -96,10 +96,17 @@ labels and Zombies with that runtime remain unverified.
 In a shell where `GNUstep.sh` has been sourced:
 
 ```sh
+export TRELLIS_ROOT=/path/to/gnustep-trellis
 make             # runtime, framework, gstrace, gstrace-helper, PerformanceDashboard.app
 make check       # unit tests (tools-xctest) and end-to-end recordings
 make install     # GNUstep Local domain; honours DESTDIR
 ```
+
+The Linux welcome window uses the separate Trellis libraries. Use the exact
+`gnustep-trellis` revision in `packaging/release-inputs.json`; the app builds
+that checkout with ARC and `hot_reload=no`. Packaging acquires and checks the
+pin automatically, or accepts `TRELLIS_ROOT` pointing at that clean revision.
+Trellis source is included in the Linux corresponding-source inventory.
 
 The unit tests need [tools-xctest](https://github.com/danjboyd/tools-xctest);
 the end-to-end suite runs the AppKit fixture under `Xvfb` when it is available

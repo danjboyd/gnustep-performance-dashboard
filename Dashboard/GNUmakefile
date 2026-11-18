@@ -77,7 +77,7 @@ ADDITIONAL_GUI_LIBS += -lwinhttp -lshell32
 endif
 ifeq (,$(WINDOWS))
 # the build tree, and the packaged layout (app/ next to runtime/lib)
-ADDITIONAL_LDFLAGS += -Wl,-rpath,'$$ORIGIN/../../GSPerformance/obj:$$ORIGIN/../../Runtime/obj:$$ORIGIN/../../runtime/lib'
+ADDITIONAL_LDFLAGS += -Wl,-rpath,'$$ORIGIN/../../GSPerformance/obj:$$ORIGIN/../../Runtime/obj:$$ORIGIN/../../out/gnustep-trellis/obj:$$ORIGIN/../../runtime/lib'
 endif
 
 include $(GNUSTEP_MAKEFILES)/application.make

@@ -39,7 +39,7 @@ def git_sources(root, lock, build_sources):
     policy.require(build_sources.get('gitSources') == [dict(fallback, resolvedCommit=fallback['revision'])],
                    'actual fallback source receipt does not match the reviewed identity')
     records = [dict(name=c['name'], url=c['url'], revision=c['revision']) for c in lock['components']]
-    records += [dict(inputs['adwaita'], name='adwaita'), dict(inputs['gnustep-packager'], name='gnustep-packager'),
+    records += [dict(inputs['gnustep-trellis'], name='gnustep-trellis'), dict(inputs['adwaita'], name='adwaita'), dict(inputs['gnustep-packager'], name='gnustep-packager'),
                 dict(config['builder'], name='gnustep-cli-new'), dict(fallback)] + config['auxiliarySources']
     policy.require(len({r['name'] for r in records}) == len(records), 'duplicate source identity')
     for record in records:
@@ -95,7 +95,7 @@ def verify_tree(directory, commit, expected_lock_sha):
     by_name = {entry['name']: entry for entry in listed}
     policy.require(len(by_name) == len(listed), 'duplicate Git source records')
     expected = {c['name']: (c['url'], c['revision']) for c in lock['components']}
-    for field in ('themeSource', 'builderSource', 'packagerSource', 'fallbackSource'):
+    for field in ('trellisSource', 'themeSource', 'builderSource', 'packagerSource', 'fallbackSource'):
         value = manifest[field]
         expected[value['name']] = (value['url'], value['revision'])
     for name, (url, revision) in expected.items():
@@ -151,7 +151,7 @@ def verify_tree(directory, commit, expected_lock_sha):
         policy.require(app.pax_headers.get('comment') == commit, 'application archive commit mismatch')
         release_inputs = json.load(app.extractfile('PerformanceDashboard/packaging/release-inputs.json'))
         config = json.load(app.extractfile('PerformanceDashboard/packaging/linux/csd-ci-inputs.json'))
-        for key, name in [('adwaita', 'themeSource'), ('gnustep-packager', 'packagerSource')]:
+        for key, name in [('gnustep-trellis', 'trellisSource'), ('adwaita', 'themeSource'), ('gnustep-packager', 'packagerSource')]:
             policy.require(all(manifest[name][field] == release_inputs[key][field] for field in ('url', 'revision')), 'application source pin differs')
         policy.require(all(manifest['builderSource'][field] == config['builder'][field] for field in ('url', 'revision')), 'application builder pin differs')
         policy.require(manifest['fallbackSource'] == config['fallbackSource'], 'application fallback pin differs')

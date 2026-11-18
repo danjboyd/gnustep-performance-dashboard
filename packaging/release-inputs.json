@@ -1,5 +1,10 @@
 {
   "comment": "Inputs release builds take from other repositories, each pinned to a tag checked against its revision (scripts/pinned-checkout.sh). libs-back has its own lock file, with its patches (packaging/linux/libs-back). Local builds can still point at their own trees with ADWAITA_THEME and LIBS_BACK_BUNDLE. The same pins as LinDirStat's AppImage.",
+  "gnustep-trellis": {
+    "comment": "Separate ARC shared libraries for the Linux welcome window; build with hot_reload=no. Matching source availability is a separate pre-release gate.",
+    "url": "https://github.com/danjboyd/gnustep-trellis.git",
+    "revision": "f8834a27305721d3e8373b4d06242ee2c8c90122"
+  },
   "adwaita": {
     "url": "https://github.com/danjboyd/plugins-themes-Adwaita.git",
     "tag": "0.1.0-alpha13",

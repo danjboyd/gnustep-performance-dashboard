@@ -75,6 +75,18 @@ class ProvenanceChecks(unittest.TestCase):
                              (self.provenance, "custom-toolchain-provenance.json"),
                              (self.receipt, "adwaita-build-receipt.json")):
             (metadata / name).write_bytes(source.read_bytes())
+        for name in writer.trellis.LIBRARIES:
+            file = self.payload / 'runtime/lib' / name
+            file.write_bytes(b"\x7fELFsynthetic Trellis payload")
+        resource = self.payload / writer.trellis.RESOURCE
+        resource.write_bytes((ROOT / 'Dashboard/Resources/WelcomeWindow.trellis').read_bytes())
+        licenses = metadata / 'licenses'
+        licenses.mkdir()
+        (licenses / 'Trellis.txt').write_text('synthetic LGPL notice')
+        (metadata / 'trellis-build-receipt.json').write_text(json.dumps(dict(schemaVersion=1,
+            source=writer.trellis.pin(), hotReload=False,
+            libraries={name: self.fake_identity(self.payload / 'runtime/lib' / name)
+                       for name in writer.trellis.LIBRARIES})))
         self.args = argparse.Namespace(lock=str(self.lock), sdk=str(self.sdk), payload=str(self.payload),
             backend=str((self.sdk / writer.check.BACK).parent), backend_sha256=writer.check.digest(self.sdk / writer.check.BACK),
             theme=str(self.theme), theme_sha256=writer.check.digest(self.theme / "Adwaita"),
@@ -82,6 +94,7 @@ class ProvenanceChecks(unittest.TestCase):
             version="0.1.7-review", source_dirty="false", source_diff_sha256="d" * 64)
         self.addCleanup(patch.stopall)
         patch.object(writer, "identity", side_effect=self.fake_identity).start()
+        patch.object(writer.trellis, "identity", side_effect=self.fake_identity).start()
         patch.object(writer.check.subprocess, "run", return_value=subprocess.CompletedProcess(
             [], 0, "0000 T GSThemeInstallBackendDefaults\n", "")).start()
 
@@ -91,7 +104,7 @@ class ProvenanceChecks(unittest.TestCase):
 
     def test_fresh_record_has_custom_sources_and_no_managed_recipe(self):
         value = writer.make_record(self.args)
-        self.assertEqual(set(value["inputs"]), {"customToolchain", "adwaita", "packager"})
+        self.assertEqual(set(value["inputs"]), {"customToolchain", "adwaita", "packager", "trellis"})
         self.assertFalse(value["officialToolchain"])
         self.assertEqual(value["inputs"]["customToolchain"]["lock"], json.loads(self.lock.read_text()))
         self.assertEqual(value["inputs"]["customToolchain"]["sdkProvenance"], json.loads(self.provenance.read_text()))
@@ -122,11 +135,45 @@ class ProvenanceChecks(unittest.TestCase):
 
     def test_missing_embedded_inputs_refuse(self):
         for path in (self.payload / "metadata").iterdir():
+            if not path.is_file():
+                continue
             saved = path.read_bytes()
             path.unlink()
             with self.subTest(path=path.name), self.assertRaises(OSError):
                 writer.make_record(self.args)
             path.write_bytes(saved)
+
+    def test_trellis_source_or_hot_reload_change_refuses(self):
+        path = self.payload / 'metadata/trellis-build-receipt.json'
+        original = json.loads(path.read_text())
+        for field, value in [('source', dict(url='https://github.com/example/other.git', revision='0' * 40)),
+                             ('hotReload', True)]:
+            record = dict(original, **{field: value})
+            path.write_text(json.dumps(record))
+            with self.subTest(field=field), self.assertRaisesRegex(ValueError, 'source/options differ'):
+                writer.make_record(self.args)
+
+    def test_missing_trellis_library_or_resource_refuses(self):
+        for relative in ['runtime/lib/' + name for name in writer.trellis.LIBRARIES] + [writer.trellis.RESOURCE]:
+            path = self.payload / relative
+            saved = path.read_bytes()
+            path.unlink()
+            with self.subTest(path=relative), self.assertRaises(OSError):
+                writer.make_record(self.args)
+            path.write_bytes(saved)
+
+    def test_changed_trellis_build_id_or_resource_refuses(self):
+        path = self.payload / 'metadata/trellis-build-receipt.json'
+        record = json.loads(path.read_text())
+        original = path.read_bytes()
+        record['libraries']['libTrellis.so.0']['buildId'] = '0' * 40
+        path.write_text(json.dumps(record))
+        with self.assertRaisesRegex(ValueError, 'Trellis payload build ID differs'):
+            writer.make_record(self.args)
+        path.write_bytes(original)
+        (self.payload / writer.trellis.RESOURCE).write_text('changed resource')
+        with self.assertRaisesRegex(ValueError, 'welcome resource differs'):
+            writer.make_record(self.args)
 
     def test_changed_embedded_lock_refuses(self):
         (self.payload / "metadata/custom-toolchain-lock.json").write_text("{}")

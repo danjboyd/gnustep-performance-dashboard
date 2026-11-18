@@ -85,7 +85,12 @@
         "runtime/lib/libgnustep-gui.so.0.32",
         "runtime/System/Library/Bundles/libgnustep-back-032.bundle/libgnustep-back-032",
         "runtime/System/Library/Themes/Adwaita.theme/Adwaita",
-        "runtime/bin/gstrace-bin"
+        "runtime/bin/gstrace-bin",
+        "runtime/lib/libTrellis.so.0",
+        "runtime/lib/libTrellisEngine.so.0",
+        "app/PerformanceDashboard.app/Resources/WelcomeWindow.trellis",
+        "metadata/licenses/Trellis.txt",
+        "metadata/trellis-build-receipt.json"
       ],
       "timeoutSeconds": 30
     },
@@ -164,6 +169,13 @@
         "source": "GSPerformance, libgsperf-agent, libgsperf and public headers",
         "homepage": "https://github.com/danjboyd/gnustep-performance-dashboard",
         "stageRelativePath": "metadata/licenses/GSPerformance.txt"
+      },
+      {
+        "name": "Trellis and TrellisEngine",
+        "license": "LGPL-2.1-or-later",
+        "source": "Pinned shared-library source; see corresponding source archive",
+        "homepage": "https://github.com/danjboyd/gnustep-trellis",
+        "stageRelativePath": "metadata/licenses/Trellis.txt"
       },
       {
         "name": "GNUstep Base",

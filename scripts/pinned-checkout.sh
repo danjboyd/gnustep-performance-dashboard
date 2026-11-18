@@ -6,7 +6,7 @@
 #   scripts/pinned-checkout.sh --verify NAME DIR # DIR must be a clean tree at the pin
 #   scripts/pinned-checkout.sh --field NAME KEY  # print url, tag or revision
 #
-# NAME is adwaita or gnustep-packager (--field also reads
+# NAME is adwaita, gnustep-packager or gnustep-trellis (--field also reads
 # appimagetool, a download: url, version, sha256). When the pin has a tag,
 # the tag is fetched and must point at the revision, so a moved tag fails
 # rather than building something else. The checkout prints DIR.

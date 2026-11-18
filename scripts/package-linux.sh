@@ -196,7 +196,11 @@ if [[ "$csd_mode" = 1 ]]; then
 fi
 
 python3 - "dist/packages/PerformanceDashboard-$version-x86_64.provenance.json" <<PY
-import json, sys, pathlib, subprocess, os
+import json, sys, pathlib, subprocess, os, importlib.util
+spec = importlib.util.spec_from_file_location("trellis_package", "scripts/trellis-package.py")
+trellis = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(trellis)
+trellis_record = trellis.verify(pathlib.Path("$root"))
 inputs = json.load(open("packaging/release-inputs.json"))
 lock = json.load(open("packaging/linux/libs-back/libs-back.lock.json"))
 toolchain_root = pathlib.Path(os.environ.get("GNUSTEP_CLI_ROOT", str(pathlib.Path.home() / ".local/share/gnustep-cli")))
@@ -216,12 +220,14 @@ json.dump({
     "builtBy": "${GITHUB_ACTIONS:+github-actions}" or "local",
     "inputs": {
         "adwaita": pin("adwaita"),
+        "gnustep-trellis": pin("gnustep-trellis"),
         "gnustep-packager": dict(pin("gnustep-packager"), used="$packager_commit"),
         "appimagetool": pin("appimagetool"),
         "gnustep-toolchain": pin("gnustep-toolchain"),
         "libs-back": {"revision": lock["revision"], "patches": [{"path": p["path"], "sha256": p["sha256"]} for p in lock["patches"]]},
     },
     "buildIds": {"app": "$app_id", "agent": "$agent_id", "adwaita": "$theme_id", "libs-back": "$back_id"},
+    "trellis": trellis_record,
     # The toolchain the AppImage bundles (the gnustep-cli-new install it was
     # built against), to compare builds made on different machines.
     "toolchainBuildIds": dict(line.split("=", 1) for line in """$toolchain_ids""".split()),

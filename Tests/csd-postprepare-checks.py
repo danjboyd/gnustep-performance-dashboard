@@ -112,9 +112,9 @@ class PostPrepareChecks(unittest.TestCase):
              patch.object(core.subprocess, 'check_output', side_effect=check_output), \
              patch.object(core.subprocess, 'run', side_effect=run), patch.dict(os.environ, CSD_MODE='production'):
             result = wrapper.collect(repo, '0.1.7', Path('dist/ci/csd-review'), sdk)
-        self.assertEqual(result['gitSourceCount'], 14); self.assertEqual(result['patchCount'], 16)
+        self.assertEqual(result['gitSourceCount'], 15); self.assertEqual(result['patchCount'], 16)
         self.assertEqual(checked_tools, ['apt-get', 'dpkg-query', 'dpkg-source'])
-        self.assertEqual(len(fetched), 13)  # builder source comes from local git archive
+        self.assertEqual(len(fetched), 14)  # builder source comes from local git archive
         self.write(work / 'logs/sources-verification.json', result)
         for source in (work / 'container-inputs.json', work / 'theme-receipt.json', sdk / 'pd-csd-cache-receipt.json',
                        work / 'logs/backend-closure.json', work / 'logs/payload-closure.json', work / 'logs/sources-verification.json'):

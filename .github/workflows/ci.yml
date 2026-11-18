@@ -56,6 +56,9 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
         run: .github/scripts/install-gnustep.sh
 
+      - name: Acquire pinned Trellis source
+        run: scripts/pinned-checkout.sh gnustep-trellis "$PWD/out/gnustep-trellis"
+
       - name: Build
         run: |
           . "$PREFIX/System/Library/Makefiles/GNUstep.sh"

@@ -16,6 +16,15 @@ set +u
 . "$gnustep_root/System/Library/Makefiles/GNUstep.sh"
 set -u
 
+# Keep Trellis outside the application source and build its ARC targets with
+# the same SDK. A supplied checkout must match the reviewed revision exactly.
+export TRELLIS_ROOT="${TRELLIS_ROOT:-$("$repo_root/scripts/pinned-checkout.sh" gnustep-trellis "$repo_root/out/gnustep-trellis")}"
+"$repo_root/scripts/pinned-checkout.sh" --verify gnustep-trellis "$TRELLIS_ROOT"
+make -C "$TRELLIS_ROOT" clean hot_reload=no
+make -C "$TRELLIS_ROOT" -j"${PD_BUILD_JOBS:-2}" hot_reload=no
+python3 "$repo_root/scripts/trellis-package.py" receipt "$TRELLIS_ROOT" \
+  --output "$TRELLIS_ROOT/obj/pd-build-receipt.json"
+
 # Objects made against a different GNUstep installation are not reusable:
 # make does not know that the toolchain/environment changed.
 make -C "$repo_root" clean

@@ -20,6 +20,9 @@ sys.dont_write_bytecode = True
 spec = importlib.util.spec_from_file_location("csd_package_check", Path(__file__).with_name("check-csd-package.py"))
 check = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(check)
+spec = importlib.util.spec_from_file_location("trellis_package", Path(__file__).with_name("trellis-package.py"))
+trellis = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(trellis)
 
 
 def identity(path):
@@ -41,6 +44,7 @@ def make_record(args):
     input_result = check.check_inputs(args)
     payload = Path(args.payload).resolve(strict=True)
     capabilities = check.check_staged(payload)
+    trellis_record = trellis.verify(payload)
     sdk = Path(args.sdk).resolve(strict=True)
     lock = bound_json(payload, "metadata/custom-toolchain-lock.json", args.lock)
     sdk_record = bound_json(payload, "metadata/custom-toolchain-provenance.json",
@@ -77,11 +81,13 @@ def make_record(args):
                   and theme_source["buildId"] == theme_final["buildId"], "payload theme identity mismatch")
     ties["adwaita"] = {"source": theme_source, "payload": theme_final,
                        "comparison": "same build ID; pre/post transformation SHA recorded"}
+    ties.update(trellis_record["payloadIdentityChecks"])
     application = {}
     for relative in ("app/PerformanceDashboard.app/PerformanceDashboard",
                      "app/PerformanceDashboard.app/Resources/libgsperf-agent.so",
                      "app/PerformanceDashboard.app/Resources/gsp-launch", "runtime/lib/gsp-launch"):
         application[relative] = identity(check.inside(payload, payload / relative))
+    application[trellis.RESOURCE] = {"sha256": trellis_record["resource"]["sha256"]}
     # Construct a fresh whitelist. Never merge in the old managed-recipe JSON.
     return {
         "schemaVersion": 1,
@@ -96,6 +102,7 @@ def make_record(args):
                                  "sdkProvenance": sdk_record},
             "adwaita": {"sourceRevision": theme_record["themeSourceRevision"], "buildReceipt": theme_record},
             "packager": {"usedCommit": args.packager_commit},
+            "trellis": {"source": trellis_record["source"], "buildReceipt": trellis_record["buildReceipt"]},
         },
         "patchSHA256": [{"component": component["name"], "path": patch["path"], "sha256": patch["sha256"]}
                         for component in lock["components"] for patch in component.get("patches", [])],

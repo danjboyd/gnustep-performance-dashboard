@@ -81,7 +81,7 @@ class CustomSources(unittest.TestCase):
             prefix = 'PerformanceDashboard-0.1.7-sources/'
             names = archive.getnames()
             inventory = json.loads(archive.extractfile(prefix + 'sources.json').read())
-            self.assertEqual(len(inventory), 14)
+            self.assertEqual(len(inventory), 15)
             for component in self.lock['components']:
                 self.assertIn(prefix + component['name'] + '-' + component['revision'] + '.tar.gz', names)
                 for entry in component['patches']:
