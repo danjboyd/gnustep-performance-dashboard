@@ -41,7 +41,7 @@ def select_custom(args):
     check.require(not git(root, "status", "--porcelain"), "custom source requires a clean application checkout")
     lock_path = args.custom_lock.resolve(strict=True)
     lock = json.loads(lock_path.read_text())
-    review_path = check.inside(lock_path.parent, lock_path.parent / lock["pd_review"]["review_inputs"])
+    review_path = check.review_inputs_for_lock(lock_path, root)
     reviewed = check.check_review_inputs(review_path)
     check.require(reviewed["lockSHA256"] == check.digest(lock_path), "review lock mismatch")
     if marker.exists():
@@ -78,6 +78,9 @@ def copy_custom(custom, work):
     shutil.copy2(lock_path, destination / lock_path.name)
     review_path = custom["review_path"]
     shutil.copy2(review_path, destination / review_path.name)
+    legacy = check.inside(lock_path.parent, lock_path.parent / custom["lock"]["pd_review"]["review_inputs"])
+    if legacy != review_path:
+        shutil.copy2(legacy, destination / legacy.name)
     shutil.copy2(custom["provenance_path"], destination / "gnustep-toolchain-provenance.json")
     review = custom["review"]
     policy = review["backendNeededPolicy"]["path"]
@@ -96,7 +99,8 @@ def copy_custom(custom, work):
         "with git apply in the listed per-component order (16 total), from this directory. "
         "Use the lock configure_args and the archived gnustep-cli-new custom builder at " + BUILDER + ".\n"
         "The CSD application patch is already applied in PerformanceDashboard.tar; do not apply it twice. "
-        "The review manifest binds its patch and applied-source hashes.\n"
+        "The active application review manifest (" + review_path.name + ") binds its patch and applied-source hashes. "
+        "The SDK lock's earlier review record is preserved separately as historical evidence.\n"
         "SDK provenance binds component revisions/configuration/applied patches to the lock. "
         "It has no builder-revision field; the included clean builder checkout identity is the "
         "reviewed lock's builder_inspection_revision, not a new SDK provenance claim.\n")

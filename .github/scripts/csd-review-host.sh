@@ -9,7 +9,8 @@ pd_state="$pd_work/container-inputs.json"
 pd_policy="$pd_repo/.github/scripts/csd-review-state.py"
 python3 "$pd_repo/.github/scripts/release-selection.py" --custom-mode "${CSD_MODE:-review}" --version "${CSD_VERSION:-}" >/dev/null
 [[ "$(git -C "$pd_builder" rev-parse HEAD)" == 4d5504bbedf076f824c952f4ab198d09547c8c3c ]]
-python3 "$pd_repo/scripts/check-csd-package.py" review-inputs "$pd_repo/packaging/linux/v017-review-inputs.json"
+pd_review="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["reviewInputs"])' "$pd_repo/packaging/linux/csd-ci-inputs.json")"
+python3 "$pd_repo/scripts/check-csd-package.py" review-inputs "$pd_repo/$pd_review"
 python3 "$pd_policy" builder-check --root "$pd_repo" --builder "$pd_builder"
 mkdir -p "$pd_work/logs"
 case "${1:-}" in

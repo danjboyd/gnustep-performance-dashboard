@@ -48,6 +48,7 @@ class CSDSourceChecks(unittest.TestCase):
         self.lock_sha = source.policy.sha(lock_path)
         paths = [self.config['lock'], 'packaging/release-inputs.json', 'packaging/linux/csd-ci-inputs.json',
                  'packaging/linux/csd-v7/backports.json', self.config['reviewInputs'], 'packaging/linux/robin-map-source.json']
+        paths.append('packaging/linux/' + self.lock['pd_review']['review_inputs'])
         review = source.policy.load(ROOT / self.config['reviewInputs'])
         for patch in review['applicationPatches']:
             paths += [patch['path'], patch['appliedSource']['path']]
@@ -223,6 +224,29 @@ class CSDSourceChecks(unittest.TestCase):
         self.save()
         with self.assertRaisesRegex(ValueError, 'corresponding source: gnustep-trellis'):
             self.verify()
+
+    def test_missing_trellis_record_has_clean_policy_error(self):
+        del self.manifest['trellisSource']
+        self.save()
+        with self.assertRaisesRegex(ValueError, 'Trellis corresponding source record missing'):
+            self.verify()
+
+    def test_older_archive_without_trellis_dependency_still_verifies(self):
+        inputs = self.project / 'packaging/release-inputs.json'
+        value = json.loads(inputs.read_text())
+        del value['gnustep-trellis']
+        inputs.write_text(json.dumps(value))
+        removed = next(v for v in self.manifest['gitSources'] if v['name'] == 'gnustep-trellis')
+        (self.tree / removed['archiveFile']).unlink()
+        self.manifest['gitSources'] = [v for v in self.manifest['gitSources'] if v is not removed]
+        del self.manifest['trellisSource']
+        with tarfile.open(self.tree / 'PerformanceDashboard.tar', 'w', format=tarfile.PAX_FORMAT,
+                          pax_headers={'comment': COMMIT}) as archive:
+            for file in self.project.rglob('*'):
+                if file.is_file():
+                    archive.add(file, arcname='PerformanceDashboard/' + str(file.relative_to(self.project)))
+        self.save()
+        self.assertEqual(self.verify()['gitSourceCount'], 14)
 
     def test_changed_trellis_revision_refused(self):
         entry = next(v for v in self.manifest['gitSources'] if v['name'] == 'gnustep-trellis')

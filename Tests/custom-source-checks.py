@@ -87,7 +87,7 @@ class CustomSources(unittest.TestCase):
                 for entry in component['patches']:
                     data = archive.extractfile(prefix + 'custom-sdk/' + entry['path']).read()
                     self.assertEqual(hashlib.sha256(data).hexdigest(), entry['sha256'])
-            for name in (self.lock_path.name, 'v017-review-inputs.json', 'gnustep-toolchain-provenance.json',
+            for name in (self.lock_path.name, 'v017-review-inputs.json', 'v018-review-inputs.json', 'gnustep-toolchain-provenance.json',
                          'application/docs/proposals/csd-theme-defaults.patch', 'application/scripts/package-stage.sh'):
                 self.assertIn(prefix + 'custom-sdk/' + name, names)
             note = archive.extractfile(prefix + 'custom-sdk/APPLYING-PATCHES.txt').read()

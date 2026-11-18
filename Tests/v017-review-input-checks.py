@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Mutation checks for combined review identity and exact direct-library gates."""
 import importlib.util
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -19,13 +20,17 @@ spec.loader.exec_module(check)
 
 
 class ReviewChecks(unittest.TestCase):
+    def test_published_v017_review_record_is_unchanged(self):
+        self.assertEqual(hashlib.sha256((ROOT / 'packaging/linux/v017-review-inputs.json').read_bytes()).hexdigest(),
+                         'b087dd3684612a583a35d8ce17618cc988727f4c4c290ebc479a1899ea6d7297')
+
     def setUp(self):
         temporary = tempfile.TemporaryDirectory(prefix="pd-review-input-")
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         self.inputs = self.root / "linux"
         shutil.copytree(ROOT / "packaging/linux", self.inputs)
-        self.manifest = self.inputs / "v017-review-inputs.json"
+        self.manifest = self.inputs / "v018-review-inputs.json"
 
     def update_manifest(self, change):
         value = json.loads(self.manifest.read_text())
@@ -141,7 +146,7 @@ class ReviewChecks(unittest.TestCase):
         fixture.setUp()
         self.addCleanup(fixture.doCleanups)
         args = fixture.fixture_inputs()
-        args.review_inputs = str(ROOT / "packaging/linux/v017-review-inputs.json")
+        args.review_inputs = str(ROOT / "packaging/linux/v018-review-inputs.json")
         with self.assertRaisesRegex(ValueError, "review manifest names another lock"):
             check.check_inputs(args)
 

@@ -61,6 +61,21 @@ def check_staged(stage):
             "scope": "required strings/export present; visual/runtime correctness unqualified"}
 
 
+def review_inputs_for_lock(lock_path, application_root=None):
+    lock_path = Path(lock_path).resolve(strict=True)
+    lock = json.loads(lock_path.read_text())
+    name = lock.get("pd_review", {}).get("review_inputs")
+    if not name:
+        return None
+    root = Path(application_root) if application_root else Path(__file__).resolve().parents[1]
+    config = root / "packaging/linux/csd-ci-inputs.json"
+    if config.is_file():
+        active = json.loads(config.read_text()).get("reviewInputs")
+        if active:
+            return inside(root, root / active)
+    return inside(lock_path.parent, lock_path.parent / name)
+
+
 def check_inputs(args):
     lock_path = Path(args.lock).resolve(strict=True)
     lock = json.loads(lock_path.read_text())
@@ -70,10 +85,9 @@ def check_inputs(args):
             ["libobjc2", "libdispatch", "tools-make", "libs-base", "libs-corebase", "libs-gui", "libs-back"],
             "CSD candidate requires the exact seven-component inventory/order")
     require(lock.get("install_domain") == "LOCAL", "CSD candidate requires reviewed LOCAL layout")
-    review_name = lock.get("pd_review", {}).get("review_inputs")
     review_path = getattr(args, "review_inputs", None)
-    if not review_path and review_name:
-        review_path = inside(lock_path.parent, lock_path.parent / review_name)
+    if not review_path:
+        review_path = review_inputs_for_lock(lock_path)
     if review_path:
         review = check_review_inputs(review_path)
         require(review["lockSHA256"] == digest(lock_path), "review manifest names another lock")

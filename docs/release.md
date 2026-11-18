@@ -28,6 +28,10 @@ the LGPL notice, then compares source and staged build IDs and resource bytes.
 Provenance records both library identities and the receipt. The custom Linux
 corresponding-source inventory now requires fifteen Git sources, including
 Trellis; omitting it or substituting its revision fails verification.
+The current application binding is `packaging/linux/v018-review-inputs.json`;
+the published v0.1.7 review record and SDK lock remain unchanged. Source
+verification uses each application's archived dependency pins, so the older
+fourteen-source v0.1.7 archive remains verifiable.
 Before any release, verify that every exact source archive is accessible
 without credentials through the existing public-codeload verifier. Adding
 this dependency does not waive that gate or authorize publication.

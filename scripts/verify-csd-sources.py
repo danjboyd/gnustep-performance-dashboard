@@ -94,8 +94,14 @@ def verify_tree(directory, commit, expected_lock_sha):
     listed = manifest['gitSources']
     by_name = {entry['name']: entry for entry in listed}
     policy.require(len(by_name) == len(listed), 'duplicate Git source records')
+    with tarfile.open(directory / 'PerformanceDashboard.tar') as application:
+        application_inputs = json.load(application.extractfile('PerformanceDashboard/packaging/release-inputs.json'))
+    trellis_required = 'gnustep-trellis' in application_inputs
+    policy.require(not trellis_required or isinstance(manifest.get('trellisSource'), dict),
+                   'Trellis corresponding source record missing for application dependency')
     expected = {c['name']: (c['url'], c['revision']) for c in lock['components']}
-    for field in ('trellisSource', 'themeSource', 'builderSource', 'packagerSource', 'fallbackSource'):
+    fields = ('themeSource', 'builderSource', 'packagerSource', 'fallbackSource')
+    for field in fields + (('trellisSource',) if trellis_required else ()):
         value = manifest[field]
         expected[value['name']] = (value['url'], value['revision'])
     for name, (url, revision) in expected.items():
@@ -151,7 +157,10 @@ def verify_tree(directory, commit, expected_lock_sha):
         policy.require(app.pax_headers.get('comment') == commit, 'application archive commit mismatch')
         release_inputs = json.load(app.extractfile('PerformanceDashboard/packaging/release-inputs.json'))
         config = json.load(app.extractfile('PerformanceDashboard/packaging/linux/csd-ci-inputs.json'))
-        for key, name in [('gnustep-trellis', 'trellisSource'), ('adwaita', 'themeSource'), ('gnustep-packager', 'packagerSource')]:
+        pairs = [('adwaita', 'themeSource'), ('gnustep-packager', 'packagerSource')]
+        if trellis_required:
+            pairs.append(('gnustep-trellis', 'trellisSource'))
+        for key, name in pairs:
             policy.require(all(manifest[name][field] == release_inputs[key][field] for field in ('url', 'revision')), 'application source pin differs')
         policy.require(all(manifest['builderSource'][field] == config['builder'][field] for field in ('url', 'revision')), 'application builder pin differs')
         policy.require(manifest['fallbackSource'] == config['fallbackSource'], 'application fallback pin differs')
