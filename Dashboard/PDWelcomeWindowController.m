@@ -193,9 +193,18 @@
     return [NSNumber numberWithInt: p.pid];
   NSString *reason = [_model unavailableReasonForProcess: p];
   if (p.GNUstepIdentity == PDGNUstepUnknown)
-    return reason ? [NSString stringWithFormat: @"GNUstep: unknown (memory map not readable); %@", reason]
+    return reason ? [NSString stringWithFormat: @"%@; GNUstep: unknown (memory map not readable)", reason]
                   : @"GNUstep: unknown (memory map not readable)";
   return reason ?: @"Permission unverified";
+}
+- (NSString *) tableView: (NSTableView *)tableView toolTipForCell: (NSCell *)cell
+                   rect: (NSRect *)rect tableColumn: (NSTableColumn *)column
+                    row: (NSInteger)row mouseLocation: (NSPoint)location
+{
+  if (row < 0 || (NSUInteger)row >= [_rows count])
+    return nil;
+  return [self tableView: tableView objectValueForTableColumn:
+    [tableView tableColumnWithIdentifier: @"status"] row: row];
 }
 - (BOOL) tableView: (NSTableView *)tableView shouldSelectRow: (NSInteger)row
 {

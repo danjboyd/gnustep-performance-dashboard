@@ -90,7 +90,7 @@ process(int pid, NSString *name, PDGNUstepIdentity identity)
   XCTAssertEqualObjects([_model recordDisabledReason], @"Choose an app or executable.");
   XCTAssertNil([_model recordingOptionsWithError: NULL]);
   _model.mode = PDWelcomeAttach;
-  XCTAssertEqualObjects([_model recordDisabledReason], @"No GNUstep apps detected. Show all processes.");
+  XCTAssertEqualObjects([_model recordDisabledReason], @"No GNUstep apps. Show all processes.");
 }
 - (void) testGNUstepFilterRequiresConfirmedIdentityAndAllIncludesUnknown
 {
@@ -118,7 +118,7 @@ process(int pid, NSString *name, PDGNUstepIdentity identity)
   _model.mode = PDWelcomeAttach;
   [_model refreshProcesses];
   XCTAssertEqual([[_model filteredProcesses] count], (NSUInteger)0);
-  XCTAssertEqualObjects([_model recordDisabledReason], @"No GNUstep apps detected. Show all processes.");
+  XCTAssertEqualObjects([_model recordDisabledReason], @"No GNUstep apps. Show all processes.");
   _model.GNUstepOnly = NO;
   XCTAssertEqualObjects([_model filteredProcesses], @[unknown]);
   XCTAssertEqualObjects([_model recordDisabledReason], @"Choose a running app.");

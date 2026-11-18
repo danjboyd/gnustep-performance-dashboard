@@ -1,6 +1,9 @@
 include $(GNUSTEP_MAKEFILES)/common.make
 
-GNUSTEP_CONFIG ?= $(GNUSTEP_SYSTEM_TOOLS)/gnustep-config
+GNUSTEP_CONFIG ?= $(firstword $(wildcard $(GNUSTEP_SYSTEM_TOOLS)/gnustep-config) $(shell command -v gnustep-config))
+ifeq ($(strip $(GNUSTEP_CONFIG)),)
+$(error gnustep-config not found; set GNUSTEP_CONFIG to the SDK config tool)
+endif
 
 APP_NAME = PerformanceDashboard
 PerformanceDashboard_OBJC_FILES = \

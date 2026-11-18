@@ -218,7 +218,7 @@
           if (_GNUstepOnly && [[_searchText stringByTrimmingCharactersInSet:
                 [NSCharacterSet whitespaceAndNewlineCharacterSet]] length] == 0
               && [[self filteredProcesses] count] == 0)
-            return @"No GNUstep apps detected. Show all processes.";
+            return @"No GNUstep apps. Show all processes.";
           return @"Choose a running app.";
         }
       NSString *identity = [_provider currentIdentityForPID: _selectedProcess.pid];

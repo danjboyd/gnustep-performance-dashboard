@@ -12,6 +12,12 @@ static unsigned checks;
 #define CHECK(condition, label) do { checks++; if (!(condition)) { \
   fprintf(stderr, "FAIL %s\n", label); fflush(NULL); _Exit(1); } } while (0)
 
+@interface PDWelcomeWindowController (ToolTipProbe)
+- (NSString *) tableView: (NSTableView *)tableView toolTipForCell: (NSCell *)cell
+                   rect: (NSRect *)rect tableColumn: (NSTableColumn *)column
+                    row: (NSInteger)row mouseLocation: (NSPoint)location;
+@end
+
 @interface WelcomeProbeProvider : NSObject <PDWelcomeTargetProvider>
 @property (nonatomic, copy) NSArray *snapshot;
 @property (nonatomic, strong) NSMutableDictionary *identities;
@@ -72,7 +78,9 @@ int main(int argc, const char **argv)
       PDWelcomeProcess *ready = target(41, @"Gorm", PDGNUstepYes);
       PDWelcomeProcess *owned = target(42, @"Other user", PDGNUstepYes);
       owned.unavailableReason = @"Owned by another user";
-      provider.snapshot = @[ready, owned, target(43, @"Busy", PDGNUstepYes), target(44, @"Plain C", PDGNUstepNo), target(45, @"Unreadable", PDGNUstepUnknown)];
+      PDWelcomeProcess *unknown = target(45, @"Unreadable", PDGNUstepUnknown);
+      unknown.unavailableReason = @"Profiling helper not installed";
+      provider.snapshot = @[ready, owned, target(43, @"Busy", PDGNUstepYes), target(44, @"Plain C", PDGNUstepNo), unknown];
       provider.identities = [NSMutableDictionary dictionary];
       for (PDWelcomeProcess *p in provider.snapshot)
         [provider.identities setObject: p.identity forKey: @(p.pid)];
@@ -148,15 +156,22 @@ int main(int argc, const char **argv)
       CHECK([pidColumn width] >= pidWidth + 16, "PID column fits seven digits in the active theme");
       NSString *unknownStatus = [window tableView: table objectValueForTableColumn:
         [table tableColumnWithIdentifier: @"status"] row: rowForPID(table, 45)];
-      CHECK([unknownStatus rangeOfString: @"GNUstep: unknown (memory map not readable)"].location != NSNotFound,
+      CHECK([unknownStatus hasPrefix: @"Profiling helper not installed; "]
+        && [unknownStatus rangeOfString: @"GNUstep: unknown (memory map not readable)"].location != NSNotFound,
         "All processes labels unreadable memory maps explicitly");
+      CHECK([[window tableView: table toolTipForCell: [pidColumn dataCell] rect: NULL
+        tableColumn: pidColumn row: rowForPID(table, 45) mouseLocation: NSZeroPoint] isEqual: unknownStatus],
+        "every row cell exposes the complete status tooltip");
       NSArray *savedSnapshot = provider.snapshot;
       provider.snapshot = @[target(45, @"Unreadable", PDGNUstepUnknown)];
       [window.processFilter selectItemAtIndex: 0];
       [window filtersChanged: nil];
       CHECK([table numberOfRows] == 0 && [[window.summary stringValue] rangeOfString:
-        @"No GNUstep apps detected. Show all processes."].location != NSNotFound,
+        @"No GNUstep apps. Show all processes."].location != NSNotFound,
         "unreadable-only snapshot offers the All processes hint");
+      NSFont *summaryFont = [window.summary font] ?: [NSFont systemFontOfSize: [NSFont systemFontSize]];
+      CHECK([[window.summary stringValue] sizeWithAttributes: @{NSFontAttributeName: summaryFont}].width
+        <= NSWidth([window.summary bounds]), "empty-filter hint fits one footer line");
       provider.snapshot = savedSnapshot;
       [window filtersChanged: nil];
       [window chooseLaunch: window.launchMode];
