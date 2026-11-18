@@ -39,6 +39,22 @@ main.m_FILE_FILTER_OUT_FLAGS = -fobjc-arc
 ADDITIONAL_INCLUDE_DIRS += -I../Runtime/include -I..
 ADDITIONAL_LIB_DIRS += -L../GSPerformance/obj -L../Runtime/obj
 ADDITIONAL_GUI_LIBS += -lGSPerformance
+
+ifeq (,$(WINDOWS))
+# Trellis is built separately with ARC; main.m keeps its existing MRC pool.
+TRELLIS_ROOT ?= $(CURDIR)/../out/gnustep-trellis
+PerformanceDashboard_OBJC_FILES += PDWelcomeWindowController.m
+PerformanceDashboard_RESOURCE_FILES += Resources/WelcomeWindow.trellis
+ADDITIONAL_INCLUDE_DIRS += -I$(TRELLIS_ROOT)/Source/Engine -I$(TRELLIS_ROOT)/Source/View
+ADDITIONAL_LIB_DIRS += -L$(TRELLIS_ROOT)/obj
+ADDITIONAL_GUI_LIBS += -lTrellis -lTrellisEngine
+.PHONY: trellis
+before-all:: trellis
+trellis:
+	@test -f "$(TRELLIS_ROOT)/GNUmakefile" || { echo "Set TRELLIS_ROOT to the pinned Trellis source checkout" >&2; exit 1; }
+	@$(MAKE) -C "$(TRELLIS_ROOT)" hot_reload=no
+endif
+
 # Use PD_ENABLE_SIGNPOSTS=0 for builds without the optional API library.
 PD_ENABLE_SIGNPOSTS ?= 1
 ifeq ($(PD_ENABLE_SIGNPOSTS),1)

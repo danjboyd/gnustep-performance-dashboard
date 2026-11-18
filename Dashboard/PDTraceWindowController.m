@@ -36,6 +36,7 @@
   NSButton *_recordButton;
   NSButton *_leaksButton;
   NSTextField *_targetLabel;
+  NSPopUpButton *_targetPicker;
   NSTextField *_statusLabel;
   NSPopUpButton *_processPopup;
   NSTimer *_timer;
@@ -45,6 +46,7 @@
 
 - (NSString *) tracePath { return _tracePath; }
 - (BOOL) isRecording { return _recorder.isRecording; }
+- (int) recordingTargetPID { return _recorder.isRecording ? _recorder.pid : 0; }
 - (BOOL) isTemporary { return _temporary; }
 - (BOOL) isLoading { return _loading; }
 
@@ -101,6 +103,14 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
   [bar addSubview: _recordButton];
   _targetLabel = label(NSMakeRect(112, 18, 420, 18), [PDTheme boldLabelFont]);
   [bar addSubview: _targetLabel];
+  [_targetLabel setHidden: YES];
+  _targetPicker = [[NSPopUpButton alloc] initWithFrame: NSMakeRect(112, 18, 160, 20) pullsDown: YES];
+  [_targetPicker addItemWithTitle: @"Target…"];
+  [_targetPicker addItemWithTitle: @"Launch an App…"];
+  [_targetPicker addItemWithTitle: @"Attach to a Running App…"];
+  [_targetPicker setTarget: self];
+  [_targetPicker setAction: @selector(chooseRecordingTarget:)];
+  [bar addSubview: _targetPicker];
   _statusLabel = label(NSMakeRect(112, 2, 420, 16), [PDTheme smallFont]);
   [_statusLabel setTextColor: [PDTheme secondaryTextColor]];
   [bar addSubview: _statusLabel];
@@ -371,6 +381,8 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
     ? [title stringByAppendingString: @" (Recording)"] : title];
   [_targetLabel setStringValue: [NSString stringWithFormat: @"%@  ·  %@",
     [self targetName], [self templateName]]];
+  [[_targetPicker itemAtIndex: 0] setTitle: [_targetLabel stringValue]];
+  [_targetPicker setToolTip: [_targetLabel stringValue]];
   if (_recorder.isRecording)
     {
       double t = -[_recordStart timeIntervalSinceNow];
@@ -457,6 +469,17 @@ push_button(NSString *title, NSRect frame, id target, SEL action)
   NSString *name = [[GSPRecorder defaultTracePathForExecutable: [self targetName]
                                                    template: [self templateName]] lastPathComponent];
   return [dir stringByAppendingPathComponent: name];
+}
+
+- (void) chooseRecordingTarget: (id)sender
+{
+  NSInteger choice = [_targetPicker indexOfSelectedItem];
+  /* Keep the existing compact launch and attach panels as direct toolbar
+     entries; a new recording gets its own trace window. */
+  GSPRecordingOptions *options = choice == 1 ? [PDRecordPanel runPanelWithTemplate: nil]
+    : (choice == 2 ? [PDAttachPanel runPanel] : nil);
+  if (options)
+    [(PDAppController *)[NSApp delegate] startRecordingWithOptions: options];
 }
 
 - (void) startRecording: (id)sender

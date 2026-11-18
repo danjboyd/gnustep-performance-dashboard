@@ -19,6 +19,7 @@
 
 @property (nonatomic, readonly) NSString *tracePath;
 @property (nonatomic, readonly) BOOL isRecording;
+@property (nonatomic, readonly) int recordingTargetPID;
 @property (nonatomic, readonly) BOOL isTemporary;   /* unsaved recording */
 
 - (void) startRecording: (id)sender;

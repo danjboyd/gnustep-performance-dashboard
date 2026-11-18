@@ -12,4 +12,5 @@
 - (void) installHelper: (id)sender;
 - (BOOL) openTraceAtPath: (NSString *)path;
 - (void) startRecordingWithOptions: (GSPRecordingOptions *)options;
+- (NSSet *) activeRecordingPIDs;
 @end

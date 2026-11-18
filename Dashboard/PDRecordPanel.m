@@ -232,9 +232,9 @@ make_button(NSString *title, NSRect frame, id target, SEL action)
   o.executablePath = exe;
   NSString *args = [[_args stringValue] stringByTrimmingCharactersInSet:
     [NSCharacterSet whitespaceCharacterSet]];
-  o.arguments = [args length] ? [self splitArguments: args] : [NSArray array];
+  o.arguments = [args length] ? [[self class] splitArguments: args] : [NSArray array];
   NSMutableDictionary *env = [NSMutableDictionary dictionary];
-  for (NSString *kv in [self splitArguments: [_env stringValue]])
+  for (NSString *kv in [[self class] splitArguments: [_env stringValue]])
     {
       NSRange eq = [kv rangeOfString: @"="];
       if (eq.location != NSNotFound && eq.location > 0)
@@ -266,7 +266,7 @@ make_button(NSString *title, NSRect frame, id target, SEL action)
 }
 
 /* Shell-like splitting with single and double quotes. */
-- (NSArray *) splitArguments: (NSString *)s
++ (NSArray *) splitArguments: (NSString *)s
 {
   NSMutableArray *out = [NSMutableArray array];
   NSMutableString *cur = nil;

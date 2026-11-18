@@ -1,0 +1,103 @@
+<!-- owner: PDWelcomeWindowController -->
+<box id="root" class="page">
+  <row class="head">
+    <column class="titles">
+      <label class="title">New Recording</label>
+      <text class="muted">Choose an app to profile and what to record.</text>
+    </column>
+    <spacer/>
+    <button action="openTrace:">Open Trace…</button>
+  </row>
+  <column class="modes">
+    <column class="target-group">
+      <label class="section">Target</label>
+      <radio id="launchMode" action="chooseLaunch:" state="on">Launch an app</radio>
+      <radio id="attachMode" action="chooseAttach:">Attach to a running app</radio>
+    </column>
+    <separator/>
+    <column class="recent-group">
+      <label class="section">Recent targets</label>
+      <column id="recentTargetsBox" class="recents"><text class="muted">No recent targets</text></column>
+    </column>
+    <column class="recent-group">
+      <label class="section">Recent traces</label>
+      <column id="recentTracesBox" class="recents"><text class="muted">No recent traces</text></column>
+    </column>
+  </column>
+  <column class="main">
+    <scroll class="main-scroll"><column class="main-body">
+    <column id="launchPane" class="pane">
+      <label label-for="targetPath">App or executable</label>
+      <row><field id="targetPath" action="fieldsChanged:" placeholder="Choose an app or executable"/>
+        <button action="browseTarget:">Choose…</button></row>
+    </column>
+    <column id="attachPane" class="pane" hidden="yes">
+      <row class="filter">
+        <field id="search" action="filtersChanged:" placeholder="Search apps by name or PID"/>
+        <popup id="processFilter" action="filtersChanged:" items="GNUstep apps, All processes" a11y-label="Processes shown"/>
+      </row>
+      <scroll id="processScroll" class="processes" a11y-label="Running apps: App, PID and Status"><column/></scroll>
+    </column>
+    <label class="section">What to record</label>
+    <row class="templates">
+      <radio id="cpuTemplate" action="chooseTemplate:" state="on">Time Profiler</radio>
+      <radio id="allocationTemplate" action="chooseTemplate:">Allocations</radio>
+      <radio id="leaksTemplate" action="chooseTemplate:">Leaks</radio>
+      <radio id="hangsTemplate" action="chooseTemplate:">Hangs</radio>
+      <popup id="moreTemplates" action="chooseTemplate:" items="More…" a11y-label="More recording templates"/>
+    </row>
+    <checkbox id="showAdvanced" action="advancedChanged:">Show advanced options</checkbox>
+    <column id="advancedPane" class="advanced" hidden="yes">
+      <row class="form"><label label-for="argumentsField">Arguments</label><field id="argumentsField" action="fieldsChanged:" placeholder="Optional arguments (quotes supported)"/></row>
+      <row class="form"><label label-for="environmentField">Environment</label><field id="environmentField" action="fieldsChanged:" placeholder="NAME=value …"/></row>
+      <row class="form"><label label-for="directoryField">Working directory</label><field id="directoryField" action="fieldsChanged:" placeholder="Executable directory by default"/></row>
+      <row class="form"><label label-for="durationField">Duration (s)</label><field id="durationField" action="fieldsChanged:" placeholder="0 = until stopped"/></row>
+      <row class="form"><label label-for="intervalField">Sample interval (µs)</label><field id="intervalField" action="fieldsChanged:" placeholder="0 = recorder default"/></row>
+    </column>
+    <spacer/>
+    </column></scroll>
+  </column>
+  <row class="foot">
+    <checkbox id="showAtLaunch" action="launchPreferenceChanged:" state="on">Show this window at launch</checkbox>
+    <spacer/>
+    <text id="summary" class="hint muted">Choose a target to record</text>
+    <button action="cancel:">Cancel</button>
+    <button id="recordButton" action="record:" default="yes" disabled="yes">Record</button>
+  </row>
+</box>
+<style>
+.page { display: grid; container-type: inline-size; grid-template-columns: 210px 1fr; grid-template-rows: auto 1fr auto; grid-template-areas: "head head" "modes main" "foot foot"; gap: 14px; padding: 18px; background-color: -tr-window-background; }
+.head { grid-area: head; gap: 10px; }
+.titles { gap: 2px; flex: 1; }
+.title { font-size: 20px; font-weight: bold; }
+.muted, .section { color: CanvasText; }
+radio { min-height: 24px; }
+.section { font-weight: bold; margin-top: 4px; }
+.modes { grid-area: modes; gap: 6px; }
+.recents { gap: 4px; }
+.target-group, .recent-group { gap: 6px; }
+.main { min-height: 0px; grid-area: main; gap: 10px; padding: 12px; background-color: Canvas; border: 1px solid -tr-separator; border-radius: 8px; }
+.main-scroll { flex: 1; min-height: 0px; overflow: auto; }
+.main-body { gap: 10px; }
+.pane { gap: 8px; }
+#launchPane row, .filter, .templates { gap: 8px; }
+#targetPath, #search { flex: 1; min-width: 120px; }
+.processes { height: 210px; min-height: 150px; }
+.templates { flex-wrap: wrap; }
+.advanced { gap: 6px; }
+.form { gap: 8px; }
+.form > label { flex: 0 0 150px; }
+.form > field { flex: 1; min-width: 100px; }
+.foot { grid-area: foot; gap: 10px; }
+.hint { max-width: 260px; }
+@container (max-width: 639px) {
+  .page { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr auto; grid-template-areas: "head" "modes" "main" "foot"; padding: 10px; gap: 8px; }
+  .modes { flex-direction: row; flex-wrap: wrap; align-items: center; }
+  .target-group { flex: 0 0 210px; }
+  .recent-group { flex: 1 1 140px; }
+  .modes > separator, .hint { display: none; }
+  .foot { flex-wrap: wrap; }
+  .form { flex-direction: column; align-items: stretch; }
+  .form > label { flex: none; }
+}
+</style>

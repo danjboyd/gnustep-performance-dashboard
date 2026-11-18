@@ -7,6 +7,8 @@
 @interface PDRecordPanel : NSObject
 /* Runs modally; returns nil when cancelled. */
 + (GSPRecordingOptions *) runPanelWithTemplate: (NSString *)templateName;
+/* Existing shell-like argument/environment field parser, shared by the welcome view. */
++ (NSArray *) splitArguments: (NSString *)text;
 /* The same, starting from the template, target, arguments, environment
    and directory in OPTIONS instead of the last ones used.  */
 + (GSPRecordingOptions *) runPanelWithOptions: (GSPRecordingOptions *)options;

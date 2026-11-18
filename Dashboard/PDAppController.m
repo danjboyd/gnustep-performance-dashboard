@@ -4,6 +4,9 @@
 #import "PDRecordPanel.h"
 #import "PDWelcomeArguments.h"
 #import "PDWelcomeProcessProvider.h"
+#if defined(__linux__)
+#import "PDWelcomeWindowController.h"
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #import "PDTimelineView.h"
@@ -24,6 +27,9 @@
 {
   NSMutableArray *_windows;
   PDWelcomeHistory *_welcomeHistory;
+#if defined(__linux__)
+  PDWelcomeWindowController *_welcomeWindow;
+#endif
   BOOL _openedAtLaunch;
   NSFileHandle *_terminationPipe;
   /* nil unless packaged: the packager writes the updater's configuration */
@@ -227,7 +233,7 @@ termination_signal(int sig)
       [self openTraceAtPath: open];
       return;
     }
-  if (!_openedAtLaunch)
+  if (!_openedAtLaunch && _welcomeHistory.showAtLaunch)
     [self performSelector: @selector(newRecording:) withObject: nil afterDelay: 0];
 }
 
@@ -336,18 +342,51 @@ termination_signal(int sig)
   [wc startRecording: nil];
 }
 
+- (NSSet *) activeRecordingPIDs
+{
+  NSMutableSet *pids = [NSMutableSet set];
+  for (PDTraceWindowController *window in _windows)
+    if (window.recordingTargetPID > 0)
+      [pids addObject: [NSNumber numberWithInt: window.recordingTargetPID]];
+  return pids;
+}
+#if defined(__linux__)
+- (void) showWelcomeForMode: (PDWelcomeTargetMode)mode
+{
+  if (_welcomeWindow == nil)
+    {
+      PDWelcomeModel *model = [[PDWelcomeModel alloc] initWithProvider: [PDWelcomeProcessProvider new]
+        history: _welcomeHistory];
+      _welcomeWindow = [[PDWelcomeWindowController alloc] initWithModel: model appController: self];
+    }
+  if (_welcomeWindow == nil)
+    {
+      NSRunAlertPanel(@"Cannot Open New Recording", @"The welcome layout could not be loaded. See the application log.",
+        @"OK", nil, nil);
+      return;
+    }
+  [_welcomeWindow showForMode: mode];
+}
+#endif
 - (void) newRecording: (id)sender
 {
+#if defined(__linux__)
+  [self showWelcomeForMode: PDWelcomeLaunch];
+#else
   GSPRecordingOptions *o = [PDRecordPanel runPanelWithTemplate: nil];
   if (o != nil)
     [self startRecordingWithOptions: o];
+#endif
 }
-
 - (void) attachToProcess: (id)sender
 {
+#if defined(__linux__)
+  [self showWelcomeForMode: PDWelcomeAttach];
+#else
   GSPRecordingOptions *o = [PDAttachPanel runPanel];
   if (o != nil)
     [self startRecordingWithOptions: o];
+#endif
 }
 
 - (void) startUpdater
