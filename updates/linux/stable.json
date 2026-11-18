@@ -1,14 +1,14 @@
 {
   "formatVersion": 1,
   "provider": "github-release-feed",
-  "generatedAt": "2026-11-16T21:08:24.0127340+00:00",
+  "generatedAt": "2026-11-18T21:21:29.3282884+00:00",
   "channel": "stable",
   "feedUrl": "https://danjboyd.github.io/gnustep-performance-dashboard/updates/linux/stable.json",
   "package": {
     "id": "io.github.danjboyd.PerformanceDashboard",
     "name": "PerformanceDashboard",
     "displayName": "Performance Dashboard",
-    "version": "0.1.7",
+    "version": "0.1.8",
     "manufacturer": "Daniel Boyd"
   },
   "source": {
@@ -19,27 +19,27 @@
   },
   "releases": [
     {
-      "version": "0.1.7",
-      "tag": "v0.1.7",
-      "releaseNotesUrl": "https://github.com/danjboyd/gnustep-performance-dashboard/releases/tag/v0.1.7",
+      "version": "0.1.8",
+      "tag": "v0.1.8",
+      "releaseNotesUrl": "https://github.com/danjboyd/gnustep-performance-dashboard/releases/tag/v0.1.8",
       "assets": [
         {
           "backend": "appimage",
           "platform": "linux-x64",
           "kind": "appimage",
-          "name": "PerformanceDashboard-0.1.7-x86_64.AppImage",
-          "url": "https://github.com/danjboyd/gnustep-performance-dashboard/releases/download/v0.1.7/PerformanceDashboard-0.1.7-x86_64.AppImage",
-          "sha256": "be3a2122b57bb2ba25dac4d69be558588393398d931e848d368c3618260f0557",
-          "sizeBytes": 29006328,
+          "name": "PerformanceDashboard-0.1.8-x86_64.AppImage",
+          "url": "https://github.com/danjboyd/gnustep-performance-dashboard/releases/download/v0.1.8/PerformanceDashboard-0.1.8-x86_64.AppImage",
+          "sha256": "844a4cd36005b7f350530433e534b74b902ce75ed4ec913cf178029ab2c9f98c",
+          "sizeBytes": 29280760,
           "updateInformation": "gh-releases-zsync|danjboyd|gnustep-performance-dashboard|latest|PerformanceDashboard-*-x86_64.AppImage.zsync",
           "zsync": {
-            "name": "PerformanceDashboard-0.1.7-x86_64.AppImage.zsync",
-            "url": "https://github.com/danjboyd/gnustep-performance-dashboard/releases/download/v0.1.7/PerformanceDashboard-0.1.7-x86_64.AppImage.zsync",
-            "sha256": "b6a87091a7700f79b53423033687383f38ca3bfce27a42fa623d60187fc3f178",
-            "sizeBytes": 99403
+            "name": "PerformanceDashboard-0.1.8-x86_64.AppImage.zsync",
+            "url": "https://github.com/danjboyd/gnustep-performance-dashboard/releases/download/v0.1.8/PerformanceDashboard-0.1.8-x86_64.AppImage.zsync",
+            "sha256": "cc334b2e12c0cb548d9f1927cc20c0f6d9f7a6a65ec1195554f555dcc71dd806",
+            "sizeBytes": 100341
           },
-          "edSignature": "tQ6Sc37WAx5G08zZApGr8i8VkcP8mPDEq24liheYCN3SSRnJze3KxbBFuIcRi1wm90a5TE/LH2RARHnCbGLJBw==",
-          "versionSignature": "wjCV3dq6hJEwZhGIY80U0XH7uFxiCuhEWamcZ2cDrpYjNZ3S4efW+k85VsnjLmNQeHjVc8dQoWbYSW6LBX0oAw=="
+          "edSignature": "TV0meiHiCkenptUjzusBpZ+97/XxOVixM1P+wITEHr+Lll4AJMqqxVB3uUr36F4vBdCl+TxSSrMURTh6i4OkCQ==",
+          "versionSignature": "2+I5cFHXvEBZQOwIFmle9KhC0KucwBaFMuqRIg1GQ2+LkGTZPsbGiTOv7LE+DL3rDTeOAQnA0GgJnUl1qzeiAQ=="
         }
       ]
     }
