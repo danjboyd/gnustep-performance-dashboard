@@ -7,10 +7,75 @@
 #import "TRBoxView.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 
-static unsigned checks;
+static unsigned checks, failures;
 #define CHECK(condition, label) do { checks++; if (!(condition)) { \
-  fprintf(stderr, "FAIL %s\n", label); fflush(NULL); _Exit(1); } } while (0)
+  failures++; fprintf(stderr, "FAIL %s\n", label); fflush(NULL); } } while (0)
+
+static void finish(void)
+{
+  printf("Welcome controller: %u checks, %u failures\n", checks, failures);
+  fflush(NULL);
+  _Exit(failures ? 1 : 0); /* AppKit has process-global caches. */
+}
+/* Safety and construction prerequisites cannot be skipped: later checks may
+   write defaults or dereference their results. All behavioral checks collect. */
+#define REQUIRE(condition, label) do { BOOL ok = (condition); CHECK(ok, label); \
+  if (!ok) finish(); } while (0)
+
+static NSView *viewWithAction(NSView *root, SEL action)
+{
+  if ([root isKindOfClass: [NSControl class]])
+    {
+      SEL candidate = [(NSControl *)root action];
+      if (candidate && [NSStringFromSelector(candidate) isEqual: NSStringFromSelector(action)])
+        return root;
+    }
+  for (NSView *child in [root subviews])
+    {
+      NSView *found = viewWithAction(child, action);
+      if (found) return found;
+    }
+  return nil;
+}
+
+static BOOL captureScreen(NSString *path)
+{
+  NSTask *capture = [NSTask new];
+  [capture setLaunchPath: @"/usr/bin/import"];
+  [capture setArguments: @[@"-display", @":151", @"-window", @"root", path]];
+  [capture launch]; [capture waitUntilExit];
+  return [capture terminationStatus] == 0;
+}
+
+static void checkFooter(PDWelcomeWindowController *window)
+{
+  NSTextField *summary = window.summary;
+  NSFont *font = [summary font] ?: [NSFont systemFontOfSize: [NSFont systemFontSize]];
+  NSRect frame = [window.root convertRect: [summary bounds] fromView: summary];
+  CGFloat textWidth = [[summary stringValue] sizeWithAttributes: @{NSFontAttributeName: font}].width;
+  BOOL hidden = [summary isHiddenOrHasHiddenAncestor];
+  printf("Footer: window=%.1f text=%.1f available=%.1f height=%.1f font=%s size=%.1f hidden=%d wraps=%d lineBreak=%ld\n",
+    NSWidth([window.root bounds]), textWidth, NSWidth([summary bounds]), NSHeight([summary bounds]),
+    [[font fontName] UTF8String], [font pointSize], hidden, [[summary cell] wraps],
+    (long)[[summary cell] lineBreakMode]);
+  CHECK(![[summary cell] wraps] && [[summary cell] lineBreakMode] == NSLineBreakByTruncatingTail,
+    "footer hint truncates on one line for any font");
+  CHECK([[summary toolTip] isEqual: [summary stringValue]], "footer tooltip preserves complete hint");
+  if (!hidden)
+    {
+      CHECK(NSWidth(frame) > 0 && NSContainsRect(NSInsetRect([window.root bounds], -1, -1), frame),
+        "footer hint stays inside the window");
+      CHECK(NSHeight(frame) >= ceil([font ascender] - [font descender]), "footer hint has full font height");
+      NSView *cancel = viewWithAction(window.root, @selector(cancel:));
+      CHECK(cancel != nil, "footer Cancel action is present");
+      NSArray *controls = @[window.showAtLaunch, window.recordButton, cancel ?: window.recordButton];
+      for (NSView *control in controls)
+        CHECK(!NSIntersectsRect(frame, [window.root convertRect: [control bounds] fromView: control]),
+          "footer hint does not overlap an action or launch preference");
+    }
+}
 
 @interface PDWelcomeWindowController (ToolTipProbe)
 - (NSString *) tableView: (NSTableView *)tableView toolTipForCell: (NSCell *)cell
@@ -68,14 +133,14 @@ int main(int argc, const char **argv)
 {
   @autoreleasepool
     {
-      CHECK(argc == 3, "theme and screenshot arguments");
+      REQUIRE(argc == 3, "theme and screenshot arguments");
       NSDictionary *env = [[NSProcessInfo processInfo] environment];
-      CHECK([[env objectForKey: @"DISPLAY"] isEqual: @":151"], "private display151 only");
-      CHECK([[env objectForKey: @"GNUSTEP_HOME"] length] > 0, "private GNUstep home");
+      REQUIRE([[env objectForKey: @"DISPLAY"] isEqual: @":151"], "private display151 only");
+      REQUIRE([[env objectForKey: @"GNUSTEP_HOME"] length] > 0, "private GNUstep home");
       NSString *home = [NSHomeDirectory() stringByResolvingSymlinksInPath];
       NSString *homePrefix = [home stringByAppendingString: @"/"];
       NSString *defaultsRoot = [GSDefaultsRootForUser(NSUserName()) stringByResolvingSymlinksInPath];
-      CHECK([defaultsRoot hasPrefix: homePrefix], "resolved defaults database stays inside private home");
+      REQUIRE([defaultsRoot hasPrefix: homePrefix], "resolved defaults database stays inside private home");
       /* CI reuses its ephemeral home for both themes. Reset this probe's own
          domain so the first theme's persisted recents cannot seed the next. */
       NSUserDefaults *persistent = [NSUserDefaults standardUserDefaults];
@@ -99,7 +164,7 @@ int main(int argc, const char **argv)
       WelcomeProbeDelegate *spy = [WelcomeProbeDelegate new];
       [[NSUserDefaults standardUserDefaults] setObject: @"Leaks" forKey: @"PDLastTemplate"];
       PDWelcomeWindowController *window = [[PDWelcomeWindowController alloc] initWithModel: model appController: (PDAppController *)spy];
-      CHECK(window != nil, "TRLoader binds real owner/outlets");
+      REQUIRE(window != nil, "TRLoader binds real owner/outlets");
       [window showForMode: PDWelcomeLaunch];
       CHECK([window valueForKey: @"refreshTimer"] == nil, "launch mode has no process timer");
       CHECK([[window.moreTemplates itemAtIndex: 0] isEnabled], "More placeholder keeps the popup looking enabled");
@@ -135,7 +200,7 @@ int main(int argc, const char **argv)
         "attach More list shows disabled reasons");
       CHECK([window valueForKey: @"refreshTimer"] != nil, "attach mode refreshes processes");
       NSTableView *table = (NSTableView *)[window.processScroll documentView];
-      CHECK([table isKindOfClass: [NSTableView class]], "native process table");
+      REQUIRE([table isKindOfClass: [NSTableView class]], "native process table");
       CHECK([table numberOfRows] == 3, "GNUstep filter shows confirmed identities only");
       CHECK(![window.allocationTemplate isEnabled], "unsupported attach template disabled");
       CHECK([[[window.moreTemplates selectedItem] title] isEqual: @"System Time Profiler"], "attach shows actual System template");
@@ -179,8 +244,27 @@ int main(int argc, const char **argv)
         @"No GNUstep apps. Show all processes."].location != NSNotFound,
         "unreadable-only snapshot offers the All processes hint");
       NSFont *summaryFont = [window.summary font] ?: [NSFont systemFontOfSize: [NSFont systemFontSize]];
-      CHECK([[window.summary stringValue] sizeWithAttributes: @{NSFontAttributeName: summaryFont}].width
-        <= NSWidth([window.summary bounds]), "empty-filter hint fits one footer line");
+      NSArray *fonts = @[summaryFont, [NSFont systemFontOfSize: 24],
+        [NSFont fontWithName: @"DejaVuSansMono" size: 18] ?: [NSFont userFixedPitchFontOfSize: 18]];
+      for (NSFont *font in fonts)
+        for (NSNumber *width in @[@960, @720, @700, @640, @500])
+          {
+            [[window window] setContentSize: NSMakeSize([width doubleValue], 680)];
+            [window.summary setFont: font];
+            [(TRBoxView *)[window.summary superview] invalidateSubview: window.summary];
+            [window.root layoutTrellis];
+            checkFooter(window);
+            if ([font pointSize] == 24 && [width intValue] == 700)
+              {
+                [[window window] displayIfNeeded];
+                NSString *path = [[NSString stringWithUTF8String: argv[2]] stringByDeletingPathExtension];
+                CHECK(captureScreen([path stringByAppendingString: @"-footer.png"]),
+                  "large-font footer screenshot retained");
+              }
+          }
+      [window.summary setFont: summaryFont];
+      [(TRBoxView *)[window.summary superview] invalidateSubview: window.summary];
+      [[window window] setContentSize: NSMakeSize(960, 680)];
       provider.snapshot = savedSnapshot;
       [window filtersChanged: nil];
       [window chooseLaunch: window.launchMode];
@@ -218,11 +302,7 @@ int main(int argc, const char **argv)
       [[window window] setContentSize: NSMakeSize(900, 680)];
       [window.root layoutTrellis];
       [[NSRunLoop currentRunLoop] runUntilDate: [NSDate dateWithTimeIntervalSinceNow: 0.15]];
-      NSTask *capture = [NSTask new];
-      [capture setLaunchPath: @"/usr/bin/import"];
-      [capture setArguments: @[@"-display", @":151", @"-window", @"root", [NSString stringWithUTF8String: argv[2]]]];
-      [capture launch]; [capture waitUntilExit];
-      CHECK([capture terminationStatus] == 0, "private display screenshot retained");
+      CHECK(captureScreen([NSString stringWithUTF8String: argv[2]]), "private display screenshot retained");
       [window cancel: nil];
       /* Exercise the product history with real persistent defaults too. The
          controller cases above use a dictionary to keep their state explicit. */
@@ -242,8 +322,11 @@ int main(int argc, const char **argv)
         isEqual: recent.executablePath], "recent target persisted in private home");
       CHECK([[[saved objectForKey: @"PDRecentTraces"] firstObject] isEqual: @"/tmp/welcome-home-probe.gstrace"],
         "recent trace persisted in private home");
-      printf("Welcome controller: %u checks PASSED\n", checks);
-      fflush(NULL);
-      _Exit(0); /* AppKit caches are process-global; no modal teardown at exit. */
+      if ([[env objectForKey: @"PD_WELCOME_PROBE_FORCE_FAILURES"] isEqual: @"1"])
+        {
+          CHECK(NO, "aggregate failure self-test one");
+          CHECK(NO, "aggregate failure self-test two");
+        }
+      finish();
     }
 }

@@ -60,7 +60,7 @@
   <row class="foot">
     <checkbox id="showAtLaunch" action="launchPreferenceChanged:" state="on">Show this window at launch</checkbox>
     <spacer/>
-    <text id="summary" class="hint muted">Choose a target to record</text>
+    <label id="summary" class="hint muted">Choose a target to record</label>
     <button action="cancel:">Cancel</button>
     <button id="recordButton" action="record:" default="yes" disabled="yes">Record</button>
   </row>
@@ -89,7 +89,7 @@ radio { min-height: 24px; }
 .form > label { flex: 0 0 150px; }
 .form > field { flex: 1; min-width: 100px; }
 .foot { grid-area: foot; gap: 10px; }
-.hint { max-width: 260px; }
+.hint { flex: 0 1 260px; min-width: 0px; max-width: 260px; }
 @container (max-width: 639px) {
   .page { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr auto; grid-template-areas: "head" "modes" "main" "foot"; padding: 10px; gap: 8px; }
   .modes { flex-direction: row; flex-wrap: wrap; align-items: center; }

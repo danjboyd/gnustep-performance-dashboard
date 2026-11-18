@@ -8,6 +8,7 @@ if ! python3 "$repo/scripts/with-private-home.py" --check; then
 fi
 mkdir -p "$repo/Tests/out"
 work=$(mktemp -d "$repo/Tests/out/welcome-check.XXXXXX")
+result=0
 export TRELLIS_ROOT="${TRELLIS_ROOT:-$repo/out/gnustep-trellis}"
 export LD_LIBRARY_PATH="$repo/GSPerformance/obj:$TRELLIS_ROOT/obj:${LD_LIBRARY_PATH:-}"
 case "${1:-}" in
@@ -43,10 +44,14 @@ OWNED
       # Each probe changes defaults; copy the selected theme into the project
       # work area so it remains readable inside the next private home.
       cp -RL "$theme_path" "$work/$theme.theme"
-      python3 "$repo/scripts/with-private-home.py" "$work/$theme-home" -- \
-        "$work/WelcomeProbe.app/WelcomeProbe" "$work/$theme.theme" "$work/$theme.png"
+      if ! python3 "$repo/scripts/with-private-home.py" "$work/$theme-home" -- \
+        "$work/WelcomeProbe.app/WelcomeProbe" "$work/$theme.theme" "$work/$theme.png"; then
+        echo "welcome probe failed ($theme); continuing with the next theme" >&2
+        result=1
+      fi
     done
     ;;
   *) echo 'usage: check-welcome.sh argv|gui' >&2; exit 2 ;;
 esac
 echo "Welcome evidence: $work"
+exit "$result"
