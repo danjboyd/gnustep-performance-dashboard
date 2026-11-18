@@ -70,9 +70,9 @@ int main(int argc, const char **argv)
       [NSApplication sharedApplication];
       WelcomeProbeProvider *provider = [WelcomeProbeProvider new];
       PDWelcomeProcess *ready = target(41, @"Gorm", PDGNUstepYes);
-      PDWelcomeProcess *owned = target(42, @"Other user", PDGNUstepUnknown);
+      PDWelcomeProcess *owned = target(42, @"Other user", PDGNUstepYes);
       owned.unavailableReason = @"Owned by another user";
-      provider.snapshot = @[ready, owned, target(43, @"Busy", PDGNUstepYes), target(44, @"Plain C", PDGNUstepNo)];
+      provider.snapshot = @[ready, owned, target(43, @"Busy", PDGNUstepYes), target(44, @"Plain C", PDGNUstepNo), target(45, @"Unreadable", PDGNUstepUnknown)];
       provider.identities = [NSMutableDictionary dictionary];
       for (PDWelcomeProcess *p in provider.snapshot)
         [provider.identities setObject: p.identity forKey: @(p.pid)];
@@ -119,7 +119,7 @@ int main(int argc, const char **argv)
       CHECK([window valueForKey: @"refreshTimer"] != nil, "attach mode refreshes processes");
       NSTableView *table = (NSTableView *)[window.processScroll documentView];
       CHECK([table isKindOfClass: [NSTableView class]], "native process table");
-      CHECK([table numberOfRows] == 3, "GNUstep filter retains unknown identities");
+      CHECK([table numberOfRows] == 3, "GNUstep filter shows confirmed identities only");
       CHECK(![window.allocationTemplate isEnabled], "unsupported attach template disabled");
       CHECK([[[window.moreTemplates selectedItem] title] isEqual: @"System Time Profiler"], "attach shows actual System template");
       CHECK(![window tableView: table shouldSelectRow: rowForPID(table, 42)], "other-user target disabled");
@@ -141,7 +141,24 @@ int main(int argc, const char **argv)
       [window.search setStringValue: @""];
       [window.processFilter selectItemAtIndex: 1];
       [window filtersChanged: nil];
-      CHECK([table numberOfRows] == 4, "All processes includes non-GNUstep");
+      CHECK([table numberOfRows] == 5, "All processes includes non-GNUstep and unknown identities");
+      NSTableColumn *pidColumn = [table tableColumnWithIdentifier: @"pid"];
+      NSFont *pidFont = [[pidColumn dataCell] font] ?: [NSFont systemFontOfSize: [NSFont systemFontSize]];
+      CGFloat pidWidth = [@"4194304" sizeWithAttributes: @{NSFontAttributeName: pidFont}].width;
+      CHECK([pidColumn width] >= pidWidth + 16, "PID column fits seven digits in the active theme");
+      NSString *unknownStatus = [window tableView: table objectValueForTableColumn:
+        [table tableColumnWithIdentifier: @"status"] row: rowForPID(table, 45)];
+      CHECK([unknownStatus rangeOfString: @"GNUstep: unknown (memory map not readable)"].location != NSNotFound,
+        "All processes labels unreadable memory maps explicitly");
+      NSArray *savedSnapshot = provider.snapshot;
+      provider.snapshot = @[target(45, @"Unreadable", PDGNUstepUnknown)];
+      [window.processFilter selectItemAtIndex: 0];
+      [window filtersChanged: nil];
+      CHECK([table numberOfRows] == 0 && [[window.summary stringValue] rangeOfString:
+        @"No GNUstep apps detected. Show all processes."].location != NSNotFound,
+        "unreadable-only snapshot offers the All processes hint");
+      provider.snapshot = savedSnapshot;
+      [window filtersChanged: nil];
       [window chooseLaunch: window.launchMode];
       CHECK([window valueForKey: @"refreshTimer"] == nil, "leaving attach stops process timer");
       CHECK([window.cpuTemplate state] == NSOnState, "launch radio restores a supported template");

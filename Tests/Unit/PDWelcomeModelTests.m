@@ -90,16 +90,16 @@ process(int pid, NSString *name, PDGNUstepIdentity identity)
   XCTAssertEqualObjects([_model recordDisabledReason], @"Choose an app or executable.");
   XCTAssertNil([_model recordingOptionsWithError: NULL]);
   _model.mode = PDWelcomeAttach;
-  XCTAssertEqualObjects([_model recordDisabledReason], @"Choose a running app.");
+  XCTAssertEqualObjects([_model recordDisabledReason], @"No GNUstep apps detected. Show all processes.");
 }
-- (void) testFiltersNameAndPIDAndKeepsUnknownGNUstepIdentity
+- (void) testGNUstepFilterRequiresConfirmedIdentityAndAllIncludesUnknown
 {
   PDWelcomeProcess *gorm = process(48213, @"Gorm", PDGNUstepYes);
   PDWelcomeProcess *unknown = process(25, @"Unverified", PDGNUstepUnknown);
   PDWelcomeProcess *other = process(35, @"Other", PDGNUstepNo);
   _provider.snapshot = [NSArray arrayWithObjects: unknown, other, gorm, nil];
   [_model refreshProcesses];
-  XCTAssertEqual([[_model filteredProcesses] count], (NSUInteger)2);
+  XCTAssertEqualObjects([_model filteredProcesses], [NSArray arrayWithObject: gorm]);
   _model.searchText = @" GOR ";
   XCTAssertEqualObjects([_model filteredProcesses], [NSArray arrayWithObject: gorm]);
   _model.searchText = @"821";
@@ -108,6 +108,20 @@ process(int pid, NSString *name, PDGNUstepIdentity identity)
   XCTAssertEqual([[_model filteredProcesses] count], (NSUInteger)0);
   _model.GNUstepOnly = NO;
   XCTAssertEqualObjects([_model filteredProcesses], [NSArray arrayWithObject: other]);
+  _model.searchText = @"Unverified";
+  XCTAssertEqualObjects([_model filteredProcesses], [NSArray arrayWithObject: unknown]);
+}
+- (void) testUnreadableMapsOnlyOffersAllProcessesHint
+{
+  PDWelcomeProcess *unknown = process(25, @"Unverified", PDGNUstepUnknown);
+  _provider.snapshot = @[unknown];
+  _model.mode = PDWelcomeAttach;
+  [_model refreshProcesses];
+  XCTAssertEqual([[_model filteredProcesses] count], (NSUInteger)0);
+  XCTAssertEqualObjects([_model recordDisabledReason], @"No GNUstep apps detected. Show all processes.");
+  _model.GNUstepOnly = NO;
+  XCTAssertEqualObjects([_model filteredProcesses], @[unknown]);
+  XCTAssertEqualObjects([_model recordDisabledReason], @"Choose a running app.");
 }
 - (void) testKnownAttachReasonsDoNotInventPermissions
 {

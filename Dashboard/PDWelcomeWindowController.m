@@ -50,7 +50,7 @@
       _table = [[NSTableView alloc] initWithFrame: NSMakeRect(0, 0, 560, 210)];
       NSArray *keys = [NSArray arrayWithObjects: @"name", @"pid", @"status", nil];
       NSArray *titles = [NSArray arrayWithObjects: @"App", @"PID", @"Status", nil];
-      CGFloat widths[] = { 140, 65, 340 };
+      CGFloat widths[] = { 140, 96, 340 };
       for (NSUInteger i = 0; i < [keys count]; i++)
         {
           NSTableColumn *column = [[NSTableColumn alloc] initWithIdentifier: [keys objectAtIndex: i]];
@@ -191,8 +191,11 @@
     return p.name;
   if ([[column identifier] isEqual: @"pid"])
     return [NSNumber numberWithInt: p.pid];
-  return [_model unavailableReasonForProcess: p]
-    ?: (p.GNUstepIdentity == PDGNUstepUnknown ? @"GNUstep status unknown; permission unverified" : @"Permission unverified");
+  NSString *reason = [_model unavailableReasonForProcess: p];
+  if (p.GNUstepIdentity == PDGNUstepUnknown)
+    return reason ? [NSString stringWithFormat: @"GNUstep: unknown (memory map not readable); %@", reason]
+                  : @"GNUstep: unknown (memory map not readable)";
+  return reason ?: @"Permission unverified";
 }
 - (BOOL) tableView: (NSTableView *)tableView shouldSelectRow: (NSInteger)row
 {

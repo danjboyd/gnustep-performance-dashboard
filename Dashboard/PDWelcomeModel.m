@@ -184,7 +184,7 @@
   NSMutableArray *result = [NSMutableArray array];
   for (PDWelcomeProcess *p in _processes)
     {
-      if (_GNUstepOnly && p.GNUstepIdentity == PDGNUstepNo)
+      if (_GNUstepOnly && p.GNUstepIdentity != PDGNUstepYes)
         continue;
       NSString *pid = [NSString stringWithFormat: @"%d", p.pid];
       if ([query length] && [p.name rangeOfString: query options: NSCaseInsensitiveSearch].location == NSNotFound
@@ -214,7 +214,13 @@
   if (_mode == PDWelcomeAttach)
     {
       if (_selectedProcess == nil)
-        return @"Choose a running app.";
+        {
+          if (_GNUstepOnly && [[_searchText stringByTrimmingCharactersInSet:
+                [NSCharacterSet whitespaceAndNewlineCharacterSet]] length] == 0
+              && [[self filteredProcesses] count] == 0)
+            return @"No GNUstep apps detected. Show all processes.";
+          return @"Choose a running app.";
+        }
       NSString *identity = [_provider currentIdentityForPID: _selectedProcess.pid];
       if (![_selectedProcess.identity length] || ![identity isEqual: _selectedProcess.identity])
         return @"The selected process exited or changed. Choose the target again.";
