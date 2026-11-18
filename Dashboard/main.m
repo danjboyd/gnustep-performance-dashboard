@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #import <AppKit/AppKit.h>
 #import "PDAppController.h"
+#import "PDWelcomeArguments.h"
 
 /* Built without ARC (GNUmakefile) so that the outermost pool is an
    NSAutoreleasePool. With @autoreleasepool it is only libobjc2's, and
@@ -11,6 +12,7 @@
 int
 main(int argc, const char **argv)
 {
+  PDPrepareWelcomeProcessArguments(argc, argv);
   NSAutoreleasePool *pool = [NSAutoreleasePool new];
   PDAppController *controller;
 

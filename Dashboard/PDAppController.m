@@ -196,7 +196,7 @@ termination_signal(int sig)
   BOOL handled = NO;
   NSError *argumentError = nil;
   GSPRecordingOptions *aliased = [PDWelcomeArguments optionsFromArguments:
-    [[NSProcessInfo processInfo] arguments] provider: [PDWelcomeProcessProvider new]
+    [PDWelcomeArguments processArguments] provider: [PDWelcomeProcessProvider new]
     handled: &handled error: &argumentError];
   if (handled)
     {
@@ -205,7 +205,8 @@ termination_signal(int sig)
           fprintf(stderr, "Performance Dashboard: %s\n", [[argumentError localizedDescription] UTF8String]);
           exit(2);
         }
-      [self startRecordingWithOptions: aliased];
+      [self startUpdater];
+      [self startRecordingWithOptions: aliased rememberTarget: NO];
       return;
     }
 #endif
@@ -224,7 +225,7 @@ termination_signal(int sig)
       NSString *args = [d stringForKey: @"PDRecordArguments"];
       o.arguments = [args length] ? [args componentsSeparatedByString: @" "] : [NSArray array];
       o.timeLimit = [d doubleForKey: @"PDRecordTimeLimit"];
-      [self startRecordingWithOptions: o];
+      [self startRecordingWithOptions: o rememberTarget: NO];
       return;
     }
   NSString *open = [d stringForKey: @"PDOpenTrace"];
@@ -239,6 +240,8 @@ termination_signal(int sig)
 
 - (BOOL) application: (NSApplication *)app openFile: (NSString *)file
 {
+  if ([PDWelcomeArguments hasRecordingAliases])
+    return YES; /* Explicit recording takes precedence over document arguments. */
   _openedAtLaunch = YES;
   return [self openTraceAtPath: file];
 }
@@ -335,7 +338,12 @@ termination_signal(int sig)
 
 - (void) startRecordingWithOptions: (GSPRecordingOptions *)o
 {
-  [_welcomeHistory noteTarget: o mode: o.attachPID ? PDWelcomeAttach : PDWelcomeLaunch];
+  [self startRecordingWithOptions: o rememberTarget: YES];
+}
+- (void) startRecordingWithOptions: (GSPRecordingOptions *)o rememberTarget: (BOOL)remember
+{
+  if (remember)
+    [_welcomeHistory noteTarget: o mode: o.attachPID ? PDWelcomeAttach : PDWelcomeLaunch];
   PDTraceWindowController *wc = [[PDTraceWindowController alloc] initWithRecordingOptions: o];
   [_windows addObject: wc];
   [wc showWindow: self];

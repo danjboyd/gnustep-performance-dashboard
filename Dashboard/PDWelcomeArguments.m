@@ -1,8 +1,48 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #import "PDWelcomeArguments.h"
 #include <limits.h>
+#include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+static NSArray *recordingArguments;
+
+void
+PDPrepareWelcomeProcessArguments(int argc, const char **argv)
+{
+  int first = 0;
+  for (int i = 1; i < argc; i++)
+    if (!strcmp(argv[i], "--launch") || !strcmp(argv[i], "--attach") || !strcmp(argv[i], "--template"))
+      { first = i; break; }
+  if (!first)
+    return;
+#if defined(__linux__)
+  extern char **environ;
+  /* This documented GNUstep override precedes the first defaults/AppKit use.
+     Keep GUI flags before the alias, and retain the complete original argv
+     separately for the recording parser and target. */
+  GSInitializeProcess(first, (char **)argv, environ);
+  @autoreleasepool
+    {
+      NSMutableArray *original = [NSMutableArray arrayWithCapacity: argc];
+      for (int i = 0; i < argc; i++)
+        {
+          NSString *value = [NSString stringWithUTF8String: argv[i]];
+          if (value == nil)
+            value = [[NSString alloc] initWithCString: argv[i] encoding: NSISOLatin1StringEncoding];
+          [original addObject: value];
+        }
+      recordingArguments = [original copy];
+    }
+#else
+  fprintf(stderr, "Performance Dashboard: recording aliases are currently supported only on Linux.\n");
+  exit(2);
+#endif
+}
 
 @implementation PDWelcomeArguments
++ (NSArray *) processArguments { return recordingArguments ?: [[NSProcessInfo processInfo] arguments]; }
++ (BOOL) hasRecordingAliases { return recordingArguments != nil; }
 + (GSPRecordingOptions *) optionsFromArguments: (NSArray *)argv
                                     provider: (id<PDWelcomeTargetProvider>)provider
                                      handled: (BOOL *)handled
