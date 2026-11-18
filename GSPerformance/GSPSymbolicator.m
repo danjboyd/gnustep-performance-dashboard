@@ -4,6 +4,8 @@
 #import "GSPStackTable.h"
 
 #include "GSPELF.h"
+#include "Runtime/gsp_build_id.h"
+#include <sys/stat.h>
 #include <GSPerformance/gsp_format.h>
 #if defined(_WIN32)
 #  include <windows.h>
@@ -33,6 +35,8 @@ typedef struct elf_sym
   BOOL hasSymtab;
   NSData *buildID;
   NSString *debugLink;
+  uint32_t debugLinkCRC;
+  BOOL hasDebugLinkCRC;
   NSString *symbolPath;
   uint64_t *funcStarts;      /* from .eh_frame_hdr, sorted */
   NSUInteger funcCount;
@@ -301,31 +305,39 @@ static uint32_t rd32(const uint8_t *p) { uint32_t v; memcpy(&v, p, 4); return v;
   const Elf64_Shdr *shstr = eh->e_shstrndx < eh->e_shnum ? &sh[eh->e_shstrndx] : NULL;
   for (int i = 0; i < eh->e_shnum; i++)
     {
-      if (sh[i].sh_offset + sh[i].sh_size > len)
+      if (sh[i].sh_offset > len || sh[i].sh_size > len - sh[i].sh_offset)
         continue;
       if (sh[i].sh_type == SHT_NOTE)
         {
-          const uint8_t *n = b + sh[i].sh_offset, *end = n + sh[i].sh_size;
-          while (n + 12 <= end)
-            {
-              uint32_t namesz = *(const uint32_t *)n;
-              uint32_t descsz = *(const uint32_t *)(n + 4);
-              uint32_t type = *(const uint32_t *)(n + 8);
-              const uint8_t *nm = n + 12;
-              const uint8_t *desc = nm + ((namesz + 3) & ~3u);
-              if (desc + descsz > end)
-                break;
-              if (type == NT_GNU_BUILD_ID && namesz == 4 && memcmp(nm, "GNU", 4) == 0)
-                buildID = [NSData dataWithBytes: desc length: descsz];
-              n = desc + ((descsz + 3) & ~3u);
-            }
+          uint8_t identifier[GSP_IMAGE_BUILD_ID_MAX];
+          size_t size = gsp_note_build_id(b + sh[i].sh_offset, (size_t)sh[i].sh_size,
+            sh[i].sh_addralign == 8 ? 8 : 4, identifier, sizeof(identifier));
+          if (size)
+            buildID = [NSData dataWithBytes: identifier length: size];
         }
       if (shstr && sh[i].sh_type == SHT_PROGBITS
-          && shstr->sh_offset + sh[i].sh_name < len
-          && strcmp((const char *)b + shstr->sh_offset + sh[i].sh_name,
-                    ".gnu_debuglink") == 0)
-        debugLink = [NSString stringWithUTF8String:
-          (const char *)b + sh[i].sh_offset];
+          && shstr->sh_offset <= len && shstr->sh_size <= len - shstr->sh_offset
+          && sh[i].sh_name < shstr->sh_size)
+        {
+          const char *section = (const char *)b + shstr->sh_offset + sh[i].sh_name;
+          size_t remaining = (size_t)(shstr->sh_size - sh[i].sh_name);
+          if (memchr(section, 0, remaining) && strcmp(section, ".gnu_debuglink") == 0)
+            {
+              const char *link = (const char *)b + sh[i].sh_offset;
+              const char *end = memchr(link, 0, (size_t)sh[i].sh_size);
+              if (end)
+                {
+                  uint64_t crcOffset = ((uint64_t)(end - link) + 4) & ~UINT64_C(3);
+                  if (crcOffset <= sh[i].sh_size && sh[i].sh_size - crcOffset >= 4)
+                    {
+                      debugLink = [[NSString alloc] initWithBytes: link length: end - link
+                                                       encoding: NSUTF8StringEncoding];
+                      memcpy(&debugLinkCRC, (const uint8_t *)link + crcOffset, 4);
+                      hasDebugLinkCRC = debugLink != nil;
+                    }
+                }
+            }
+        }
     }
 
   for (int pass = 0; pass < 2; pass++)
@@ -388,28 +400,68 @@ hex_string(NSData *d)
 static NSArray *
 debug_roots(void)
 {
-  NSMutableArray *roots = [NSMutableArray arrayWithObject: @"/usr/lib/debug"];
   const char *value = getenv("GSP_DEBUG_ROOTS");
-  NSString *configured = value ? [NSString stringWithUTF8String: value] : nil;
+  NSString *configured = value ? [NSString stringWithUTF8String: value] : @"";
+  @synchronized ([GSPELFFile class])
+    {
+      static NSString *previous;
+      static NSArray *cached;
+      if (cached && [previous isEqual: configured])
+        return cached;
+      NSMutableArray *roots = [NSMutableArray arrayWithObject: @"/usr/lib/debug"];
 #if defined(_WIN32)
-  NSString *separator = @";";
+      NSString *separator = @";";
 #else
-  NSString *separator = @":";
+      NSString *separator = @":";
 #endif
-  for (NSString *root in [configured componentsSeparatedByString: separator])
-    if ([root isAbsolutePath] && ![roots containsObject: root])
-      [roots addObject: root];
-  return roots;
+      for (NSString *root in [configured componentsSeparatedByString: separator])
+        if ([root isAbsolutePath] && ![roots containsObject: root])
+          [roots addObject: root];
+      previous = [configured copy];
+      cached = [roots copy];
+      return cached;
+    }
 }
 
-- (void) loadDebugFileFor: (NSString *)path
+static uint32_t
+debuglink_crc(NSData *data)
 {
-  if ([buildID length] == 0)
-    return;   /* A matching filename/debuglink alone is insufficient. */
+  uint32_t crc = UINT32_MAX;
+  const uint8_t *bytes = data.bytes;
+  for (NSUInteger i = 0; i < data.length; i++)
+    {
+      crc ^= bytes[i];
+      for (unsigned bit = 0; bit < 8; bit++)
+        crc = (crc >> 1) ^ ((crc & 1) ? UINT32_C(0xedb88320) : 0);
+    }
+  return ~crc;
+}
+
+/* Filesystem identity invalidates cached verification on replacement/change. */
+static NSArray *
+file_stamp(NSString *path)
+{
+  struct stat st;
+  if (stat(path.fileSystemRepresentation, &st) != 0 || !S_ISREG(st.st_mode))
+    return nil;
+  long modifiedNS = 0, changedNS = 0;
+#if defined(__linux__)
+  modifiedNS = st.st_mtim.tv_nsec; changedNS = st.st_ctim.tv_nsec;
+#elif defined(__APPLE__)
+  modifiedNS = st.st_mtimespec.tv_nsec; changedNS = st.st_ctimespec.tv_nsec;
+#endif
+  return @[ @(st.st_dev), @(st.st_ino), @(st.st_size), @(st.st_mtime),
+            @(modifiedNS), @(st.st_ctime), @(changedNS) ];
+}
+
+- (void) loadDebugFileFor: (NSString *)path roots: (NSArray *)roots
+{
+  if ([buildID length] == 0 && !hasDebugLinkCRC)
+    return;   /* A filename alone is insufficient; CRC restores no-ID debuglink. */
   NSMutableArray *candidates = [NSMutableArray array];
   NSFileManager *fm = [NSFileManager defaultManager];
   NSString *hex = hex_string(buildID);
-  for (NSString *root in debug_roots())
+  for (NSString *root in roots)
     {
       BOOL isDir = NO;
       if (![fm fileExistsAtPath: root isDirectory: &isDir])
@@ -444,7 +496,9 @@ debug_roots(void)
       GSPELFFile *dbg = [GSPELFFile new];
       NSData *data = [NSData dataWithContentsOfFile: c];
       if (data != nil && [dbg loadData: data] && !dbg->isPE
-          && [dbg->buildID isEqual: buildID] && dbg->count > count)
+          && ([buildID length] ? [dbg->buildID isEqual: buildID]
+                                : (hasDebugLinkCRC && debuglink_crc(data) == debugLinkCRC))
+          && dbg->count > count)
         {
           free(syms);
           syms = dbg->syms;
@@ -475,7 +529,8 @@ debug_roots(void)
     {
       if (elfCache == nil)
         elfCache = [NSMutableDictionary dictionary];
-      NSArray *cacheKey = @[ path, debug_roots(), expected ?: [NSData data] ];
+      NSArray *roots = debug_roots();
+      NSArray *cacheKey = @[ path, roots, expected ?: [NSData data], file_stamp(path) ?: @[] ];
       id cached = [elfCache objectForKey: cacheKey];
       if (cached)
         return [cached isKindOfClass: [GSPELFFile class]] ? cached : nil;
@@ -493,14 +548,14 @@ debug_roots(void)
              A matching explicitly supplied file may replace a missing image. */
           file = [GSPELFFile new];
           file->buildID = expected;
-          [file loadDebugFileFor: path];
+          [file loadDebugFileFor: path roots: roots];
           parsed = file->symbolPath != nil;
         }
       else if (parsed)
         {
           file->symbolPath = path;
           if (!file->hasSymtab)
-            [file loadDebugFileFor: path];
+            [file loadDebugFileFor: path roots: roots];
         }
       [elfCache setObject: parsed ? (id)file : (id)[NSNull null] forKey: cacheKey];
       return parsed ? file : nil;
@@ -600,9 +655,24 @@ static char *(*cxa_demangle)(const char *, char *, size_t *, int *);
 
 + (NSData *) buildIDForImageAtPath: (NSString *)path
 {
-  GSPELFFile *file = [GSPELFFile new];
-  NSData *data = [NSData dataWithContentsOfFile: path];
-  return data && [file loadData: data] && !file->isPE ? file->buildID : nil;
+  @synchronized (self)
+    {
+      static NSMutableDictionary *verified;
+      NSArray *stamp = file_stamp(path);
+      if (!stamp) return nil;
+      if (!verified) verified = [NSMutableDictionary dictionary];
+      NSDictionary *cached = verified[path];
+      if ([cached[@"stamp"] isEqual: stamp])
+        return cached[@"id"] == [NSNull null] ? nil : cached[@"id"];
+      GSPELFFile *file = [GSPELFFile new];
+      NSData *data = [NSData dataWithContentsOfMappedFile: path];
+      NSData *identifier = data && [file loadData: data] && !file->isPE ? file->buildID : nil;
+      /* Do not cache a read raced by replacement or modification. */
+      if (![stamp isEqual: file_stamp(path)]) return nil;
+      if (verified.count >= 256) [verified removeAllObjects];
+      verified[path] = @{ @"stamp": stamp, @"id": identifier ?: (id)[NSNull null] };
+      return identifier;
+    }
 }
 
 + (NSString *) matchingDebugFileForImageAtPath: (NSString *)path
@@ -1237,8 +1307,14 @@ is_agent(GSPSymbol *s)
 - (NSDictionary *) symbolSnapshotForAllStacks
 {
   NSMutableArray *images = [NSMutableArray array];
+  BOOL needsIdentity = NO;
   for (GSPImage *image in _process.images)
-    [images addObject: image_identity(image)];
+    {
+      [images addObject: image_identity(image)];
+      needsIdentity |= image.buildID.length > 0 || image.buildIDInvalid || image.identityAmbiguous;
+    }
+  if (!needsIdentity)
+    return [self symbolTableForAllStacks];
   return @{ @"FormatVersion": @2, @"Images": images, @"Symbols": [self symbolTableForAllStacks] };
 }
 
@@ -1261,7 +1337,8 @@ is_agent(GSPSymbol *s)
              function boundaries here; another host without that exact image
              would otherwise group the same frames under different offsets
              (or resolve them against an unrelated local library). Keep the
-             existing address-to-string sidecar format for older readers. */
+             flat maps for ID-less traces, and identity-bound v2 snapshots
+             when the trace records module IDs. */
           [table setObject: s.name forKey: hex];
         }
     }

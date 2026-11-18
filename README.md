@@ -186,8 +186,8 @@ CPU-weighted denominator excludes wall samples.
 
 On Linux, optional `GSP_DEBUG_ROOTS=/path/to/debug-store:/path/to/runtime.debug`
 adds local debug files or build-ID directories. Separate symbols are accepted
-only when their ELF build ID matches the local image; mismatches or missing
-IDs retain the normal fallback. No symbols are downloaded automatically.
+only when their ELF build ID matches the local image, or an ID-less image’s
+.gnu_debuglink CRC32 matches. Mismatches retain the normal fallback. No symbols are downloaded automatically.
 New Linux captures retain loaded GNU build IDs and require matching local
 images/symbols; `gstrace info` lists capture coverage and unresolved-module
 IDs. Legacy traces through v0.1.6 lack recording-time IDs, so a local match

@@ -63,7 +63,7 @@
 /* Address -> display name for every frame of every stack, including fallback
    address labels, for embedding a portable snapshot in the trace bundle. */
 - (NSDictionary *) symbolTableForAllStacks;
-/* Versioned portable snapshot bound to recorded image identities. */
+/* Identity-bound v2 snapshot, or a legacy flat map for ID-less traces. */
 - (NSDictionary *) symbolSnapshotForAllStacks;
 
 /* Parse the final :line component, preserving Windows drive colons.
@@ -73,7 +73,7 @@
 
 + (BOOL) isSystemLibraryPath: (NSString *)path;
 + (NSString *) executableSearchPathInEnvironment: (NSDictionary *)environment;
-/* Local ELF diagnostics. Missing IDs and mismatched debug files are refused. */
+/* Local ELF diagnostics. ID mismatches refuse; ID-less debuglink uses CRC32. */
 + (NSData *) buildIDForImageAtPath: (NSString *)path;
 + (NSString *) matchingDebugFileForImageAtPath: (NSString *)path;
 

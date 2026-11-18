@@ -103,6 +103,8 @@ typedef struct pending_ref
 
   NSMutableDictionary *_threads;
   NSMutableArray *_images;
+  NSUInteger _imageIdentityComparisons;
+  BOOL _imageIdentityOverflow;
   NSMutableDictionary *_strings;   /* NSNumber -> NSString */
   NSMutableDictionary *_methods;
   NSMutableArray *_signposts;
@@ -358,12 +360,26 @@ payload_string(const uint8_t *p, size_t max)
                     }
                 }
             }
-          for (GSPImage *old in _images)
-            if (im.start < old.end && old.start < im.end
-                && (im.buildIDInvalid || old.buildIDInvalid
-                    || im.base != old.base || ![im.path isEqual: old.path]
-                    || ![(im.buildID ?: [NSData data]) isEqual: (old.buildID ?: [NSData data])]))
-              { im.identityAmbiguous = YES; old.identityAmbiguous = YES; }
+          /* Bound work across the entire stream. Once the budget is spent,
+             conservatively refuse all image attribution, including old images. */
+          if (!_imageIdentityOverflow)
+            for (GSPImage *old in _images)
+              {
+                if (_imageIdentityComparisons++ >= 65536)
+                  {
+                    _imageIdentityOverflow = YES;
+                    for (GSPImage *known in _images)
+                      known.identityAmbiguous = YES;
+                    break;
+                  }
+                if (im.start < old.end && old.start < im.end
+                    && (im.buildIDInvalid || old.buildIDInvalid
+                        || im.base != old.base || ![im.path isEqual: old.path]
+                        || ![(im.buildID ?: [NSData data]) isEqual: (old.buildID ?: [NSData data])]))
+                  { im.identityAmbiguous = YES; old.identityAmbiguous = YES; }
+              }
+          if (_imageIdentityOverflow)
+            im.identityAmbiguous = YES;
           [_images addObject: im];
         }
       break;

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Linux agent/reader identity contract; local synthetic workload, no network."""
-import hashlib
+"""Linux agent/reader identity contract; synthetic workload plus a pinned cached legacy reader."""
+import legacy_reader
 import os
 from pathlib import Path
 import re
@@ -19,6 +19,10 @@ def run(args):
 
 with tempfile.TemporaryDirectory(prefix='pd-loaded-id-') as directory:
     work = Path(directory)
+    notes = work / 'elf-notes'
+    run(['cc', '-std=c11', '-Wall', '-Wextra', '-Werror',
+         ROOT / 'Tests/fixtures/elf-build-id-notes.c', '-o', notes])
+    print(run([notes]).strip())
     source = work / 'target.c'
     target = work / 'target'
     source.write_text('#include <time.h>\n#include <stdint.h>\n'
@@ -52,11 +56,10 @@ with tempfile.TemporaryDirectory(prefix='pd-loaded-id-') as directory:
     info = run([CLI, 'info', trace])
     assert re.search(r'image build IDs: [1-9][0-9]* of [0-9]+ recorded; 0 invalid/ambiguous', info), info
     assert 'CaptureStatus: complete' in info and 'Exit status: 0' in info, info
-    legacy = os.environ.get('PD_LEGACY_GSTRACE')
-    if legacy:
-        old = run([legacy, 'info', trace])
-        assert str(target) in old and 'CaptureStatus: complete' in old, old
-        print('PASS published legacy reader opens new IMAGE suffix')
+    legacy = os.environ.get('PD_LEGACY_GSTRACE') or legacy_reader.prepare(work / 'legacy')
+    old = run([legacy, 'info', trace])
+    assert str(target) in old and 'CaptureStatus: complete' in old, old
+    print('PASS published legacy reader opens new IMAGE suffix')
     run([CLI, 'symbolicate', trace, '--embed'])
     assert 'Symbols:' in run([CLI, 'info', trace])
     dependencies = run(['readelf', '-d', ROOT/'Runtime/obj/libgsperf-agent.so'])

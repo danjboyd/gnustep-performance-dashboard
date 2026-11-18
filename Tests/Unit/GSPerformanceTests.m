@@ -16,6 +16,7 @@
 
 #if defined(__linux__)
 #include "GSPerformance/GSPELF.h"
+#include <zlib.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -875,7 +876,7 @@ child(GSPCallTreeNode *n, NSString *name)
   @try
     {
       setenv("GSP_DEBUG_ROOTS", (layout ? root : debug).UTF8String, 1);
-      XCTAssertEqualObjects([GSPSymbolicator buildIDForImageAtPath: image], imageID);
+      XCTAssertEqualObjects([GSPSymbolicator buildIDForImageAtPath: image], imageID.length ? imageID : nil);
       XCTAssertEqualObjects([GSPSymbolicator matchingDebugFileForImageAtPath: image], expected ? debug : nil);
       TraceBuilder *builder = [[TraceBuilder alloc] initWithPID: 4242];
       [builder image: image.UTF8String base: 0x70000000 start: 0x70001000 end: 0x70002000];
@@ -987,6 +988,69 @@ child(GSPCallTreeNode *n, NSString *name)
   XCTAssertTrue([trace.targetProcess.symbolicator symbolForAddress: 0x70001104].isUnknown);
 }
 
+- (void) testBuildIDVerificationCacheInvalidatesReplacedFiles
+{
+  NSString *path = [NSTemporaryDirectory() stringByAppendingPathComponent: [[NSUUID UUID] UUIDString]];
+  NSData *one = [NSData dataWithBytes: "1111" length: 4];
+  NSData *two = [NSData dataWithBytes: "2222" length: 4];
+  [symbol_elf_fixture(one, YES) writeToFile: path atomically: YES];
+  NSData *first = [GSPSymbolicator buildIDForImageAtPath: path];
+  XCTAssertTrue(first == [GSPSymbolicator buildIDForImageAtPath: path]);
+  [symbol_elf_fixture(two, YES) writeToFile: path atomically: YES];
+  XCTAssertEqualObjects([GSPSymbolicator buildIDForImageAtPath: path], two);
+  [[NSFileManager defaultManager] removeItemAtPath: path error: NULL];
+  XCTAssertNil([GSPSymbolicator buildIDForImageAtPath: path]);
+}
+
+- (void) testLargeImageInventoryBoundsAmbiguityWork
+{
+  TraceBuilder *builder = [[TraceBuilder alloc] initWithPID: 4242];
+  for (NSUInteger i = 0; i < 4096; i++)
+    [builder image: "/missing/image.so" base: 0x1000 * i
+             start: 0x1000 * i end: 0x1000 * i + 0x800];
+  [builder end: builder.start + MS];
+  GSPTrace *trace = [self traceFrom: builder name: @"large-image-inventory" instruments: nil];
+  XCTAssertEqual(trace.targetProcess.images.count, (NSUInteger)4096);
+  for (GSPImage *image in trace.targetProcess.images)
+    XCTAssertTrue(image.identityAmbiguous);
+}
+
+- (void) testDebuglinkWithoutBuildIDRequiresMatchingCRC
+{
+  NSFileManager *fm = [NSFileManager defaultManager];
+  NSString *root = [NSTemporaryDirectory() stringByAppendingPathComponent: [[NSUUID UUID] UUIDString]];
+  [fm createDirectoryAtPath: root withIntermediateDirectories: YES attributes: nil error: NULL];
+  NSString *path = [root stringByAppendingPathComponent: @"image.so"];
+  NSString *debug = [root stringByAppendingPathComponent: @"image.debug"];
+  NSData *debugData = symbol_elf_fixture([NSData data], YES);
+  [debugData writeToFile: debug atomically: YES];
+  NSMutableData *image = [symbol_elf_fixture([NSData data], NO) mutableCopy];
+  uint8_t *bytes = image.mutableBytes;
+  Elf64_Ehdr *header = (Elf64_Ehdr *)bytes;
+  header->e_shnum = 6; header->e_shstrndx = 4;
+  Elf64_Shdr *sections = (Elf64_Shdr *)(bytes + 1024);
+  const char names[] = "\0.gnu_debuglink\0.shstrtab\0";
+  memcpy(bytes + 768, names, sizeof(names));
+  sections[4].sh_type = SHT_STRTAB; sections[4].sh_offset = 768;
+  sections[4].sh_size = sizeof(names);
+  sections[5].sh_type = SHT_PROGBITS; sections[5].sh_name = 1;
+  sections[5].sh_offset = 832; sections[5].sh_size = 16;
+  memcpy(bytes + 832, "image.debug", 12);
+  uint32_t crc = (uint32_t)crc32(0, debugData.bytes, (uInt)debugData.length);
+  memcpy(bytes + 844, &crc, 4);
+  @try
+    {
+      [image writeToFile: path atomically: YES];
+      XCTAssertNil([GSPSymbolicator buildIDForImageAtPath: path]);
+      XCTAssertEqualObjects([GSPSymbolicator matchingDebugFileForImageAtPath: path], debug);
+      /* Same name and richer symbols are insufficient after one byte changes. */
+      crc ^= 1; memcpy(bytes + 844, &crc, 4);
+      [image writeToFile: path atomically: YES];
+      XCTAssertNil([GSPSymbolicator matchingDebugFileForImageAtPath: path]);
+    }
+  @finally { [fm removeItemAtPath: root error: NULL]; }
+}
+
 - (void) testRuntimeDebugSymbolsMatchBuildIDInExplicitFile
 {
   NSData *identifier = [NSData dataWithBytes: "\x11\x22\x33\x44" length: 4];
@@ -1043,6 +1107,7 @@ child(GSPCallTreeNode *n, NSString *name)
   XCTAssertEqualObjects([table objectForKey: @"14000001f"], @"0x14000001f");
   XCTAssertEqualObjects([table objectForKey: @"0"], @"0x0");
   XCTAssertNil([table objectForKey: @"ffffffffffffffff"]);
+  XCTAssertEqualObjects([symbols symbolSnapshotForAllStacks], table);
   NSString *file = [t.path stringByAppendingPathComponent: @"symbols-4242.plist"];
   XCTAssertTrue([table writeToFile: file atomically: YES]);
   GSPTrace *reopened = [GSPTrace traceWithPath: t.path error: NULL];

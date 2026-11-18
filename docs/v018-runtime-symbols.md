@@ -10,8 +10,9 @@ prove that the image still names the bytes loaded when recording.
 The reader parses ELF symbol tables, build IDs and debuglink names. It already
 looks in standard debug locations, but previously selected richer debug tables
 without verifying their build ID. This can silently attach symbols from the
-wrong build. Require a nonempty image ID and equal candidate ID before using
-separate debug or unstripped symbol tables, including debuglink candidates.
+wrong build. Require equal image/candidate IDs before using separate symbol tables when
+the image has an ID. An ID-less image may instead use a .gnu_debuglink candidate
+only after its GNU CRC32 matches.
 No basename, symbol count or directory naming alone establishes identity.
 
 Add explicit local `GSP_DEBUG_ROOTS` directories or full ELF/debug file paths.
@@ -32,7 +33,8 @@ qualification remain unrun. Legacy display-name snapshots are not retroactive
 ID evidence and cannot override a recorded ID.
 
 Validation must cover a correct candidate resolving a private function, a
-different-ID richer candidate refusing, missing IDs refusing, root layout and
+different-ID richer candidates refusing, missing IDs without CRC refusing,
+CRC-matched ID-less debuglink, root layout and
 existing fallback behavior. Re-analyze the retained Arlen trace without
 embedding or overwriting it, report exact before/after unresolved denominators,
 and distinguish absent matching local symbols from a resolution failure.
@@ -83,3 +85,12 @@ Malformed IDs and ambiguous mappings refuse attribution. Version2 embedded
 snapshots bind names to the image record identities; flat legacy snapshots
 cannot override a recorded ID. Existing traces and legacy snapshots remain
 readable. The broader lifetime-aware mapping design above remains future work.
+
+The reader caches addr2line file-ID verification by path, device/inode, size,
+mtime and ctime (including nanoseconds where available), invalidating on file
+replacement or change. Configured debug roots are parsed once per setting.
+A fixed 65,536-comparison budget bounds image-overlap work; exhaustion marks
+all stream images ambiguous. Loaded-note parsing honors 4/8-byte alignment
+and ELF PF_R ranges; PF_R is not a guarantee against later mprotect changes.
+Agent image deduplication retains a bounded path fingerprint and length rather
+than a 1 KiB path per entry. Full recorded paths are still emitted in IMAGE.

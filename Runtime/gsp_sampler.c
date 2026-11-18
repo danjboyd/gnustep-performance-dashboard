@@ -8,6 +8,7 @@
    to find periods when the main run loop was not waiting for events.  */
 
 #include "gsp_internal.h"
+#include "gsp_build_id.h"
 
 #include <dlfcn.h>
 #include <errno.h>
@@ -178,7 +179,8 @@ pthread_create(pthread_t *thread, const pthread_attr_t *attr,
 typedef struct image_identity
 {
   uint64_t start;
-  char path[1024];
+  uint64_t path_hash;
+  uint32_t path_length;
   uint16_t build_id_size;
   uint8_t build_id[GSP_IMAGE_BUILD_ID_MAX];
 } image_identity;
@@ -224,34 +226,20 @@ loaded_build_id(const struct dl_phdr_info *pi, image_info *image)
               || load->p_vaddr > UINTPTR_MAX - pi->dlpi_addr)
             continue;
           uintptr_t lo = pi->dlpi_addr + load->p_vaddr;
-          if (load->p_memsz <= UINTPTR_MAX - lo && start >= lo && end <= lo + load->p_memsz)
+          if (load->p_memsz <= UINTPTR_MAX - lo
+              && gsp_note_range_within(start, end - start, lo, load->p_memsz))
             readable = true;
         }
       if (!readable)
         continue;
-      const uint8_t *bytes = (const uint8_t *)start;
-      size_t size = (size_t)note->p_memsz, offset = 0;
-      while (offset <= size - 12)
-        {
-          uint32_t fields[3];
-          memcpy(fields, bytes + offset, sizeof(fields));
-          offset += 12;
-          size_t names = ((uint64_t)fields[0] + 3) & ~UINT64_C(3);
-          size_t desc = ((uint64_t)fields[1] + 3) & ~UINT64_C(3);
-          if (names > size - offset || desc > size - offset - names)
-            break;
-          if (fields[2] == NT_GNU_BUILD_ID && fields[0] == 4
-              && fields[1] > 0 && fields[1] <= GSP_IMAGE_BUILD_ID_MAX
-              && memcmp(bytes + offset, "GNU", 4) == 0)
-            {
-              image->build_id_size = (uint16_t)fields[1];
-              memcpy(image->build_id, bytes + offset + names, fields[1]);
-              return;
-            }
-          offset += names + desc;
-          if (size - offset < 12)
-            break;
-        }
+      /* PF_R describes the ELF load segment, not later mprotect changes. */
+      if (note->p_memsz > SIZE_MAX)
+        continue;
+      image->build_id_size = (uint16_t)gsp_note_build_id((const void *)start,
+        (size_t)note->p_memsz, note->p_align == 8 ? 8 : 4,
+        image->build_id, sizeof(image->build_id));
+      if (image->build_id_size)
+        return;
     }
 }
 
@@ -293,14 +281,20 @@ image_cb(struct dl_phdr_info *pi, size_t size, void *data)
       ssize_t n = readlink("/proc/self/exe", im->path, 1023);
       im->path[n > 0 ? n : 0] = 0;
     }
+  uint32_t path_length = (uint32_t)strlen(im->path);
+  uint64_t path_hash = UINT64_C(14695981039346656037);
+  for (uint32_t i = 0; i < path_length; i++)
+    path_hash = (path_hash ^ (uint8_t)im->path[i]) * UINT64_C(1099511628211);
   for (int i = 0; i < emitted_count; i++)
-    if (emitted_images[i].start == lo && strcmp(emitted_images[i].path, im->path) == 0
+    if (emitted_images[i].start == lo && emitted_images[i].path_hash == path_hash
+        && emitted_images[i].path_length == path_length
         && emitted_images[i].build_id_size == im->build_id_size
         && memcmp(emitted_images[i].build_id, im->build_id, im->build_id_size) == 0)
       return 0;
   image_identity *identity = &emitted_images[emitted_count++];
   identity->start = lo;
-  memcpy(identity->path, im->path, strlen(im->path) + 1);
+  identity->path_hash = path_hash;
+  identity->path_length = path_length;
   identity->build_id_size = im->build_id_size;
   memcpy(identity->build_id, im->build_id, im->build_id_size);
   scan->count++;

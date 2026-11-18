@@ -9,6 +9,7 @@ ADDITIONAL_LIB_DIRS += -L../../GSPerformance/obj
 GSPerformanceTests_BUNDLE_LIBS += -lGSPerformance
 ifeq (,$(findstring mingw,$(GNUSTEP_HOST_OS))$(findstring windows,$(GNUSTEP_HOST_OS)))
 ADDITIONAL_LDFLAGS += -Wl,-rpath,$(CURDIR)/../../GSPerformance/obj
+GSPerformanceTests_BUNDLE_LIBS += -lz
 endif
 
 include $(GNUSTEP_MAKEFILES)/Auxiliary/xctest.make

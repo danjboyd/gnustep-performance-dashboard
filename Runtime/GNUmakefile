@@ -65,6 +65,8 @@ $(OBJDIR)/%.o: %.c gsp_internal.h include/GSPerformance/gsp_format.h \
                include/GSPerformance/gsp_capture.h | $(OBJDIR)
 	$(CC) $(ALL_CFLAGS) -c $< -o $@
 
+$(OBJDIR)/gsp_sampler.o: gsp_build_id.h
+
 $(OBJDIR)/libgsperf-agent.so: $(AGENT_OBJS)
 	$(CC) -shared -o $@ $(AGENT_OBJS) -Wl,-soname,libgsperf-agent.so \
 	  -Wl,-z,nodelete -ldl -lpthread -lrt

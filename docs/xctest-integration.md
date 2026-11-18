@@ -50,3 +50,10 @@ tools-xctest's `XCTCPUMetric` reports less than Apple's (no instructions
 retired / cycles). With `kernel.perf_event_paranoid` ≤ 2 a process can count
 its own instructions with `perf_event_open`; the counting code could live in
 libgsperf and be shared.
+
+The Linux regression suite also exercises the published v0.1.7 reader against
+new IMAGE records. `python3 Tests/legacy_reader.py` primes a SHA256-pinned
+public AppImage cache under `out/compatibility/v0.1.7`; the first run needs
+network access. For offline checks, set `PD_LEGACY_APPIMAGE` to the exact
+published AppImage. The fixture uses `unsquashfs` (squashfs-tools), never the
+AppImage runtime, and executes only its CLI with its extracted libraries.

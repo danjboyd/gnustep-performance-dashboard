@@ -109,3 +109,9 @@ bias/range, captured ID and validity) and Symbols(address-to-name). Images
 with captured IDs require an equal binding before cached names are accepted;
 old flat name-only snapshots remain usable for legacy traces. Build IDs are
 identity assertions, not downloaded symbol data or cryptographic attestations.
+
+Image identity comparison work is capped at 65,536 comparisons per stream.
+If exhausted, all image records in that stream are conservatively marked
+ambiguous; readers retain module/offset fallbacks rather than infer identity.
+This bounds malformed or unusually large IMAGE inventories to linear work
+after the fixed comparison budget.
