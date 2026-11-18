@@ -114,6 +114,9 @@ build stages both libraries automatically and rewrites their runtime paths.
 The unit tests need [tools-xctest](https://github.com/danjboyd/tools-xctest);
 the end-to-end suite runs the AppKit fixture under `Xvfb` when it is available
 (`SKIP_GUI=1` skips it).
+On Linux the suite also checks recording-argument isolation and runs the native
+welcome controller probe in Adwaita and Sombre on its owned private display.
+Themes can be supplied through `ADWAITA_TEST_THEME` and `SOMBRE_TEST_THEME`.
 
 ## Using the app
 

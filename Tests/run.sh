@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Tests/run.sh - regression suite: unit tests (tools-xctest) plus end-to-end
 # recordings of the fixtures with gstrace.
 #
@@ -8,6 +8,8 @@
 #
 # Judge the suite by the exit status and the final line.
 
+# Keep existing `sh Tests/run.sh` callers while sharing the pinned Xvfb helper.
+if [ -z "${BASH_VERSION:-}" ]; then exec bash "$0" "$@"; fi
 set -u
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 OUT=$ROOT/Tests/out
@@ -67,6 +69,18 @@ else
 fi
 
 if [ "$(uname -s)" = Linux ]; then
+  echo "== Pinned Trellis source refusal"
+  if python3 "$ROOT/Tests/pinned-checkout-checks.py"; then
+    pass "Trellis: reviewed source accepted and untracked/changed source refused"
+  else
+    fail "Trellis pinned source refusal"
+  fi
+  echo "== GNUstep recording argument isolation"
+  if bash "$ROOT/Tests/check-welcome.sh" argv; then
+    pass "GUI aliases: target defaults/document arguments stay with the target"
+  else
+    fail "GUI recording argument isolation"
+  fi
   echo "== Offline CSD harness contracts"
   if python3 "$ROOT/Tests/csd-harness-checks.py"; then
     pass "CSD harness: nested make overrides and reserved-display refusal"
@@ -267,14 +281,26 @@ check "child processes are not traced by default" "[ \$(ls '$OUT/objcwork.gstrac
 
 if [ "${SKIP_GUI:-0}" != 1 ] && command -v Xvfb >/dev/null 2>&1; then
   echo "== AppKit fixture: hangs (Xvfb)"
-  DISPLAY_FILE=$(mktemp)
-  Xvfb -displayfd 3 -screen 0 1280x800x24 -nolisten tcp -ac 3>"$DISPLAY_FILE" >/dev/null 2>&1 &
-  XPID=$!
-  trap 'kill "$XPID" 2>/dev/null; rm -f "$DISPLAY_FILE"' EXIT HUP INT TERM
-  n=0
-  while [ ! -s "$DISPLAY_FILE" ] && [ $n -lt 10 ]; do sleep 1; n=$((n + 1)); done
-  [ -s "$DISPLAY_FILE" ] || { echo "private Xvfb failed to start"; exit 1; }
-  DISP=:$(cat "$DISPLAY_FILE")
+  . "$ROOT/scripts/private-xvfb.sh"
+  xvfb_pid=""
+  cleanup_suite_xvfb() {
+    if [ -n "$xvfb_pid" ]; then
+      kill "$xvfb_pid" 2>/dev/null || true
+      wait "$xvfb_pid" 2>/dev/null || true
+      xvfb_pid=""
+    fi
+  }
+  trap cleanup_suite_xvfb EXIT
+  trap 'exit 130' HUP INT TERM
+  pd_start_private_xvfb "$OUT/suite-xvfb.log" || exit 1
+  DISP=":$display_number"
+  if [ "$(uname -s)" = Linux ]; then
+    if DISPLAY="$DISP" PD_OWNED_XVFB_PID="$xvfb_pid" bash "$ROOT/Tests/check-welcome.sh" gui; then
+      pass "welcome: native controller bindings, modes, policies and scrolling in both themes"
+    else
+      fail "native welcome controller checks"
+    fi
+  fi
   # Exercise packaged environment cleanup while connecting a real GUI target
   # to a private display: the leading colon in DISPLAY must survive.
   APPDIR=/tmp/pd-test-appimage-mount DISPLAY=$DISP XAUTHORITY= record hang --template "Time Profiler" --launch "$OUT/hangapp"
@@ -448,7 +474,7 @@ if [ "${SKIP_GUI:-0}" != 1 ] && command -v Xvfb >/dev/null 2>&1; then
   else
     echo "== Performance Dashboard app skipped (needs xdotool)"
   fi
-  kill $XPID 2>/dev/null
+  cleanup_suite_xvfb
 else
   echo "== AppKit fixture skipped"
 fi
