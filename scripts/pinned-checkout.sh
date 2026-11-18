@@ -42,7 +42,9 @@ if [[ "$mode" == verify ]]; then
   [[ -d "$dir" ]] || die "$name: no tree at $dir"
   head="$(git -C "$dir" rev-parse HEAD 2>/dev/null)" || die "$name: $dir is not a git checkout"
   [[ "$head" == "$revision" ]] || die "$name: $dir is at ${head:0:9}, the pin is ${tag:-$revision} (${revision:0:9})"
-  [[ -z "$(git -C "$dir" status --porcelain --untracked-files=no)" ]] || die "$name: $dir has local changes"
+  untracked=no
+  [[ "$name" != gnustep-trellis ]] || untracked=all
+  [[ -z "$(git -C "$dir" status --porcelain --untracked-files="$untracked")" ]] || die "$name: $dir has local changes or unreviewed files"
   exit 0
 fi
 

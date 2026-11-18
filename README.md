@@ -107,6 +107,9 @@ The Linux welcome window uses the separate Trellis libraries. Use the exact
 that checkout with ARC and `hot_reload=no`. Packaging acquires and checks the
 pin automatically, or accepts `TRELLIS_ROOT` pointing at that clean revision.
 Trellis source is included in the Linux corresponding-source inventory.
+`make install` does not install this external dependency: install Trellis's
+shared libraries into the same GNUstep installation first. The Linux package
+build stages both libraries automatically and rewrites their runtime paths.
 
 The unit tests need [tools-xctest](https://github.com/danjboyd/tools-xctest);
 the end-to-end suite runs the AppKit fixture under `Xvfb` when it is available

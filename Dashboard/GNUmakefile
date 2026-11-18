@@ -48,11 +48,6 @@ PerformanceDashboard_RESOURCE_FILES += Resources/WelcomeWindow.trellis
 ADDITIONAL_INCLUDE_DIRS += -I$(TRELLIS_ROOT)/Source/Engine -I$(TRELLIS_ROOT)/Source/View
 ADDITIONAL_LIB_DIRS += -L$(TRELLIS_ROOT)/obj
 ADDITIONAL_GUI_LIBS += -lTrellis -lTrellisEngine
-.PHONY: trellis
-before-all:: trellis
-trellis:
-	@test -f "$(TRELLIS_ROOT)/GNUmakefile" || { echo "Set TRELLIS_ROOT to the pinned Trellis source checkout" >&2; exit 1; }
-	@$(MAKE) -C "$(TRELLIS_ROOT)" hot_reload=no
 endif
 
 # Use PD_ENABLE_SIGNPOSTS=0 for builds without the optional API library.
@@ -77,10 +72,20 @@ ADDITIONAL_GUI_LIBS += -lwinhttp -lshell32
 endif
 ifeq (,$(WINDOWS))
 # the build tree, and the packaged layout (app/ next to runtime/lib)
-ADDITIONAL_LDFLAGS += -Wl,-rpath,'$$ORIGIN/../../GSPerformance/obj:$$ORIGIN/../../Runtime/obj:$$ORIGIN/../../out/gnustep-trellis/obj:$$ORIGIN/../../runtime/lib'
+# The leading build path follows a supplied checkout. Staging replaces the
+# complete build RUNPATH with its payload-relative runtime path.
+ADDITIONAL_LDFLAGS += -Wl,-rpath,'$(abspath $(TRELLIS_ROOT))/obj:$$ORIGIN/../../GSPerformance/obj:$$ORIGIN/../../Runtime/obj:$$ORIGIN/../../runtime/lib'
 endif
 
 include $(GNUSTEP_MAKEFILES)/application.make
+
+ifeq (,$(WINDOWS))
+.PHONY: trellis
+before-all:: trellis
+trellis:
+	@test -f "$(TRELLIS_ROOT)/GNUmakefile" || { echo "Set TRELLIS_ROOT to the pinned Trellis source checkout" >&2; exit 1; }
+	@$(MAKE) -C "$(TRELLIS_ROOT)" hot_reload=no
+endif
 
 .PHONY: updater
 before-all:: updater
