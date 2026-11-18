@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import sys
 import tempfile
+import subprocess
 import unittest
 import yaml
 
@@ -53,6 +54,30 @@ class ProducerChecks(unittest.TestCase):
     def test_managed_is_explicit(self):
         self.production.write_text(json.dumps({'schemaVersion': 1, 'linuxProducer': 'managed'}))
         self.assertEqual(selection.select(self.manifest, self.production, 'refs/tags/v0.1.7')['producer'], 'managed')
+
+    def test_versioned_review_inputs_and_missing_manifest_refusal(self):
+        inputs = self.manifest.parent / 'linux'
+        inputs.mkdir()
+        for version in ('0.1.7', '0.1.8'):
+            if version == '0.1.8':
+                (inputs / 'v017-review-inputs.json').write_text('{}')
+            manifest = json.loads(self.manifest.read_text())
+            manifest['package']['version'] = version
+            self.manifest.write_text(json.dumps(manifest))
+            expected = inputs / ('v' + version.replace('.', '') + '-review-inputs.json')
+            for mode, requested in (('production', version), ('review', version + '-review.1')):
+                command = [sys.executable, str(ROOT / '.github/scripts/release-selection.py'),
+                    '--manifest', str(self.manifest), '--production', str(self.production),
+                    '--custom-mode', mode, '--version', requested, '--review-inputs']
+                missing = subprocess.run(command, capture_output=True, text=True)
+                self.assertNotEqual(missing.returncode, 0)
+                self.assertIn('Missing review-inputs manifest for release ' + version, missing.stderr)
+                self.assertEqual(missing.stdout, '')
+                expected.write_text('{}')
+                result = subprocess.run(command, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout.strip(), str(expected))
+                expected.unlink()
 
     def test_numeric_unsigned_path_requires_custom_and_exact_base(self):
         self.assertEqual(selection.custom_version(self.manifest, self.production, 'production', '0.1.7')['version'], '0.1.7')

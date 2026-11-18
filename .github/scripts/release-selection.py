@@ -29,6 +29,16 @@ def custom_version(manifest, production, mode, version):
     return selected
 
 
+def review_inputs(manifest, selected):
+    if selected['producer'] != 'custom-csd':
+        raise ValueError('Custom review inputs require the custom-csd producer')
+    base = selected['version'].split('-', 1)[0]
+    path = Path(manifest).parent / 'linux' / ('v' + base.replace('.', '') + '-review-inputs.json')
+    if not path.is_file():
+        raise ValueError('Missing review-inputs manifest for release ' + base + ': ' + str(path))
+    return path
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--manifest', default='packaging/package.manifest.json')
@@ -36,10 +46,15 @@ def main():
     parser.add_argument('--ref', default='')
     parser.add_argument('--custom-mode')
     parser.add_argument('--version', default='')
+    parser.add_argument('--review-inputs', action='store_true',
+                        help='Print the selected version\'s required custom review manifest path')
     args = parser.parse_args()
     try:
         result = custom_version(args.manifest, args.production, args.custom_mode, args.version) if args.custom_mode else select(
             args.manifest, args.production, args.ref, args.version)
+        if args.review_inputs:
+            print(review_inputs(args.manifest, result))
+            return
     except (OSError, ValueError, KeyError, TypeError) as error:
         parser.exit(1, str(error) + '\n')
     for name, value in result.items():

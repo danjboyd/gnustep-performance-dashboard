@@ -40,7 +40,9 @@ jobs:
       - name: Validate explicit unsigned producer mode before any acquisition
         run: python3 .github/scripts/release-selection.py --custom-mode "$CSD_MODE" --version "$CSD_VERSION"
       - name: Verify combined application inputs before builder fetch or cache use
-        run: python3 scripts/check-csd-package.py review-inputs packaging/linux/v017-review-inputs.json
+        run: |
+          review_inputs=$(python3 .github/scripts/release-selection.py --custom-mode "$CSD_MODE" --version "$CSD_VERSION" --review-inputs)
+          python3 scripts/check-csd-package.py review-inputs "$review_inputs"
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: danjboyd/gnustep-cli-new
