@@ -72,6 +72,15 @@ int main(int argc, const char **argv)
       NSDictionary *env = [[NSProcessInfo processInfo] environment];
       CHECK([[env objectForKey: @"DISPLAY"] isEqual: @":151"], "private display151 only");
       CHECK([[env objectForKey: @"GNUSTEP_HOME"] length] > 0, "private GNUstep home");
+      NSString *home = [NSHomeDirectory() stringByResolvingSymlinksInPath];
+      NSString *homePrefix = [home stringByAppendingString: @"/"];
+      NSString *defaultsRoot = [GSDefaultsRootForUser(NSUserName()) stringByResolvingSymlinksInPath];
+      CHECK([defaultsRoot hasPrefix: homePrefix], "resolved defaults database stays inside private home");
+      /* CI reuses its ephemeral home for both themes. Reset this probe's own
+         domain so the first theme's persisted recents cannot seed the next. */
+      NSUserDefaults *persistent = [NSUserDefaults standardUserDefaults];
+      NSString *domainName = [[NSProcessInfo processInfo] processName];
+      [persistent removePersistentDomainForName: domainName];
       [[NSUserDefaults standardUserDefaults] setObject: [NSString stringWithUTF8String: argv[1]] forKey: @"GSTheme"];
       [NSApplication sharedApplication];
       WelcomeProbeProvider *provider = [WelcomeProbeProvider new];
@@ -215,6 +224,24 @@ int main(int argc, const char **argv)
       [capture launch]; [capture waitUntilExit];
       CHECK([capture terminationStatus] == 0, "private display screenshot retained");
       [window cancel: nil];
+      /* Exercise the product history with real persistent defaults too. The
+         controller cases above use a dictionary to keep their state explicit. */
+      PDWelcomeHistory *diskHistory = [[PDWelcomeHistory alloc] initWithDefaults: persistent
+        fileExists: ^BOOL(NSString *path) { return YES; }];
+      [diskHistory noteTarget: recent mode: PDWelcomeLaunch];
+      [diskHistory noteTrace: @"/tmp/welcome-home-probe.gstrace"];
+      NSString *token = [[NSUUID UUID] UUIDString];
+      [persistent setObject: token forKey: @"PDWelcomeHomeProbe"];
+      CHECK([persistent synchronize], "private defaults synchronize");
+      NSString *domain = [domainName stringByAppendingPathExtension: @"plist"];
+      NSString *database = [[defaultsRoot stringByAppendingPathComponent: domain] stringByResolvingSymlinksInPath];
+      CHECK([database hasPrefix: homePrefix], "persisted defaults file stays inside private home");
+      NSDictionary *saved = [NSDictionary dictionaryWithContentsOfFile: database];
+      CHECK([[saved objectForKey: @"PDWelcomeHomeProbe"] isEqual: token], "defaults marker persisted in private home");
+      CHECK([[[[saved objectForKey: @"PDRecentRecordingTargets"] firstObject] objectForKey: @"path"]
+        isEqual: recent.executablePath], "recent target persisted in private home");
+      CHECK([[[saved objectForKey: @"PDRecentTraces"] firstObject] isEqual: @"/tmp/welcome-home-probe.gstrace"],
+        "recent trace persisted in private home");
       printf("Welcome controller: %u checks PASSED\n", checks);
       fflush(NULL);
       _Exit(0); /* AppKit caches are process-global; no modal teardown at exit. */

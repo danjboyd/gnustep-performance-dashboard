@@ -38,7 +38,10 @@ if not command:
     parser.error('COMMAND is required')
 if ephemeral_ci:
     print(ci_notice, file=sys.stderr)
-    env = dict(os.environ, PD_PRIVATE_HOME_MODE='ephemeral-ci')
+    # Keep the same home contract as the development sandbox. GNUstep.sh may
+    # leave GNUSTEP_HOME unset, or an inherited override may name another home.
+    env = dict(os.environ, HOME=home, GNUSTEP_HOME=home,
+               PD_PRIVATE_HOME_MODE='ephemeral-ci')
     os.execvpe(command[0], command, env)
 scratch = args.directory.resolve()
 scratch.mkdir(mode=0o700, parents=True)  # Never reuse a previous check's home.

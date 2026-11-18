@@ -52,6 +52,12 @@ for flag in ('GITHUB_ACTIONS', 'CI'):
     result, log = invoke('/root', {flag: 'true'})
     assert result[0] == 'direct' and result[1] == ['/bin/true']
     assert result[2]['PD_PRIVATE_HOME_MODE'] == 'ephemeral-ci' and 'no bwrap' in log
+    assert result[2]['HOME'] == '/root' and result[2]['GNUSTEP_HOME'] == '/root'
+    checks += 1
+    result, log = invoke('/root', {flag: 'true', 'HOME': '/stale-home',
+                                 'GNUSTEP_HOME': '/stale-gnustep-home'})
+    assert result[0] == 'direct'
+    assert result[2]['HOME'] == '/root' and result[2]['GNUSTEP_HOME'] == '/root'
     checks += 1
     result, log = invoke('/root', {flag: 'true'}, check=True)
     assert result == 0 and 'existing runner isolation' in log
