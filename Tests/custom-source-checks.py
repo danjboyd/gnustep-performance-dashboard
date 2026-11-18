@@ -28,6 +28,11 @@ class CustomSources(unittest.TestCase):
         self.addCleanup(tmp.cleanup)
         self.root = Path(tmp.name)
         shutil.copytree(ROOT / 'packaging', self.root / 'packaging')
+        # Keep the synthetic 0.1.7 scenarios independent of the live version.
+        manifest = self.root / 'packaging/package.manifest.json'
+        data = json.loads(manifest.read_text())
+        data['package']['version'] = '0.1.7'
+        manifest.write_text(json.dumps(data))
         for name in ('docs/proposals/csd-theme-defaults.patch', 'scripts/package-stage.sh'):
             target = self.root / name
             target.parent.mkdir(parents=True, exist_ok=True)

@@ -110,6 +110,7 @@ if [ "$(uname -s)" = Linux ]; then
     pass "task launch: descriptors, environment, startup failures and no leaks"
   else
     fail "task launch descriptor handoff"
+  fi
 
   echo "== Loaded image build-ID capture"
   if python3 "$ROOT/Tests/image-build-id-checks.py" >"$OUT/image-build-id.log" 2>&1; then
