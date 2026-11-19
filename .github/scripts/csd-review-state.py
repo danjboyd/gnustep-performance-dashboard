@@ -175,7 +175,8 @@ def check_closure(root, backend, build_log):
     require(build_log.is_file() and build_log.stat().st_size > 0, 'backend compile/link log missing')
     output = subprocess.check_output(['readelf', '-d', str(backend)], text=True)
     needed = sorted(re.findall(r'\(NEEDED\).*?\[([^]]+)\]', output))
-    baseline = load(root / 'packaging/linux/v017-backend-needed.json')
+    config, _, _ = settings(root)
+    baseline = load(root / config['backendNeededPolicy'])
     require(needed == sorted(baseline['expectedNeeded']), 'unexpected backend DT_NEEDED or missing required entry')
     text = build_log.read_text()
     require(any('clang' in line and ' -shared ' in line and 'gnustep-back' in line

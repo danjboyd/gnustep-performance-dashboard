@@ -44,5 +44,6 @@
       "revision": "8ff9317d54e6bee57dc266cd9ba288c426790b40"
     }
   ],
-  "reviewInputs": "packaging/linux/v018-review-inputs.json"
+  "reviewInputs": "packaging/linux/v018-review-inputs.json",
+  "backendNeededPolicy": "packaging/linux/v017-backend-needed.json"
 }

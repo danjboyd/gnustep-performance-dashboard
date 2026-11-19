@@ -1,0 +1,8 @@
+[
+  {
+    "file": ".github/scripts/csd-review-state.py",
+    "literal": "docs/v017-builder-source-digests.json",
+    "count": 2,
+    "reason": "Immutable reviewed builder source baseline, not the selected application version."
+  }
+]

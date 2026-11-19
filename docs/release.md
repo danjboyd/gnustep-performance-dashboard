@@ -201,3 +201,39 @@ bash scripts/check-helper-vm.sh /path/to/candidate.AppImage /path/to/vmlinuz
 # As an ordinary user, with loopback networking available:
 python3 scripts/check-update-failures.py /path/to/candidate.AppImage
 ```
+
+### Hosted verification and version-literal gate
+
+Use the tracked `.github/scripts/verify-hosted.py` for future publication
+plans. It derives all seven release filenames, including both feed lookups,
+from the explicit reviewed stable version. The inventory JSON must contain
+`files` (name to SHA256) and `sizes` (name to byte length) for exactly those
+seven names. Supply the reviewed notes hash and public-anchor JSON; no private
+key is read. These commands only read hosted data and write fresh local
+evidence, and confer no publication authority:
+
+```sh
+python3 .github/scripts/verify-hosted.py assets --version "$pd_version" \
+  --record "$pd_record" --notes "$pd_notes" --notes-sha256 "$pd_notes_sha256" \
+  --anchor "$pd_public_anchor" --evidence "$pd_evidence"
+python3 .github/scripts/verify-hosted.py feed --version "$pd_version" \
+  --record "$pd_record" --notes "$pd_notes" --notes-sha256 "$pd_notes_sha256" \
+  --anchor "$pd_public_anchor" --evidence "$pd_evidence"
+```
+
+The assets phase requires stable Latest, exact body bytes, seven exact names,
+sizes and hashes, six unique checksum entries, the selected feed version,
+and payload/version signatures. The feed phase requires the matching assets
+PASS, rechecks retained files and signatures, then compares live bytes and
+signatures. A failure produces no PASS for that phase; it does not retry,
+replace artifacts or change a remote. Use a fresh evidence directory for a
+new assets verification. Keep historical publication evidence unchanged.
+
+CI runs `.github/scripts/check-version-literals.py` against scripts and
+workflows. It rejects frozen tag, compact-version and asset-name spellings.
+Only explicit immutable documentation-baseline references are allowlisted in
+`docs/ci-version-literals.allowlist.json`; each entry has an exact source file,
+literal, expected occurrence count and reason. This is not an exemption for
+selecting release inputs. Lock and backend policy paths come from committed
+configuration; changing the application version does not silently change an
+approved SDK baseline.

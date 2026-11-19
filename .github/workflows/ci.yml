@@ -19,11 +19,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # The mixed-client fixture archives the immutable v0.1.5 source commit.
+          # Compatibility fixtures require immutable historical source commits.
           fetch-depth: 0
 
       - name: Release assembly and toolchain cache guards
         run: |
+          python3 .github/scripts/check-version-literals.py
+          python3 Tests/hosted-verifier-checks.py
           python3 Tests/vendored-updater-checks.py
           python3 Tests/release-assembly-checks.py
           python3 Tests/toolchain-fetch-checks.py
@@ -85,7 +87,7 @@ jobs:
           export LD_LIBRARY_PATH="$PREFIX/System/Library/Libraries${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
           bash .github/scripts/install-investigation-themes.sh
 
-      - name: Cache hash-pinned v0.1.7 reader for compatibility tests
+      - name: Cache hash-pinned legacy reader for compatibility tests
         run: python3 Tests/legacy_reader.py
 
       - name: make check

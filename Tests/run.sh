@@ -102,7 +102,7 @@ if [ "$(uname -s)" = Linux ]; then
     fail "custom CSD provenance"
   fi
   echo "== Combined v0.1.7 CSD review identities and exact dependencies"
-  if python3 "$ROOT/Tests/v017-review-input-checks.py"; then
+  if python3 "$ROOT/Tests/csd-review-input-checks.py"; then
     pass "combined CSD patch order, application identity and hard direct-library gate"
   else
     fail "combined CSD review identities"

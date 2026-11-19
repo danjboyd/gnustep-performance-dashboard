@@ -61,7 +61,7 @@ jobs:
         run: |
           sudo apt-get -q update
           sudo apt-get -q -y install python3-yaml
-          /usr/bin/python3 Tests/v017-review-input-checks.py
+          /usr/bin/python3 Tests/csd-review-input-checks.py
           /usr/bin/python3 Tests/robin-source-checks.py
           /usr/bin/python3 Tests/csd-package-checks.py
           /usr/bin/python3 Tests/csd-provenance-checks.py

@@ -29,7 +29,7 @@ class CSDCIChecks(unittest.TestCase):
         for relative in ('packaging/linux', 'docs', '.github/containers', 'builder/toolchains/linux-amd64-clang',
                          'sdk/lib', 'sdk/System/Library/Makefiles'):
             (self.root / relative).mkdir(parents=True, exist_ok=True)
-        self.config = dict(builder=dict(revision='a' * 40), lock='packaging/linux/lock.json', fallbackSource=dict(name='robin-map-fallback', url='https://example.invalid/robin.git', revision='c' * 40))
+        self.config = dict(builder=dict(revision='a' * 40), lock='packaging/linux/lock.json', backendNeededPolicy='packaging/linux/v017-backend-needed.json', fallbackSource=dict(name='robin-map-fallback', url='https://example.invalid/robin.git', revision='c' * 40))
         self.lock = dict(install_domain='LOCAL', components=[dict(name=name, url='https://example.invalid/' + name,
                           revision='b' * 40, configure_args=[], patches=[]) for name in state.NAMES])
         self.write('packaging/linux/csd-ci-inputs.json', self.config)
