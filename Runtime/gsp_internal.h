@@ -31,6 +31,7 @@
 #include <sys/types.h>
 
 #include "GSPerformance/gsp_format.h"
+#include "gsp_arch.h"
 
 #define GSP_EXPORT __attribute__((visibility("default")))
 #define GSP_HIDDEN __attribute__((visibility("hidden")))
@@ -110,7 +111,7 @@ typedef struct gsp_thread
   gsp_ring ring_signal;
   gsp_ring ring_normal;
   uintptr_t stack_lo, stack_hi;
-  uintptr_t tls_base;          /* %fs base: the thread control block */
+  uintptr_t tls_base;          /* architecture's thread pointer */
   timer_t cpu_timer;
   timer_t wall_timer;
   bool has_cpu_timer, has_wall_timer;
@@ -119,8 +120,8 @@ typedef struct gsp_thread
   /* stop-the-world state */
   atomic_int suspended;
   uintptr_t saved_sp;
-  uintptr_t saved_fs;
-  uint64_t saved_regs[NGREG];
+  uintptr_t saved_tp;
+  uint64_t saved_regs[GSP_SAVED_REG_COUNT];
 } gsp_thread;
 
 GSP_HIDDEN extern gsp_thread *gsp_threads[GSP_MAX_THREADS];

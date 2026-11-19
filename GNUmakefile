@@ -16,6 +16,12 @@ else
 SUBDIRS = Runtime GSPerformance Tools/gstrace Tools/gstrace-helper Dashboard
 endif
 
+# HEADLESS=1 selects the native CLI/agent suite without building the AppKit app.
+ifeq ($(HEADLESS),1)
+SUBDIRS := $(filter-out Dashboard,$(SUBDIRS))
+export SKIP_GUI = 1
+endif
+
 all install clean:
 	@for d in $(SUBDIRS); do \
 	  $(MAKE) -C $$d $@ || exit 1; \

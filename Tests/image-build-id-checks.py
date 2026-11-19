@@ -2,6 +2,7 @@
 """Linux agent/reader identity contract; synthetic workload plus a pinned cached legacy reader."""
 import legacy_reader
 import os
+import platform
 from pathlib import Path
 import re
 import struct
@@ -56,10 +57,13 @@ with tempfile.TemporaryDirectory(prefix='pd-loaded-id-') as directory:
     info = run([CLI, 'info', trace])
     assert re.search(r'image build IDs: [1-9][0-9]* of [0-9]+ recorded; 0 invalid/ambiguous', info), info
     assert 'CaptureStatus: complete' in info and 'Exit status: 0' in info, info
-    legacy = os.environ.get('PD_LEGACY_GSTRACE') or legacy_reader.prepare(work / 'legacy')
-    old = run([legacy, 'info', trace])
-    assert str(target) in old and 'CaptureStatus: complete' in old, old
-    print('PASS published legacy reader opens new IMAGE suffix')
+    if platform.machine() == 'x86_64':
+        legacy = os.environ.get('PD_LEGACY_GSTRACE') or legacy_reader.prepare(work / 'legacy')
+        old = run([legacy, 'info', trace])
+        assert str(target) in old and 'CaptureStatus: complete' in old, old
+        print('PASS published legacy reader opens new IMAGE suffix')
+    else:
+        print('SKIP published legacy reader: fixture is x86_64 only; native IMAGE checks retained')
     run([CLI, 'symbolicate', trace, '--embed'])
     assert 'Symbols:' in run([CLI, 'info', trace])
     dependencies = run(['readelf', '-d', ROOT/'Runtime/obj/libgsperf-agent.so'])

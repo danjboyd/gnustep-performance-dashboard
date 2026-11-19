@@ -26,7 +26,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <asm/prctl.h>
 #include <sys/syscall.h>
 #include <sys/uio.h>
 #include <sys/mman.h>
@@ -62,7 +61,6 @@ suspend_handler(int sig, siginfo_t *info, void *ucv)
   int saved = errno;
   gsp_thread *t = gsp_self_thread;
   ucontext_t *uc = ucv;
-  unsigned long fs = 0;
 
   (void)sig;
   (void)info;
@@ -71,10 +69,9 @@ suspend_handler(int sig, siginfo_t *info, void *ucv)
       errno = saved;
       return;
     }
-  memcpy(t->saved_regs, uc->uc_mcontext.gregs, sizeof(t->saved_regs));
-  t->saved_sp = (uintptr_t)uc->uc_mcontext.gregs[REG_RSP];
-  syscall(SYS_arch_prctl, ARCH_GET_FS, &fs);
-  t->saved_fs = fs;
+  memcpy(t->saved_regs, GSP_CONTEXT_REGS(uc), sizeof(t->saved_regs));
+  t->saved_sp = (uintptr_t)GSP_CONTEXT_SP(uc);
+  t->saved_tp = gsp_thread_pointer();
   atomic_store(&t->suspended, 1);
   sem_post(&suspend_ack);
   while (atomic_load(&world_stopped))
@@ -753,7 +750,7 @@ gsp_leaks_snapshot(void)
     int nthreads = atomic_load(&gsp_thread_count);
     /* Exited threads too: glibc keeps their stacks mapped for reuse, and
        the stale frames would hide leaks.  Their thread control block and
-       static TLS (just below %fs, at the top of the mapping) stay roots:
+       static TLS (near the thread pointer) stay roots:
        glibc's stack cache still points at them.  */
     for (int i = 0; i < nthreads; i++)
       {
@@ -764,7 +761,12 @@ gsp_leaks_snapshot(void)
         if (atomic_load(&t->state) != GSP_SLOT_ACTIVE && t->tls_base > t->stack_lo
             && t->tls_base < t->stack_hi + 65536)
           {
+#if defined(__aarch64__)
+            /* glibc's thread descriptor precedes TP; static TLS follows it. */
+            uintptr_t keep = t->tls_base - 4096;
+#else
             uintptr_t keep = t->tls_base - static_tls_size;
+#endif
             if (keep > t->stack_lo && keep < hi)
               hi = keep;
           }
@@ -869,14 +871,14 @@ gsp_leaks_snapshot(void)
       if (explain_size)
         {
           static char td[96];
-          snprintf(td, sizeof(td), "thread %d (sp %#lx, fs %#lx)", (int)t->tid,
-                   (unsigned long)t->saved_sp, (unsigned long)t->saved_fs);
+          snprintf(td, sizeof(td), "thread %d (sp %#lx, tp %#lx)", (int)t->tid,
+                   (unsigned long)t->saved_sp, (unsigned long)t->saved_tp);
           explain_root = td;
         }
       if (atomic_load(&t->suspended))
         {
           scan_words(&s, (uintptr_t)t->saved_regs,
-                     (uintptr_t)(t->saved_regs + NGREG));
+                     (uintptr_t)(t->saved_regs + GSP_SAVED_REG_COUNT));
           if (t->stack_hi && t->saved_sp >= t->stack_lo
               && t->saved_sp < t->stack_hi)
             scan_checked(&s, t->saved_sp, t->stack_hi);
@@ -886,8 +888,12 @@ gsp_leaks_snapshot(void)
               if (r)
                 scan_checked(&s, t->saved_sp, r->hi);
             }
-          if (t->saved_fs)
-            scan_checked(&s, t->saved_fs - 16384, t->saved_fs + 4096);
+          if (t->saved_tp)
+#if defined(__aarch64__)
+            scan_checked(&s, t->saved_tp - 4096, t->saved_tp + static_tls_size);
+#else
+            scan_checked(&s, t->saved_tp - 16384, t->saved_tp + 4096);
+#endif
         }
       else if (t->stack_hi)
         scan_checked(&s, t->stack_lo, t->stack_hi);

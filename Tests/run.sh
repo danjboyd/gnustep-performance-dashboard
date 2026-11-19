@@ -41,9 +41,11 @@ clang $OBJCFLAGS -O0 "$ROOT/docs/upstream-issues/jpeg_probe_leak.m" \
   -o "$OUT/jpeg_probe_leak" $(gnustep-config --gui-libs) || exit 1
 clang $OBJCFLAGS -O0 "$ROOT/Tests/fixtures/jpeg-gate.m" \
   -o "$OUT/jpeg-gate" $(gnustep-config --gui-libs) || exit 1
+if [ "${SKIP_GUI:-0}" != 1 ]; then
 clang $OBJCFLAGS -O0 -I"$ROOT/Runtime/include" "$ROOT/Tests/fixtures/hangapp.m" \
   -o "$OUT/hangapp" $(gnustep-config --gui-libs) \
   -L"$ROOT/Runtime/obj" -lgsperf -Wl,-rpath,"$ROOT/Runtime/obj" || exit 1
+fi
 
 echo "== unit tests (xctest)"
 if (cd Tests/Unit && make -s check) >"$OUT/unit.log" 2>&1; then
@@ -140,6 +142,16 @@ if [ "$(uname -s)" = Linux ] && [ "$(uname -m)" = x86_64 ]; then
   else
     cat "$OUT/sampler-reentry.log"
     fail "signal unwinder safety"
+  fi
+fi
+
+if [ "$(uname -s)" = Linux ]; then
+  echo "== Native signal-context register layout"
+  if cc -D_GNU_SOURCE -std=gnu11 -Wall -Wextra -Werror \
+      "$ROOT/Tests/fixtures/arch-context.c" -o "$OUT/arch-context" && "$OUT/arch-context"; then
+    pass "native context: PC, frame pointer, stack pointer, all register roots and TLS pointer"
+  else
+    fail "native signal context"
   fi
 fi
 

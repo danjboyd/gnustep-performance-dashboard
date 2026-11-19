@@ -12,10 +12,22 @@
 #include <link.h>
 #include <string.h>
 
-/* libunwind (x86_64, local-only) ABI subset.  unw_cursor_t is 127 words;
-   unw_context_t is ucontext_t on x86_64.  */
+/* Local-only libunwind ABI (Linux libunwind 1.6+). The signal ucontext
+   prefix is compatible on both architectures. Public cursors need 250
+   words on AArch64 and 127 on x86_64; leave room for the current ABI. */
+#if defined(__aarch64__)
+#define GSP_UNW_CURSOR_WORDS 256
+/* UNW_REG_IP is X30 (30), not UNW_AARCH64_PC (32): get_reg special-cases
+   it to return the advancing cursor IP rather than a saved register slot. */
+#define GSP_UNW_REG_IP 30
+#define GSP_UNW_PREFIX "_ULaarch64_"
+#elif defined(__x86_64__)
 #define GSP_UNW_CURSOR_WORDS 160
 #define GSP_UNW_REG_IP 16
+#define GSP_UNW_PREFIX "_ULx86_64_"
+#else
+#error "The Linux recording agent requires x86_64 or aarch64."
+#endif
 #define GSP_UNW_INIT_SIGNAL_FRAME 1
 #define GSP_UNW_CACHE_PER_THREAD 2
 
@@ -39,12 +51,12 @@ gsp_unwind_init(void)
     h = dlopen("libunwind.so", RTLD_NOW | RTLD_LOCAL);
   if (h == NULL)
     goto limited;
-  unw_init_local2_fn = dlsym(h, "_ULx86_64_init_local2");
-  unw_step_fn = dlsym(h, "_ULx86_64_step");
-  unw_get_reg_fn = dlsym(h, "_ULx86_64_get_reg");
+  unw_init_local2_fn = dlsym(h, GSP_UNW_PREFIX "init_local2");
+  unw_step_fn = dlsym(h, GSP_UNW_PREFIX "step");
+  unw_get_reg_fn = dlsym(h, GSP_UNW_PREFIX "get_reg");
   unw_backtrace_fn = dlsym(h, "unw_backtrace");
-  int (*set_policy)(void *, int) = dlsym(h, "_ULx86_64_set_caching_policy");
-  void **space = dlsym(h, "_ULx86_64_local_addr_space");
+  int (*set_policy)(void *, int) = dlsym(h, GSP_UNW_PREFIX "set_caching_policy");
+  void **space = dlsym(h, GSP_UNW_PREFIX "local_addr_space");
   if (set_policy && space)
     set_policy(*space, GSP_UNW_CACHE_PER_THREAD);
   have_libunwind = unw_init_local2_fn && unw_step_fn && unw_get_reg_fn;
@@ -92,6 +104,7 @@ walk_frame_pointers(gsp_thread *t, uintptr_t pc, uintptr_t fp, uintptr_t sp,
   frames[n++] = pc;
   while (n < max && (fp & 7) == 0 && in_stack(t, fp, sp))
     {
+      /* AAPCS64 and x86_64 both store [previous FP, return address]. */
       uintptr_t next = ((uintptr_t *)fp)[0];
       uintptr_t ret = ((uintptr_t *)fp)[1];
       if (ret < 4096)
@@ -110,9 +123,9 @@ gsp_unwind_signal(gsp_thread *t, void *ucontext, uint64_t *frames,
                   unsigned max)
 {
   ucontext_t *uc = ucontext;
-  uintptr_t pc = (uintptr_t)uc->uc_mcontext.gregs[REG_RIP];
-  uintptr_t fp = (uintptr_t)uc->uc_mcontext.gregs[REG_RBP];
-  uintptr_t sp = (uintptr_t)uc->uc_mcontext.gregs[REG_RSP];
+  uintptr_t pc = (uintptr_t)GSP_CONTEXT_PC(uc);
+  uintptr_t fp = (uintptr_t)GSP_CONTEXT_FP(uc);
+  uintptr_t sp = (uintptr_t)GSP_CONTEXT_SP(uc);
 
   if (have_libunwind && !t->in_unwind && !gsp_loader_busy())
     {

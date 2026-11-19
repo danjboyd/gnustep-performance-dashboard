@@ -60,7 +60,7 @@ all: $(OBJDIR)/libgsperf-agent.so $(OBJDIR)/libgsperf.so $(OBJDIR)/gsp-launch
 $(OBJDIR)/gsp-launch: gsp_launch.c gsp_launch_protocol.h | $(OBJDIR)
 	$(CC) $(ALL_CFLAGS) -o $@ gsp_launch.c
 
-$(OBJDIR)/%.o: %.c gsp_internal.h include/GSPerformance/gsp_format.h \
+$(OBJDIR)/%.o: %.c gsp_internal.h gsp_arch.h include/GSPerformance/gsp_format.h \
                include/GSPerformance/gsp_signpost.h gsp_writer_io.h \
                include/GSPerformance/gsp_capture.h | $(OBJDIR)
 	$(CC) $(ALL_CFLAGS) -c $< -o $@

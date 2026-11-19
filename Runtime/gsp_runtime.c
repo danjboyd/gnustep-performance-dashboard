@@ -628,11 +628,7 @@ gsp_thread_current(void)
         }
       pthread_attr_destroy(&attr);
     }
-  {
-    unsigned long fs = 0;
-    syscall(SYS_arch_prctl, 0x1003 /* ARCH_GET_FS */, &fs);
-    t->tls_base = fs;
-  }
+  t->tls_base = gsp_thread_pointer();
   gsp_threads[idx] = t;
   if (idx == count)
     atomic_store(&gsp_thread_count, count + 1);
