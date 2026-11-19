@@ -67,3 +67,16 @@ installer as x86_64 with a separate architecture cache key, then runs this
 suite without AppImage packaging or a GUI session. Adding the job is not a
 claim that it has run: native ARM execution requires a separately approved
 push. ARM GUI, packaging and sustained production profiling are not qualified.
+
+## Loader-state copy relocation limitation
+
+The agent uses PIC/GOT access to `_r_debug`. On glibc versions affected by
+[BZ28130](https://sourceware.org/pipermail/glibc-bugs/2025-August/060057.html),
+a target executable that itself introduces an `_r_debug` COPY relocation can
+interpose a stale loader-state copy even on the agent's GOT reference. This
+can keep the loader-busy guard set and conservatively disable libunwind in
+that target: stacks fall back to frame pointers and may be shorter. It does
+not establish that the loader is actually busy. The standalone native test
+fixture is built with PIC and no COPY relocations to avoid this linkage
+artifact. Reading the main executable's real `DT_DEBUG` loader record is a
+separate product follow-up; this test correction does not change the guard.

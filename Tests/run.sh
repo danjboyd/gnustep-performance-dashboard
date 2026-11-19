@@ -147,7 +147,10 @@ fi
 
 if [ "$(uname -s)" = Linux ]; then
   echo "== Native signal-context register layout"
-  if cc -D_GNU_SOURCE -std=gnu11 -Wall -Wextra -Werror -I"$ROOT/Runtime/include" \
+  # Match the preload agent's PIC access to _r_debug. A COPY relocation in
+  # a standalone GCC/PIE fixture can read stale RT_ADD on glibc 2.39.
+  if cc -D_GNU_SOURCE -std=gnu11 -Wall -Wextra -Werror -fPIC -pie \
+      -Wl,-z,nocopyreloc -I"$ROOT/Runtime/include" \
       "$ROOT/Tests/fixtures/arch-context.c" -o "$OUT/arch-context" && "$OUT/arch-context"; then
     pass "native context: PC, frame pointer, stack pointer, all register roots and TLS pointer"
   else

@@ -12,6 +12,7 @@
 
 /* Link the actual walker in this fixture, without the preload constructor. */
 static char last_diagnostic[160];
+static unsigned fake_init_calls;
 gsp_config gsp_cfg;
 uintptr_t gsp_agent_text_lo, gsp_agent_text_hi;
 void
@@ -47,6 +48,7 @@ static int
 fake_init(unw_cursor_buf *cursor, ucontext_t *uc, int flags)
 {
   (void)cursor; (void)uc; (void)flags;
+  fake_init_calls++;
   return 0;
 }
 static int
@@ -87,9 +89,18 @@ check_invalid_ip_fallback(void)
   unw_init_local2_fn = fake_init;
   unw_get_reg_fn = fake_ip;
   unw_step_fn = unexpected_step;
-  assert(gsp_unwind_signal(&thread, &uc, frames, 3) == 2);
+  unsigned count = gsp_unwind_signal(&thread, &uc, frames, 3);
+  uint64_t fallbacks = atomic_load(&invalid_ip_fallbacks);
+  if (count != 2 || fake_init_calls != 1 || fallbacks != 1 || thread.in_unwind)
+    fprintf(stderr, "invalid-IP fixture: frames=%u init_calls=%u counter=%llu "
+            "in_unwind=%d loader_busy=%d r_state=%d\n", count, fake_init_calls,
+            (unsigned long long)fallbacks, thread.in_unwind, gsp_loader_busy(),
+            (int)_r_debug.r_state);
+  assert(count == 2);
   assert(frames[0] == 0x12345000 && frames[1] == 0x12345000);
-  assert(atomic_load(&invalid_ip_fallbacks) == 1 && !thread.in_unwind);
+  assert(fake_init_calls == 1);
+  assert(fallbacks == 1);
+  assert(!thread.in_unwind);
   gsp_unwind_emit_stats();
   assert(strstr(last_diagnostic, "fallbacks: 1 "));
   have_libunwind = false;
