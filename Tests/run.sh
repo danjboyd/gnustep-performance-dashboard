@@ -147,7 +147,7 @@ fi
 
 if [ "$(uname -s)" = Linux ]; then
   echo "== Native signal-context register layout"
-  if cc -D_GNU_SOURCE -std=gnu11 -Wall -Wextra -Werror \
+  if cc -D_GNU_SOURCE -std=gnu11 -Wall -Wextra -Werror -I"$ROOT/Runtime/include" \
       "$ROOT/Tests/fixtures/arch-context.c" -o "$OUT/arch-context" && "$OUT/arch-context"; then
     pass "native context: PC, frame pointer, stack pointer, all register roots and TLS pointer"
   else

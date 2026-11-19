@@ -763,7 +763,7 @@ gsp_leaks_snapshot(void)
           {
 #if defined(__aarch64__)
             /* glibc's thread descriptor precedes TP; static TLS follows it. */
-            uintptr_t keep = t->tls_base - 4096;
+            uintptr_t keep = t->tls_base - GSP_AARCH64_PTHREAD_DESC_MAX;
 #else
             uintptr_t keep = t->tls_base - static_tls_size;
 #endif
@@ -890,7 +890,7 @@ gsp_leaks_snapshot(void)
             }
           if (t->saved_tp)
 #if defined(__aarch64__)
-            scan_checked(&s, t->saved_tp - 4096, t->saved_tp + static_tls_size);
+            scan_checked(&s, t->saved_tp - GSP_AARCH64_PTHREAD_DESC_MAX, t->saved_tp + static_tls_size);
 #else
             scan_checked(&s, t->saved_tp - 16384, t->saved_tp + 4096);
 #endif

@@ -11,6 +11,7 @@
 #include <dlfcn.h>
 #include <link.h>
 #include <string.h>
+#include <stdio.h>
 
 /* Local-only libunwind ABI (Linux libunwind 1.6+). The signal ucontext
    prefix is compatible on both architectures. Public cursors need 250
@@ -39,11 +40,102 @@ static int (*unw_get_reg_fn)(unw_cursor_buf *, int, uint64_t *);
 static int (*unw_backtrace_fn)(void **, int);
 static bool have_libunwind;
 
+#if defined(__aarch64__) || defined(GSP_TEST_VALIDATE_IP)
+#define GSP_VALIDATE_IP 1
+#define GSP_EXEC_RANGES 4096
+/* Fixed atomic slots avoid allocation, reader locks and reclamation hazards.
+   A signal interrupting publication fails closed immediately; it never spins.
+   All slots and generation use seq_cst to keep snapshot validation ordered. */
+_Static_assert(ATOMIC_LONG_LOCK_FREE == 2 && ATOMIC_INT_LOCK_FREE == 2,
+               "Signal-context executable range checks require lock-free atomics");
+static _Atomic uintptr_t exec_ranges[GSP_EXEC_RANGES][2];
+static atomic_uint exec_generation, exec_count;
+static _Atomic uint64_t invalid_ip_fallbacks;
+
+typedef struct exec_scan
+{
+  unsigned count;
+  bool overflow;
+} exec_scan;
+
+static int
+exec_image_cb(struct dl_phdr_info *pi, size_t size, void *data)
+{
+  exec_scan *scan = data;
+  (void)size;
+  for (unsigned i = 0; i < pi->dlpi_phnum; i++)
+    {
+      const ElfW(Phdr) *ph = &pi->dlpi_phdr[i];
+      if (ph->p_type != PT_LOAD || !(ph->p_flags & PF_X) || !ph->p_memsz)
+        continue;
+      uintptr_t lo = (uintptr_t)pi->dlpi_addr + ph->p_vaddr;
+      if (scan->count == GSP_EXEC_RANGES || lo < (uintptr_t)pi->dlpi_addr
+          || ph->p_memsz > UINTPTR_MAX - lo)
+        {
+          scan->overflow = true;
+          return 1;
+        }
+      atomic_store(&exec_ranges[scan->count][0], lo);
+      atomic_store(&exec_ranges[scan->count][1], lo + ph->p_memsz);
+      scan->count++;
+    }
+  return 0;
+}
+
+void
+gsp_unwind_refresh_images(void)
+{
+  exec_scan scan = { 0, false };
+  /* Serialized by images_lock, or startup before the writer/timers exist. */
+  atomic_fetch_add(&exec_generation, 1);
+  dl_iterate_phdr(exec_image_cb, &scan);
+  atomic_store(&exec_count, scan.overflow ? 0 : scan.count);
+  atomic_fetch_add(&exec_generation, 1);
+}
+
+static bool
+executable_ip(uintptr_t ip)
+{
+  unsigned generation = atomic_load(&exec_generation);
+  if (generation & 1)
+    return false;
+  unsigned count = atomic_load(&exec_count);
+  bool found = false;
+  for (unsigned i = 0; i < count; i++)
+    if (ip >= atomic_load(&exec_ranges[i][0])
+        && ip < atomic_load(&exec_ranges[i][1]))
+      {
+        found = true;
+        break;
+      }
+  return found && generation == atomic_load(&exec_generation);
+}
+
+void
+gsp_unwind_emit_stats(void)
+{
+  uint64_t count = atomic_load(&invalid_ip_fallbacks);
+  if (count)
+    {
+      char message[160];
+      snprintf(message, sizeof(message),
+               "Unwind executable-IP validation fallbacks: %llu (invalid IP or image snapshot unavailable).",
+               (unsigned long long)count);
+      gsp_writer_emit(GSP_REC_DIAGNOSTIC, GSP_DIAGNOSTIC_UNWIND_LIMITED,
+                      gsp_now(), 0, message, strlen(message) + 1, NULL, 0);
+    }
+}
+#else
+void gsp_unwind_refresh_images(void) { }
+void gsp_unwind_emit_stats(void) { }
+#endif
+
 void
 gsp_unwind_init(void)
 {
   void *h;
 
+  gsp_unwind_refresh_images();
   if (gsp_cfg.unwind_fp)
     goto limited;
   h = dlopen("libunwind.so.8", RTLD_NOW | RTLD_LOCAL);
@@ -101,12 +193,12 @@ walk_frame_pointers(gsp_thread *t, uintptr_t pc, uintptr_t fp, uintptr_t sp,
 
   if (max == 0)
     return 0;
-  frames[n++] = pc;
+  frames[n++] = gsp_strip_return_address(pc);
   while (n < max && (fp & 7) == 0 && in_stack(t, fp, sp))
     {
       /* AAPCS64 and x86_64 both store [previous FP, return address]. */
       uintptr_t next = ((uintptr_t *)fp)[0];
-      uintptr_t ret = ((uintptr_t *)fp)[1];
+      uintptr_t ret = gsp_strip_return_address(((uintptr_t *)fp)[1]);
       if (ret < 4096)
         break;
       frames[n++] = ret;
@@ -131,6 +223,7 @@ gsp_unwind_signal(gsp_thread *t, void *ucontext, uint64_t *frames,
     {
       unw_cursor_buf cursor;
       unsigned n = 0;
+      bool invalid_ip = false;
 
       t->in_unwind = 1;
       if (unw_init_local2_fn(&cursor, uc, GSP_UNW_INIT_SIGNAL_FRAME) == 0)
@@ -140,12 +233,21 @@ gsp_unwind_signal(gsp_thread *t, void *ucontext, uint64_t *frames,
               uint64_t ip;
               if (unw_get_reg_fn(&cursor, GSP_UNW_REG_IP, &ip) != 0 || ip == 0)
                 break;
+              ip = gsp_strip_return_address(ip);
+#ifdef GSP_VALIDATE_IP
+              if (!executable_ip(ip))
+                {
+                  invalid_ip = true;
+                  atomic_fetch_add_explicit(&invalid_ip_fallbacks, 1, memory_order_relaxed);
+                  break;
+                }
+#endif
               frames[n++] = ip;
             }
           while (n < max && unw_step_fn(&cursor) > 0);
         }
       t->in_unwind = 0;
-      if (n > 1)
+      if (!invalid_ip && n > 1)
         return n;
     }
   return walk_frame_pointers(t, pc, fp, sp, frames, max);
@@ -167,8 +269,17 @@ gsp_unwind_here(gsp_thread *t, uint64_t *frames, unsigned max)
       t->in_unwind = 1;
       n = unw_backtrace_fn(raw, (int)max + 8);
       t->in_unwind = 0;
+#ifdef GSP_VALIDATE_IP
+      for (i = 0; i < n; i++)
+        if (!executable_ip(gsp_strip_return_address((uintptr_t)raw[i])))
+          {
+            atomic_fetch_add_explicit(&invalid_ip_fallbacks, 1, memory_order_relaxed);
+            n = 0;
+            break;
+          }
+#endif
     }
-  else
+  if (n <= 0)
     {
       uintptr_t fp = (uintptr_t)__builtin_frame_address(0);
       uintptr_t sp = fp;
@@ -188,6 +299,8 @@ gsp_unwind_here(gsp_thread *t, uint64_t *frames, unsigned max)
   /* The walk starts inside libunwind, then the agent (unwinder, hook,
      interposed malloc).  Skip exactly that leading run: agent frames
      further down (e.g. the objc_alloc_init interposer) are real callers.  */
+  for (i = 0; i < n; i++)
+    raw[i] = (void *)gsp_strip_return_address((uintptr_t)raw[i]);
   int first = 0;
 #define IN_AGENT(pc) ((uintptr_t)(pc) >= gsp_agent_text_lo && (uintptr_t)(pc) < gsp_agent_text_hi)
   while (first < n && first < 8 && !IN_AGENT(raw[first]))

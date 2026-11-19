@@ -9,6 +9,9 @@
 #include <unistd.h>
 
 #if defined(__aarch64__)
+/* Conservative glibc pthread descriptor bound below TP. May retain up to
+   roughly 1.7 KiB of stale exited-thread stack as roots; not an ABI size. */
+# define GSP_AARCH64_PTHREAD_DESC_MAX 4096
 # define GSP_SAVED_REG_COUNT 31
 # define GSP_CONTEXT_REGS(uc) ((uc)->uc_mcontext.regs)
 # define GSP_CONTEXT_PC(uc) ((uc)->uc_mcontext.pc)
@@ -33,6 +36,20 @@ gsp_thread_pointer(void)
   unsigned long base = 0;
   syscall(SYS_arch_prctl, 0x1003 /* ARCH_GET_FS */, &base);
   return (uintptr_t)base;
+#endif
+}
+
+/* XPACLRI is HINT #7: safe as a NOP on pre-PAC CPUs, with no allocation,
+   syscalls, locks or guessed virtual-address mask in a signal handler. */
+static inline uintptr_t
+gsp_strip_return_address(uintptr_t address)
+{
+#if defined(__aarch64__)
+  register uintptr_t lr __asm__("x30") = address;
+  __asm__ __volatile__("hint #7" : "+r" (lr));
+  return lr;
+#else
+  return address;
 #endif
 }
 

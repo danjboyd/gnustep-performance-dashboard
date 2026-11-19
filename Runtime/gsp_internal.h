@@ -213,6 +213,9 @@ GSP_HIDDEN uint32_t gsp_current_stack_id(gsp_thread *t);
 
 GSP_HIDDEN void gsp_sampler_init(void);
 GSP_HIDDEN void gsp_sampler_stop(void);
+/* Refresh only in normal context under the image-scan lock; never in a handler. */
+GSP_HIDDEN void gsp_unwind_refresh_images(void);
+GSP_HIDDEN void gsp_unwind_emit_stats(void);
 GSP_HIDDEN void gsp_images_emit_new(gsp_thread *t);
 GSP_HIDDEN void gsp_images_emit_new_writer(void);
 GSP_HIDDEN bool gsp_images_changed(void);   /* writer only */

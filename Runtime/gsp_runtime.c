@@ -790,6 +790,8 @@ finish_recording(void)
       if (!output_state.error && gsp_cfg.leaks)
         gsp_leaks_snapshot();
     }
+  if (!from_signal)
+    gsp_unwind_emit_stats();
   /* samples dropped by threads that are still alive */
   {
     int n = atomic_load(&gsp_thread_count);

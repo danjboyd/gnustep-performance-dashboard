@@ -309,6 +309,7 @@ emit_new_images(gsp_thread *t, bool writer)
 
   pthread_mutex_lock(&images_lock);
   dl_iterate_phdr(image_cb, &scan);
+  gsp_unwind_refresh_images();
   for (int i = 0; i < scan.count; i++)
     {
       gsp_image_payload p = { found[i].base, found[i].start, found[i].end };
