@@ -30,4 +30,10 @@ all install clean:
 check: all
 	sh Tests/run.sh
 
-.PHONY: all install clean check
+# Timing-sensitive signals are opt-in; never enabled by ordinary make check.
+check-wall-eintr:
+	@mkdir -p Tests/out
+	$(CC) -std=gnu11 -Wall -Wextra -Werror Tests/fixtures/wall-eintr.c -pthread -lrt -o Tests/out/wall-eintr
+	Tests/out/wall-eintr
+
+.PHONY: all install clean check check-wall-eintr

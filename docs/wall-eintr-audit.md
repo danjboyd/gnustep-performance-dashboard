@@ -19,9 +19,10 @@ original deadline. No server, database or recording helper is involved.
 Counts are one observed run, not fixed test expectations. The fixture asserts
 at least three signals per worker, EINTR on the first five calls and none on
 the condition wait. All six retained their intended deadline (about120ms).
-Run locally with `cc -std=gnu11 -Wall -Wextra -Werror
-Tests/fixtures/wall-eintr.c -pthread -lrt -o /tmp/pd-wall-eintr` followed by
-`/tmp/pd-wall-eintr`. This needs Linux, not AppKit or a display.
+Run with the opt-in `make check-wall-eintr` target, or include it in the full
+suite using `PD_TEST_WALL_EINTR=1 make check`. Ordinary `make check` skips
+this timing-sensitive matrix. It needs Linux, not AppKit or a display. The
+binary and optional suite log are retained under Tests/out/.
 
 ## Source audit
 

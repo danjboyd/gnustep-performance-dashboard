@@ -828,14 +828,15 @@ bundle_bytes(int fd, unsigned depth, uint64_t *total)
       NSString *path = [_tracePath stringByAppendingPathComponent: name];
       int fd = open([path fileSystemRepresentation], O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
       struct stat st;
-      gsp_file_header header;
+      gsp_file_header header = {0};
       gsp_record end;
       gsp_writer_status status = {0};
       BOOL valid = fd >= 0 && fstat(fd, &st) == 0 && S_ISREG(st.st_mode)
-        && st.st_uid == geteuid() && st.st_size >= sizeof(header) + sizeof(end)
-        && pread(fd, &header, sizeof(header), 0) == sizeof(header)
+        && st.st_uid == geteuid() && st.st_size >= GSP_FILE_HEADER_V1_SIZE + sizeof(end)
+        && pread(fd, &header, GSP_FILE_HEADER_V1_SIZE, 0) == GSP_FILE_HEADER_V1_SIZE
         && !memcmp(header.magic, GSP_MAGIC, sizeof(header.magic))
-        && header.version == GSP_FORMAT_VERSION && header.header_size == sizeof(header)
+        && header.version == GSP_FORMAT_VERSION && header.header_size >= GSP_FILE_HEADER_V1_SIZE
+        && (uint64_t)header.header_size <= (uint64_t)st.st_size - sizeof(end)
         && pread(fd, &end, sizeof(end), st.st_size - sizeof(end)) == sizeof(end)
         && end.type == GSP_REC_END && end.size == sizeof(end);
       NSData *receipt = valid ? [_completedStreams objectForKey: @(header.pid)] : nil;

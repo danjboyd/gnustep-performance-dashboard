@@ -522,6 +522,21 @@ else
   fail "report sample kinds and thread selectors"
 fi
 
+if python3 Tests/header-compat-checks.py >"$OUT/header-compat.log" 2>&1; then
+  pass "legacy/current/future headers: dump and recorder"
+else
+  cat "$OUT/header-compat.log"
+  fail "header compatibility"
+fi
+if [ "${PD_TEST_WALL_EINTR:-0}" = 1 ]; then
+  if make check-wall-eintr >"$OUT/wall-eintr.log" 2>&1; then
+    pass "opt-in worker wall-signal EINTR matrix"
+  else
+    cat "$OUT/wall-eintr.log"
+    fail "worker wall-signal EINTR matrix"
+  fi
+fi
+
 if [ $FAILED -eq 0 ]; then
   echo "All $PASSED checks passed."
   exit 0
