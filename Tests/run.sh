@@ -509,6 +509,13 @@ else
   fail "thread-state polling and reader"
 fi
 
+if python3 Tests/report-kind-checks.py >"$OUT/report-kinds.log" 2>&1; then
+  pass "report sample kinds and thread selectors"
+else
+  cat "$OUT/report-kinds.log"
+  fail "report sample kinds and thread selectors"
+fi
+
 if [ $FAILED -eq 0 ]; then
   echo "All $PASSED checks passed."
   exit 0

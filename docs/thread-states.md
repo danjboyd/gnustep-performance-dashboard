@@ -31,3 +31,14 @@ wchan names, a Waits view, or all-thread wall signals. R is ambiguous, and a
 10 ms proc observation cannot classify a particular wall sample as blocked
 or running. Those sample flags need separate signal-handler CPU-clock data
 and an EINTR audit before all-thread wall sampling can ship.
+
+`gstrace report trace.gstrace top --kind wall --thread worker` selects wall
+samples for every thread whose recorded name is exactly `worker`. A numeric
+TID selects that thread; `--thread all` selects every thread. Repeat name/TID
+selectors to form a union. Unknown selectors fail instead of silently showing
+an empty result. `--kind cpu` remains the default, including perf CPU samples.
+Wall weights use the recorded wall interval, CPU weights the CPU interval;
+wall totals sum sampled thread time and can exceed process elapsed time.
+`info` gives per-thread CPU/wall weights including timer overruns.
+`wall-blocked` and `wall-running` fail clearly until classification flags are
+implemented; proc-state polls never substitute for them.

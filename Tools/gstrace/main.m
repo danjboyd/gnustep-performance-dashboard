@@ -68,7 +68,8 @@ usage(void)
       @"Analysis\n"
       @"  info <trace>\n"
       @"  report <trace> <calltree|top|hangs|allocations|leaks|signposts|logs|zombies|threads|files|network>\n"
-      @"    --pid <pid>  --thread <tid>  --range <start-end seconds>\n"
+      @"    --pid <pid>  --thread <tid|name|all>  --kind <cpu|wall|wall-blocked|wall-running>\n"
+      @"    --range <start-end seconds>\n"
       @"    --invert  --separate-threads  --hide-system  --flatten-recursion\n"
       @"    --charge-to-caller <symbol>  --prune <symbol>  --focus <symbol>\n"
       @"    --depth <n>  --min-percent <p>  --limit <n>  --by-stack  --persistent  --lines  --events\n"
@@ -383,6 +384,8 @@ typedef struct report_opts
 {
   int pid;
   NSMutableSet *threads;
+  NSMutableArray *threadSelectors;
+  NSString *sampleKind;
   double rangeStart, rangeEnd;
   BOOL haveRange;
   GSPCallTreeOptions treeOptions;
@@ -554,7 +557,7 @@ cmd_info(NSArray *args)
       uint64_t cpu = 0, wall = 0;
       for (NSUInteger i = 0; i < p.sampleCount; i++)
         if (p.samples[i].kind == GSP_SAMPLE_WALL)
-          wall++;
+          wall += p.samples[i].weight;
         else
           cpu += p.samples[i].weight;
       out([NSString stringWithFormat: @"\nProcess %d%@: %@\n", p.pid,
@@ -609,6 +612,21 @@ cmd_info(NSArray *args)
            (unsigned long)[p.signposts count], (unsigned long)[p.logMessages count],
            (unsigned long)[p.leakSnapshots count], (unsigned long)[p.zombies count],
            (unsigned long)[p.methodNames count]]);
+      out(@"  per-thread sample weights (timer overruns included):\n");
+      for (GSPThreadInfo *thread in [p sortedThreads])
+        {
+          uint64_t tcpu = 0, twall = 0;
+          for (NSUInteger i = 0; i < p.sampleCount; i++)
+            if (p.samples[i].tid == thread.tid)
+              {
+                if (p.samples[i].kind == GSP_SAMPLE_WALL) twall += p.samples[i].weight;
+                else if (p.samples[i].kind == GSP_SAMPLE_CPU || p.samples[i].kind == GSP_SAMPLE_PERF)
+                  tcpu += p.samples[i].weight;
+              }
+          out([NSString stringWithFormat:
+            @"    %u %@: cpu %llu; wall %llu; wall-blocked/wall-running: not recorded\n",
+            thread.tid, thread.displayName, (unsigned long long)tcpu, (unsigned long long)twall]);
+        }
       report_symbols(p);
     }
   return 0;
@@ -623,11 +641,18 @@ report_calltree(GSPTrace *t, GSPProcess *p, report_opts *o, BOOL top)
   GSPCallTree *tree = configured([[GSPCallTree alloc] initWithProcess: p], o);
   NSMutableData *in = [NSMutableData data];
 
+  BOOL wall = [o->sampleKind isEqual: @"wall"];
+  double interval = wall ? (p.wallIntervalMicroseconds ?: 10000)
+                         : (p.sampleIntervalMicroseconds ?: 1000);
+  NSString *(^formatWeight)(uint64_t) = ^NSString *(uint64_t weight) {
+    return GSPFormatDuration(weight * interval / 1e6);
+  };
   tree.options = opts;
   for (NSUInteger i = 0; i < p.sampleCount; i++)
     {
       const GSPSample *sm = &p.samples[i];
-      if (sm->kind == GSP_SAMPLE_WALL || (e && (sm->time < s || sm->time > e)))
+      if ((wall ? sm->kind != GSP_SAMPLE_WALL : sm->kind != GSP_SAMPLE_CPU && sm->kind != GSP_SAMPLE_PERF)
+          || (e && (sm->time < s || sm->time > e)))
         continue;
       if (o->threads && ![o->threads containsObject: [NSNumber numberWithUnsignedInt: sm->tid]])
         continue;
@@ -637,11 +662,13 @@ report_calltree(GSPTrace *t, GSPProcess *p, report_opts *o, BOOL top)
   [tree buildFromStacks: [in bytes] count: [in length] / sizeof(GSPWeightedStack)];
   if (tree.totalWeight == 0)
     {
-      out(@"No CPU samples (record with the Time Profiler template).\n");
+      out(wall ? @"No wall samples recorded.\n"
+               : @"No CPU samples (record with the Time Profiler template).\n");
       return 0;
     }
-  out([NSString stringWithFormat: @"Time Profiler: %@ of CPU time, process %d\n\n",
-       ms_formatter(p)(tree.totalWeight), p.pid]);
+  out([NSString stringWithFormat: @"%@: %@ of %@, process %d\n\n",
+       wall ? @"Wall samples" : @"Time Profiler", formatWeight(tree.totalWeight),
+       wall ? @"sampled thread wall time" : @"CPU time", p.pid]);
   if (top)
     {
       NSArray *kids = [tree.root.children sortedArrayUsingComparator:
@@ -657,14 +684,14 @@ report_calltree(GSPTrace *t, GSPProcess *p, report_opts *o, BOOL top)
           if (limit-- == 0)
             break;
           out([NSString stringWithFormat: @"%10@ %6.1f%% %10@  %@  (%@)\n",
-               ms_formatter(p)(nd.selfWeight),
+               formatWeight(nd.selfWeight),
                100.0 * nd.selfWeight / tree.totalWeight,
-               ms_formatter(p)(nd.totalWeight), nd.name, nd.imageName ?: @"?"]);
+               formatWeight(nd.totalWeight), nd.name, nd.imageName ?: @"?"]);
         }
       return 0;
     }
   out([tree textWithMaxDepth: o->depth minPercent: o->minPercent
-             weightFormatter: ms_formatter(p)]);
+             weightFormatter: formatWeight]);
   return 0;
 }
 
@@ -970,6 +997,8 @@ cmd_report(NSArray *args)
   report_opts o = { 0 };
   o.charge = [NSMutableSet set];
   o.prune = [NSMutableSet set];
+  o.sampleKind = @"cpu";
+  o.threadSelectors = [NSMutableArray array];
 
   for (NSUInteger i = 2; i < [args count]; i++)
     {
@@ -994,9 +1023,13 @@ cmd_report(NSArray *args)
       else if ([a isEqual: @"--pid"]) o.pid = [v intValue];
       else if ([a isEqual: @"--thread"])
         {
-          if (o.threads == nil)
-            o.threads = [NSMutableSet set];
-          [o.threads addObject: [NSNumber numberWithUnsignedInt: (uint32_t)[v intValue]]];
+          [o.threadSelectors addObject: v];
+        }
+      else if ([a isEqual: @"--kind"])
+        {
+          if (![@[@"cpu", @"wall", @"wall-blocked", @"wall-running"] containsObject: v])
+            { err(@"--kind must be cpu, wall, wall-blocked or wall-running"); return 2; }
+          o.sampleKind = v;
         }
       else if ([a isEqual: @"--range"])
         {
@@ -1027,6 +1060,31 @@ cmd_report(NSArray *args)
   GSPProcess *p = pick_process(t, o.pid);
   if (p == nil)
     return 1;
+  if (![o.sampleKind isEqual: @"cpu"]
+      && ![kind isEqual: @"top"] && ![kind isEqual: @"calltree"])
+    { err(@"--kind applies to top and calltree reports"); return 2; }
+  if ([o.sampleKind isEqual: @"wall-blocked"] || [o.sampleKind isEqual: @"wall-running"])
+    {
+      err(@"this trace has no blocked/running flags; record with --wall-threads all, available in a later version");
+      return 1;
+    }
+  if ([o.threadSelectors containsObject: @"all"] && o.threadSelectors.count > 1)
+    { err(@"--thread all cannot be combined with another thread selector"); return 2; }
+  for (NSString *selector in o.threadSelectors)
+    {
+      if ([selector isEqual: @"all"]) break;
+      if (!o.threads) o.threads = [NSMutableSet set];
+      BOOL found = NO;
+      for (GSPThreadInfo *thread in [p sortedThreads])
+        if ([selector isEqual: [NSString stringWithFormat: @"%u", thread.tid]]
+            || [selector isEqual: thread.name])
+          {
+            [o.threads addObject: [NSNumber numberWithUnsignedInt: thread.tid]];
+            found = YES;
+          }
+      if (!found)
+        { err([NSString stringWithFormat: @"no thread matches '%@'", selector]); return 2; }
+    }
   if (o.symbolSummary) report_symbols(p);
   if ([kind isEqual: @"calltree"])
     return report_calltree(t, p, &o, NO);
