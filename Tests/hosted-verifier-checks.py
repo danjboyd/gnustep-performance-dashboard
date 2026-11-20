@@ -5,6 +5,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
 import re
 from pathlib import Path
 import shutil
@@ -173,7 +174,51 @@ class GateChecks(unittest.TestCase):
         windows = (ROOT / '.github/workflows/windows-package.yml').read_text()
         self.assertNotIn('inputs.version ||', windows)
         self.assertIn("$env:GITHUB_EVENT_NAME -ne 'push'", windows)
-        self.assertIn('(Get-Content package.version -Raw).Trim()', windows)
+
+
+    def test_env_pin_checkout_is_lf(self):
+        output = subprocess.check_output(['git', 'check-attr', 'eol', '--', 'docs/ci-source-pins.env'], cwd=ROOT, text=True)
+        self.assertEqual(output.strip(), 'docs/ci-source-pins.env: eol: lf')
+
+    def test_windows_push_version_behaviour(self):
+        workflow = (ROOT / '.github/workflows/windows-package.yml').read_text()
+        blocks = re.findall(r'        run: \|\n((?:          .*\n)+)', workflow)
+        body = next(b for b in blocks if 'IsNullOrWhiteSpace' in b)
+        code = '\n'.join(line[10:] for line in body.splitlines()).split('# Git for Windows')[0]
+        packaging = (ROOT / 'scripts/package-windows.ps1').read_text()
+        pattern = re.search(r"\$Version -notmatch '([^']+)'", packaging).group(1)
+        manifest = json.loads((ROOT / 'packaging/package.manifest.json').read_text())
+        expected = manifest['package']['version'] + '-hosted.449'
+        self.assertRegex(expected, pattern)
+        pwsh = shutil.which('pwsh')
+        if not pwsh:
+            # Non-Windows runners still verify actual manifest data against the
+            # packaging script's acceptance expression, not a duplicated version.
+            print('NOTE pwsh unavailable: actual manifest/packaging regex checked')
+            return
+        with tempfile.TemporaryDirectory(prefix='pd-version-expression-') as temp:
+            root = Path(temp)
+            (root / 'packaging').mkdir()
+            path = root / 'packaging/package.manifest.json'
+            path.write_text(json.dumps(manifest))
+            def invoke(event, version=''):
+                return subprocess.run([pwsh, '-NoLogo', '-NoProfile', '-NonInteractive', '-Command',
+                    "$ErrorActionPreference='Stop';\n" + code + '\nWrite-Output $env:PD_PACKAGE_VERSION'],
+                    cwd=root, env=dict(os.environ, GITHUB_EVENT_NAME=event, GITHUB_RUN_ID='449', PD_PACKAGE_VERSION=version, POWERSHELL_TELEMETRY_OPTOUT='1'),
+                    text=True, capture_output=True)
+            result = invoke('push')
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout.strip(), expected)
+            self.assertRegex(result.stdout.strip(), pattern)
+            result = invoke('workflow_dispatch', '0.2.3-review.1')
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout.strip(), '0.2.3-review.1')
+            self.assertNotEqual(invoke('workflow_dispatch').returncode, 0)
+            self.assertNotEqual(invoke('workflow_dispatch', '../invalid').returncode, 0)
+            manifest['package']['version'] = '../invalid'
+            path.write_text(json.dumps(manifest))
+            self.assertNotEqual(invoke('push').returncode, 0)
+            print('PASS actual pwsh: manifest fallback, explicit manual version and invalid-input refusals')
 
     def test_real_tree_and_mutations(self):
         gate.check(ROOT)

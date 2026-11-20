@@ -37,8 +37,9 @@ jobs:
         run: |
           if ([string]::IsNullOrWhiteSpace($env:PD_PACKAGE_VERSION)) {
             if ($env:GITHUB_EVENT_NAME -ne 'push') { throw 'An explicit version is required' }
-            $env:PD_PACKAGE_VERSION = (Get-Content package.version -Raw).Trim() + '-hosted.' + $env:GITHUB_RUN_ID
+            $env:PD_PACKAGE_VERSION = ((Get-Content packaging/package.manifest.json -Raw | ConvertFrom-Json).package.version) + '-hosted.' + $env:GITHUB_RUN_ID
           }
+          if ($env:PD_PACKAGE_VERSION -notmatch '^\d+\.\d+\.\d+-[A-Za-z0-9.-]+$') { throw 'Use an unpublished prerelease version for Windows qualification.' }
           # Git for Windows provides OpenSSL for manifest authentication.
           $env:PATH = 'C:\Program Files\Git\usr\bin;' + $env:PATH
           ./scripts/package-windows.ps1 -Version $env:PD_PACKAGE_VERSION -Release

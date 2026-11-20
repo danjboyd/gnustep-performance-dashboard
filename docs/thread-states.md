@@ -58,3 +58,12 @@ With `PD_GLIBC239_LOADER` set to a retained Ubuntu 2.39 loader beside its libc,
 the fixture additionally verifies stale-copy state 1 versus authoritative
 state 0 and proves that restoring the old guard fails. No library download or
 system installation is performed by the test.
+
+
+## Release verification follow-up
+
+The hosted verifier's `--arch` selects one architecture's seven-asset release
+inventory. Multi-architecture publication remains TODO: it needs a combined
+asset list and SHA256SUMS plus explicit per-architecture feed URLs instead of
+assuming the default stable.json. Existing mixed releases fail closed; this
+work does not authorize or implement their publication.

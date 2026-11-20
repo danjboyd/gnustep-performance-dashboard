@@ -23,6 +23,9 @@ def sha(path):
         return hashlib.file_digest(stream, 'sha256').hexdigest()
 
 
+# TODO: Multi-architecture publication needs a combined asset/checksum inventory
+# and explicit per-architecture feed endpoints. This verifier currently requires
+# exactly seven assets for one architecture and fails closed for a mixed release.
 def filenames(version, arch='x86_64'):
     require(re.fullmatch(r'\d+\.\d+\.\d+', version), 'Stable numeric version required')
     require(arch in ('x86_64', 'aarch64'), 'Unsupported Linux architecture')
