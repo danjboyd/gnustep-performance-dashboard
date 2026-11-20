@@ -147,8 +147,7 @@ fi
 
 if [ "$(uname -s)" = Linux ]; then
   echo "== Native signal-context register layout"
-  # Match the preload agent's PIC access to _r_debug. A COPY relocation in
-  # a standalone GCC/PIE fixture can read stale RT_ADD on glibc 2.39.
+  # Exercise ordinary PIC access separately from the deliberate COPY target.
   if cc -D_GNU_SOURCE -std=gnu11 -Wall -Wextra -Werror -fPIC -pie \
       -Wl,-z,nocopyreloc -I"$ROOT/Runtime/include" \
       "$ROOT/Tests/fixtures/arch-context.c" -o "$OUT/arch-context" && "$OUT/arch-context"; then
@@ -297,6 +296,13 @@ fi
 
 echo "== CLI behaviour"
 check "unknown template is rejected" "! '$GSTRACE' record --template Nope --launch /bin/true >/dev/null 2>&1"
+if python3 Tests/loader-debug-checks.py >"$OUT/loader-debug.log" 2>&1; then
+  pass "DT_DEBUG bypasses target COPY relocation"
+else
+  cat "$OUT/loader-debug.log"
+  fail "DT_DEBUG loader state"
+fi
+
 check "list templates" "'$GSTRACE' list templates 2>/dev/null | grep -q '^Time Profiler'"
 check "setuid targets are refused" "! '$GSTRACE' record --output '$OUT/su.gstrace' --launch /usr/bin/passwd >/dev/null 2>&1"
 check "child processes are not traced by default" "[ \$(ls '$OUT/objcwork.gstrace' | grep -c '^events-.*\\.bin') -eq 1 ]"

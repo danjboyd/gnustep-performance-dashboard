@@ -130,11 +130,47 @@ void gsp_unwind_refresh_images(void) { }
 void gsp_unwind_emit_stats(void) { }
 #endif
 
+/* Resolve in normal startup context, before sampling timers exist. A target
+   executable can COPY-relocate _r_debug; that interposed copy is stale on
+   older glibc. DT_DEBUG is filled by the loader with its authoritative object.
+   The main executable is the first dl_iterate_phdr object, PIE or not. */
+static struct r_debug *loader_debug = &_r_debug;
+
+static int
+find_loader_debug(struct dl_phdr_info *info, size_t size, void *opaque)
+{
+  (void)size;
+  struct r_debug **result = opaque;
+  for (ElfW(Half) i = 0; i < info->dlpi_phnum; i++)
+    if (info->dlpi_phdr[i].p_type == PT_DYNAMIC)
+      {
+        const ElfW(Phdr) *ph = &info->dlpi_phdr[i];
+        const ElfW(Dyn) *dyn = (const void *)(info->dlpi_addr + ph->p_vaddr);
+        size_t count = ph->p_memsz / sizeof(*dyn);
+        for (size_t j = 0; j < count && dyn[j].d_tag != DT_NULL; j++)
+          if (dyn[j].d_tag == DT_DEBUG && dyn[j].d_un.d_ptr)
+            {
+              *result = (struct r_debug *)(uintptr_t)dyn[j].d_un.d_ptr;
+              return 1;
+            }
+      }
+  return 1; /* Never inspect a DSO's dynamic table instead of the main one. */
+}
+
+static void
+init_loader_debug(void)
+{
+  struct r_debug *debug = &_r_debug;
+  dl_iterate_phdr(find_loader_debug, &debug);
+  loader_debug = debug;
+}
+
 void
 gsp_unwind_init(void)
 {
   void *h;
 
+  init_loader_debug();
   gsp_unwind_refresh_images();
   if (gsp_cfg.unwind_fp)
     goto limited;
@@ -171,7 +207,7 @@ limited:
 bool
 gsp_loader_busy(void)
 {
-  return _r_debug.r_state != RT_CONSISTENT;
+  return ((volatile struct r_debug *)loader_debug)->r_state != RT_CONSISTENT;
 }
 
 static inline bool

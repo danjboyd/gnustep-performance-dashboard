@@ -42,3 +42,13 @@ wall totals sum sampled thread time and can exceed process elapsed time.
 `info` gives per-thread CPU/wall weights including timer overruns.
 `wall-blocked` and `wall-running` fail clearly until classification flags are
 implemented; proc-state polls never substitute for them.
+
+The loader-state guard resolves the main executable's DT_DEBUG pointer during
+normal startup, before timers are enabled. Signal handlers only read that
+cached object's state. GOT `_r_debug` remains the fallback if DT_DEBUG is
+absent. The non-PIE GCC regression requires a real `_r_debug` COPY relocation
+and verifies both the loader pointer and the actual unwinder fallback counter.
+With `PD_GLIBC239_LOADER` set to a retained Ubuntu 2.39 loader beside its libc,
+the fixture additionally verifies stale-copy state 1 versus authoritative
+state 0 and proves that restoring the old guard fails. No library download or
+system installation is performed by the test.

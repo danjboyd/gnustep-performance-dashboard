@@ -146,6 +146,29 @@ main(void)
   uintptr_t tp = gsp_thread_pointer();
   uintptr_t marker = (uintptr_t)&tls_marker;
   assert(tp != 0 && (tp > marker ? tp - marker : marker - tp) < (1u << 20));
+  init_loader_debug();
+  assert(!gsp_loader_busy());
+#ifdef GSP_TEST_COPY_RELOC
+  /* GCC non-PIE deliberately COPY-relocates this symbol. DT_DEBUG must
+     bypass it, even when its state happens to be consistent on new glibc. */
+  assert(loader_debug != &_r_debug);
+  printf("PASS COPY-relocated r_debug bypass: copy=%d loader=%d\n",
+         (int)_r_debug.r_state, (int)loader_debug->r_state);
+#endif
+  struct r_debug fake = { 0 };
+  struct r_debug *saved = loader_debug;
+  fake.r_state = RT_ADD;
+  loader_debug = &fake;
+  assert(gsp_loader_busy());
+  fake.r_state = RT_DELETE;
+  assert(gsp_loader_busy());
+  fake.r_state = RT_CONSISTENT;
+  assert(!gsp_loader_busy());
+  loader_debug = saved;
+  struct dl_phdr_info empty = { 0 };
+  struct r_debug *fallback = &_r_debug;
+  assert(find_loader_debug(&empty, sizeof(empty), &fallback) == 1);
+  assert(fallback == &_r_debug);
   check_frame_record(0x12345000);
   check_invalid_ip_fallback();
 #if defined(__aarch64__)
