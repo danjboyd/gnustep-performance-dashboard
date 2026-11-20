@@ -536,12 +536,15 @@ poll_thread_states(uint64_t now)
       snprintf(path, sizeof(path), "/proc/self/task/%d/stat", t->tid);
       int fd = gsp_sys_open(path, O_RDONLY | O_CLOEXEC, 0);
       if (fd < 0 && (errno == ENOENT || errno == ESRCH))
-        { exit_state(t, now); continue; }
+        { exit_state(t, gsp_now()); continue; }
       ssize_t bytes = fd < 0 ? -1 : gsp_sys_read(fd, stat, sizeof(stat) - 1);
       if (fd >= 0) gsp_sys_close(fd);
       unsigned char state = GSP_STATE_UNKNOWN;
       if (bytes > 0)
         { stat[bytes] = 0; state = gsp_proc_state(stat); }
+      now = gsp_now(); /* Timestamp this read, not the beginning of a large pass. */
+      if (state == GSP_STATE_EXITED)
+        { exit_state(t, now); continue; }
       gsp_state_polls *s = &t->state_polls;
       bool changed = s->state != state;
       if (changed) flush_state(t);

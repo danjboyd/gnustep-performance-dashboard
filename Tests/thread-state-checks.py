@@ -11,7 +11,21 @@ REC = struct.Struct('<HHIQII')
 
 with tempfile.TemporaryDirectory(prefix='pd-thread-states-') as tmp:
     tmp = Path(tmp)
-    source = tmp / 'worker.c'
+    parser = tmp / 'parser.c'
+    parser.write_text('''#include <assert.h>
+#include <GSPerformance/gsp_format.h>
+#include "gsp_thread_states.h"
+int main(void) {
+  assert(gsp_proc_state("12 (wait) worker) S 1 2") == 'S');
+  assert(gsp_proc_state("12 (gone) X 1 2") == GSP_STATE_EXITED);
+  assert(gsp_proc_state("12 (cut) ") == GSP_STATE_UNKNOWN);
+  assert(gsp_proc_state("no proc fields") == GSP_STATE_UNKNOWN);
+  return 0;
+}
+''')
+    subprocess.run(['cc', '-std=gnu11', '-Wall', '-Wextra', '-Werror', '-I' + str(ROOT / 'Runtime/include'), '-I' + str(ROOT / 'Runtime'), str(parser), '-o', str(tmp / 'parser')], check=True)
+    subprocess.run([str(tmp / 'parser')], check=True)
+    source = tmp / 'worker.c' 
     source.write_text('''#define _GNU_SOURCE
 #include <pthread.h>
 #include <sys/prctl.h>
