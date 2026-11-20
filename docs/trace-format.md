@@ -51,6 +51,15 @@ intervals, executable path), followed by records. Each record starts with a
 24-byte `gsp_record` header: type, flags, total size (a multiple of 8), time
 (`CLOCK_MONOTONIC` ns), thread id and a type-specific `aux` word.
 
+The original v1 header is a 312-byte prefix. `header_size` is where records
+begin; seek to it instead of assuming the reader's own header size. Accept
+headers at least 312 bytes long and skip unknown suffix bytes. The optional
+suffix at offset 312 adds `thread_state_interval_us` (u32) and a reserved zero
+word (u32), making the header 320 bytes. A missing suffix or zero interval
+means polling was not requested. A nonzero interval is its nominal cadence,
+not proof of available observations. Recorder completion validation uses the
+declared header size, final END and separate writer receipt/marker checks.
+
 Records are **not** in time order (each thread's buffers are flushed
 independently), and definitions may follow their uses. Readers make a second
 pass to resolve ids and sort by time. A final record may be incomplete while
@@ -72,6 +81,7 @@ recording; readers stop at it.
 | ZOMBIE | object address, selector string id, stack id |
 | DROPPED | samples dropped because a ring was full |
 | MARK / END | recording start, user marks, clean end |
+| THREAD_STATE (23) | `aux` = proc state character; first poll time (u64), actual poll count (u32), reserved zero (u32) |
 
 Frame 0 of a sample is the interrupted PC; later frames are return addresses
 and are symbolicated at `address - 1`.
@@ -83,7 +93,23 @@ while diagnostics remain in the recording history. `aux=2` means stack
 unwinding is limited to frame pointers. Readers expose these in the CLI and
 GUI. Version 1 is retained because unknown record types are skipped; older
 readers will not display these diagnostics and should not be used to assess
-recording quality for v0.1.0.
+recording quality for v0.1.0. `aux=3` means thread states are unavailable:
+`/proc/self/task` did not expose the writer's own TID, was unreadable, or
+became unavailable later. The header retains the requested nominal interval,
+but later state polling is disabled. `info` reports
+`thread states: unavailable (no /proc)` rather than inventing thread exits.
+This diagnostic is independent of CPU/wall samples and capture completion.
+
+Record 23's timestamp is the last actual observation in its batch;
+`first_ns` is the first. Each poll contributes once. State changes emit
+immediately; unchanged batches emit about once a second and at stop.
+Counts represent share of polls, not elapsed scheduler time. R means running
+or runnable, S sleeping, D disk wait, `?` unavailable/malformed observation
+(included in the denominator), and `X` a final exited event with zero polls.
+The writer verifies its own proc entry before ENOENT can mean an exited TID;
+ESRCH after opening a proc fd also means exit. Threads still alive at capture
+stop are not marked exited. Polling gaps are not interpolated.
+See [thread-states.md](thread-states.md) for CLI selection and limitations.
 
 ## Optional Linux IMAGE identity suffix
 

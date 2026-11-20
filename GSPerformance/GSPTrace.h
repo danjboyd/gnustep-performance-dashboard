@@ -155,6 +155,7 @@ typedef struct GSPIOEvent
 @property (nonatomic, readonly) uint32_t sampleIntervalMicroseconds;
 @property (nonatomic, readonly) uint32_t wallIntervalMicroseconds;
 @property (nonatomic, readonly) uint32_t threadStateIntervalMicroseconds;
+@property (nonatomic, readonly) BOOL threadStatesUnavailable;
 @property (nonatomic, readonly) const GSPThreadStateEvent *threadStates;
 @property (nonatomic, readonly) NSUInteger threadStateCount;
 @property (nonatomic, readonly) uint64_t droppedSamples;

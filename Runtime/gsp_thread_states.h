@@ -3,6 +3,8 @@
 #ifndef GSP_THREAD_STATES_H
 #define GSP_THREAD_STATES_H
 #include <string.h>
+#include <errno.h>
+#include <sys/types.h>
 
 typedef struct gsp_state_polls
 {
@@ -20,5 +22,21 @@ gsp_proc_state(const char *stat)
       && strchr("RSDTtXZPIWK", end[2]))
     return (unsigned char)end[2];
   return GSP_STATE_UNKNOWN;
+}
+/* Capture read errno before close, which can change errno even on success.
+   A proc fd opened while the task lived can yield ESRCH after its exit. */
+static inline unsigned char
+gsp_read_proc_state(int fd, ssize_t (*read_fn)(int, void *, size_t),
+                    int (*close_fn)(int))
+{
+  if (fd < 0) return GSP_STATE_UNKNOWN;
+  char stat[4096];
+  ssize_t bytes = read_fn(fd, stat, sizeof(stat) - 1);
+  int error = bytes < 0 ? errno : 0;
+  close_fn(fd);
+  if (bytes < 0 && error == ESRCH) return GSP_STATE_EXITED;
+  if (bytes <= 0) return GSP_STATE_UNKNOWN;
+  stat[bytes] = 0;
+  return gsp_proc_state(stat);
 }
 #endif

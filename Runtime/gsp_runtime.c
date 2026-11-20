@@ -522,6 +522,30 @@ exit_state(gsp_thread *t, uint64_t now)
   t->state_polls.state = GSP_STATE_EXITED;
 }
 
+/* A proc mount can be absent or belong to another PID namespace. Probe
+   this writer's own TID, not a user thread which might legitimately exit. */
+static bool
+probe_thread_states(void)
+{
+  char path[80];
+  snprintf(path, sizeof(path), "/proc/self/task/%d/stat", gsp_gettid());
+  int fd = gsp_sys_open(path, O_RDONLY | O_CLOEXEC, 0);
+  unsigned char state = gsp_read_proc_state(fd, gsp_sys_read, gsp_sys_close);
+  if (state != GSP_STATE_UNKNOWN && state != GSP_STATE_EXITED) return true;
+  for (int i = 0, n = atomic_load(&gsp_thread_count); i < n; i++)
+    {
+      gsp_thread *t = gsp_threads[i];
+      if (t && (atomic_load(&t->state) == GSP_SLOT_ACTIVE
+                || atomic_load(&t->state) == GSP_SLOT_EXITED))
+        flush_state(t);
+    }
+  gsp_cfg.thread_states = false;
+  const char message[] = "Thread states unavailable (no /proc): this process's task stats are not readable.";
+  gsp_writer_emit(GSP_REC_DIAGNOSTIC, GSP_DIAGNOSTIC_THREAD_STATES_UNAVAILABLE,
+                  gsp_now(), (uint32_t)traced_pid, message, sizeof(message), NULL, 0);
+  return false;
+}
+
 static void
 poll_thread_states(uint64_t now)
 {
@@ -532,16 +556,17 @@ poll_thread_states(uint64_t now)
       if (!t || atomic_load(&t->state) != GSP_SLOT_ACTIVE
           || t->state_polls.state == GSP_STATE_EXITED)
         continue;
-      char path[80], stat[4096];
+      char path[80];
       snprintf(path, sizeof(path), "/proc/self/task/%d/stat", t->tid);
       int fd = gsp_sys_open(path, O_RDONLY | O_CLOEXEC, 0);
       if (fd < 0 && (errno == ENOENT || errno == ESRCH))
-        { exit_state(t, gsp_now()); continue; }
-      ssize_t bytes = fd < 0 ? -1 : gsp_sys_read(fd, stat, sizeof(stat) - 1);
-      if (fd >= 0) gsp_sys_close(fd);
-      unsigned char state = GSP_STATE_UNKNOWN;
-      if (bytes > 0)
-        { stat[bytes] = 0; state = gsp_proc_state(stat); }
+        {
+          /* Recheck the writer if the proc mount disappeared mid-capture. */
+          if (!probe_thread_states()) return;
+          exit_state(t, gsp_now());
+          continue;
+        }
+      unsigned char state = gsp_read_proc_state(fd, gsp_sys_read, gsp_sys_close);
       now = gsp_now(); /* Timestamp this read, not the beginning of a large pass. */
       if (state == GSP_STATE_EXITED)
         { exit_state(t, now); continue; }
@@ -940,6 +965,8 @@ writer_main(void *arg)
         pthread_attr_destroy(&attr);
       }
   }
+
+  if (gsp_cfg.thread_states) probe_thread_states();
 
   if (gsp_cfg.leak_interval_s)
     next_leak = gsp_now() + (uint64_t)gsp_cfg.leak_interval_s * 1000000000ull;

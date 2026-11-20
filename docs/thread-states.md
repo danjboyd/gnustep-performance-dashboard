@@ -17,7 +17,11 @@ to the reader's existing TID-based thread grouping.
 
 The v1 stream keeps its original 312-byte prefix and appends an optional
 8-byte header suffix: `thread_state_interval_us` and a reserved zero word.
-Old streams have no suffix and show `thread states: not recorded`.
+Old streams have no suffix and show `thread states: not recorded`. The
+writer probes its own TID's proc stat before polling. If unavailable, it
+disables the track and emits diagnostic 3. `info` then says
+`thread states: unavailable (no /proc)`, while the header retains the requested
+nominal interval. No user-thread exit is inferred from this failure.
 `GSP_REC_THREAD_STATE` (23) uses aux for the proc state character (`?` for
 unavailable, `X` for exited). Its 16-byte payload contains `first_ns` (u64),
 `polls` (u32), and reserved zero (u32). The record timestamp is the last poll

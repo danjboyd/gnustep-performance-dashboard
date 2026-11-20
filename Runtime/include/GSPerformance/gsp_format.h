@@ -97,7 +97,8 @@ enum gsp_record_type
 enum
 {
   GSP_DIAGNOSTIC_LEAK_SCAN_UNAVAILABLE = 1,
-  GSP_DIAGNOSTIC_UNWIND_LIMITED = 2
+  GSP_DIAGNOSTIC_UNWIND_LIMITED = 2,
+  GSP_DIAGNOSTIC_THREAD_STATES_UNAVAILABLE = 3
 };
 
 /* State observations are batches of actual polls, never elapsed-time weights.

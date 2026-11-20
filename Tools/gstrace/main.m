@@ -568,7 +568,9 @@ cmd_info(NSArray *args)
       out([NSString stringWithFormat: @"  threads: %lu  images: %lu  stacks: %lu\n",
            (unsigned long)[p.threads count], (unsigned long)[p.images count],
            (unsigned long)[p.stacks count]]);
-      if (!p.threadStateIntervalMicroseconds)
+      if (p.threadStatesUnavailable)
+        out(@"  thread states: unavailable (no /proc)\n");
+      else if (!p.threadStateIntervalMicroseconds)
         out(@"  thread states: not recorded\n");
       else
         {

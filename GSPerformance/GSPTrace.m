@@ -145,7 +145,7 @@ typedef struct pending_ref
   uint32_t _interval, _wallInterval;
   uint64_t _dropped;
   NSMutableArray *_diagnostics;
-  BOOL _leakScanUnavailable;
+  BOOL _leakScanUnavailable, _threadStatesUnavailable;
   BOOL _samplesSorted;
 @public
   BOOL _changed;
@@ -195,6 +195,7 @@ typedef struct pending_ref
 - (BOOL) finishedCleanly { return _clean; }
 - (BOOL) fromPerf { return _fromPerf; }
 - (uint32_t) sampleIntervalMicroseconds { return _interval; }
+- (BOOL) threadStatesUnavailable { return _threadStatesUnavailable; }
 - (uint32_t) threadStateIntervalMicroseconds { return _stateInterval; }
 - (const GSPThreadStateEvent *) threadStates { return _threadStates; }
 - (NSUInteger) threadStateCount { return _threadStateCount; }
@@ -639,6 +640,8 @@ payload_string(const uint8_t *p, size_t max)
       break;
 
     case GSP_REC_DIAGNOSTIC:
+      if (r->aux == GSP_DIAGNOSTIC_THREAD_STATES_UNAVAILABLE)
+        _threadStatesUnavailable = YES;
       if (r->aux == GSP_DIAGNOSTIC_LEAK_SCAN_UNAVAILABLE)
         _leakScanUnavailable = YES;
       {
