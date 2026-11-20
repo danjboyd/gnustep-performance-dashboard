@@ -502,6 +502,13 @@ else
 fi
 
 echo
+if python3 Tests/thread-state-checks.py >"$OUT/thread-states.log" 2>&1; then
+  pass "thread-state polling and reader"
+else
+  cat "$OUT/thread-states.log"
+  fail "thread-state polling and reader"
+fi
+
 if [ $FAILED -eq 0 ]; then
   echo "All $PASSED checks passed."
   exit 0

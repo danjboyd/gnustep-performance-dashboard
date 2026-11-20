@@ -20,6 +20,14 @@ typedef struct GSPSample
   uint32_t reserved;
 } GSPSample;
 
+/* A batch of actual proc-state observations. No interpolation across gaps. */
+typedef struct GSPThreadStateEvent
+{
+  GSPTime time, firstTime;
+  uint32_t tid, polls;
+  uint32_t state; /* proc character, '?' unavailable, 'X' exited */
+} GSPThreadStateEvent;
+
 typedef struct GSPAllocationEvent
 {
   GSPTime time;
@@ -146,6 +154,9 @@ typedef struct GSPIOEvent
 @property (nonatomic, readonly) BOOL fromPerf;
 @property (nonatomic, readonly) uint32_t sampleIntervalMicroseconds;
 @property (nonatomic, readonly) uint32_t wallIntervalMicroseconds;
+@property (nonatomic, readonly) uint32_t threadStateIntervalMicroseconds;
+@property (nonatomic, readonly) const GSPThreadStateEvent *threadStates;
+@property (nonatomic, readonly) NSUInteger threadStateCount;
 @property (nonatomic, readonly) uint64_t droppedSamples;
 @property (nonatomic, readonly) NSArray *diagnostics; /* unique agent warnings */
 @property (nonatomic, readonly) BOOL leakScanUnavailable; /* latest attempt failed */

@@ -232,6 +232,7 @@ read_config(void)
 
   memset(&gsp_cfg, 0, sizeof(gsp_cfg));
   snprintf(gsp_cfg.output, sizeof(gsp_cfg.output), "%s", out ? out : "");
+  gsp_cfg.thread_states = env_flag("GSP_THREAD_STATES", false);
   gsp_cfg.cpu_sampling = env_flag("GSP_CPU_SAMPLING", true);
   gsp_cfg.wall_sampling_main = env_flag("GSP_WALL_SAMPLING", true);
   gsp_cfg.allocations = env_flag("GSP_ALLOCATIONS", false);
@@ -498,6 +499,62 @@ drain_ring(gsp_ring *r)
 }
 
 static void
+flush_state(gsp_thread *t)
+{
+  gsp_state_polls *s = &t->state_polls;
+  if (!s->count) return;
+  gsp_thread_state_payload p = { s->first, s->count, 0 };
+  gsp_writer_emit(GSP_REC_THREAD_STATE, s->state, s->last, t->tid,
+                  &p, sizeof(p), NULL, 0);
+  s->count = 0;
+  s->emitted = s->last;
+}
+
+static void
+exit_state(gsp_thread *t, uint64_t now)
+{
+  if (!gsp_cfg.thread_states || t->state_polls.state == GSP_STATE_EXITED)
+    return;
+  flush_state(t);
+  gsp_thread_state_payload p = { now, 0, 0 };
+  gsp_writer_emit(GSP_REC_THREAD_STATE, GSP_STATE_EXITED, now, t->tid,
+                  &p, sizeof(p), NULL, 0);
+  t->state_polls.state = GSP_STATE_EXITED;
+}
+
+static void
+poll_thread_states(uint64_t now)
+{
+  int n = atomic_load(&gsp_thread_count);
+  for (int i = 0; i < n; i++)
+    {
+      gsp_thread *t = gsp_threads[i];
+      if (!t || atomic_load(&t->state) != GSP_SLOT_ACTIVE
+          || t->state_polls.state == GSP_STATE_EXITED)
+        continue;
+      char path[80], stat[4096];
+      snprintf(path, sizeof(path), "/proc/self/task/%d/stat", t->tid);
+      int fd = gsp_sys_open(path, O_RDONLY | O_CLOEXEC, 0);
+      if (fd < 0 && (errno == ENOENT || errno == ESRCH))
+        { exit_state(t, now); continue; }
+      ssize_t bytes = fd < 0 ? -1 : gsp_sys_read(fd, stat, sizeof(stat) - 1);
+      if (fd >= 0) gsp_sys_close(fd);
+      unsigned char state = GSP_STATE_UNKNOWN;
+      if (bytes > 0)
+        { stat[bytes] = 0; state = gsp_proc_state(stat); }
+      gsp_state_polls *s = &t->state_polls;
+      bool changed = s->state != state;
+      if (changed) flush_state(t);
+      s->state = state;
+      if (!s->count) s->first = now;
+      s->last = now;
+      s->count++;
+      if (changed || now - s->emitted >= 1000000000ull)
+        flush_state(t);
+    }
+}
+
+static void
 drain_all(void)
 {
   int n = atomic_load(&gsp_thread_count);
@@ -524,6 +581,7 @@ drain_all(void)
                               (uint32_t)t->tid, &d, sizeof(d), NULL, 0);
               wbuf_flush();
             }
+          exit_state(t, gsp_now());
           atomic_store(&t->state, GSP_SLOT_RETIRED);
         }
     }
@@ -610,6 +668,7 @@ gsp_thread_current(void)
       gsp_in_agent--;
       return NULL;
     }
+  memset(&t->state_polls, 0, sizeof(t->state_polls));
   t->tid = gsp_gettid();
   t->flags = (t->tid == traced_pid) ? GSP_THREAD_MAIN : 0;
   t->has_cpu_timer = t->has_wall_timer = false;
@@ -782,6 +841,9 @@ finish_recording(void)
   gsp_sampler_stop();
   gsp_io_stop();
   drain_all();
+  if (gsp_cfg.thread_states)
+    for (int i = 0, n = atomic_load(&gsp_thread_count); i < n; i++)
+      if (gsp_threads[i]) flush_state(gsp_threads[i]);
   if (!from_signal && !output_state.error)
     {
       gsp_images_emit_new_writer();
@@ -846,6 +908,7 @@ writer_main(void *arg)
   sigset_t set;
   uint64_t next_leak = 0;
   uint64_t next_images = 0;
+  uint64_t next_states = 0;
 
   (void)arg;
   gsp_is_internal = 1;
@@ -884,7 +947,16 @@ writer_main(void *arg)
       char junk[64];
       uint64_t now;
 
-      poll(&pfd, 1, 20);
+      /* Wake for the next actual observation; don't fabricate missed polls
+         after slow loader/leak work, or oversample on ring-buffer wakes. */
+      int timeout = 20;
+      if (gsp_cfg.thread_states)
+        {
+          uint64_t stamp = gsp_now();
+          timeout = stamp >= next_states ? 0
+            : (int)((next_states - stamp + 999999) / 1000000);
+        }
+      poll(&pfd, 1, timeout);
       while (gsp_sys_read(wake_pipe[0], junk, sizeof(junk)) > 0)
         ;
       drain_all();
@@ -892,6 +964,11 @@ writer_main(void *arg)
         break;
       gsp_objc_poll();
       now = gsp_now();
+      if (gsp_cfg.thread_states && now >= next_states)
+        {
+          poll_thread_states(now);
+          next_states = gsp_now() + 10000000ull;
+        }
       if (now >= next_images || gsp_images_changed())
         {
           gsp_images_emit_new_writer();
@@ -1202,6 +1279,7 @@ gsp_init(void)
   hdr.pointer_size = sizeof(void *);
   hdr.flags = GSP_STREAM_FROM_AGENT;
   hdr.sample_interval_us = gsp_cfg.cpu_sampling ? gsp_cfg.sample_interval_us : 0;
+  hdr.thread_state_interval_us = gsp_cfg.thread_states ? 10000 : 0;
   hdr.wall_interval_us = gsp_cfg.wall_sampling_main ? gsp_cfg.wall_interval_us : 0;
   ssize_t n = readlink("/proc/self/exe", exe, sizeof(exe) - 1);
   if (n > 0)

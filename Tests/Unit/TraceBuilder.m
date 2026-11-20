@@ -30,6 +30,22 @@
   return self;
 }
 
+- (void) stateAt: (uint64_t)t first: (uint64_t)first tid: (uint32_t)tid state: (uint32_t)state polls: (uint32_t)polls
+{
+  ((gsp_file_header *)[_data mutableBytes])->thread_state_interval_us = 10000;
+  gsp_thread_state_payload payload = { first, polls, 0 };
+  [self record: GSP_REC_THREAD_STATE aux: state time: t tid: tid
+             a: &payload alen: sizeof(payload) b: NULL blen: 0];
+}
+
+- (void) legacyHeader
+{
+  gsp_file_header *header = [_data mutableBytes];
+  header->header_size = GSP_FILE_HEADER_V1_SIZE;
+  [_data replaceBytesInRange: NSMakeRange(GSP_FILE_HEADER_V1_SIZE,
+    sizeof(*header) - GSP_FILE_HEADER_V1_SIZE) withBytes: NULL length: 0];
+}
+
 - (uint64_t) start { return _start; }
 
 - (void) diagnosticAt: (uint64_t)t message: (const char *)message

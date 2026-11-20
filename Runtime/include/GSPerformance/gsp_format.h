@@ -41,7 +41,12 @@ typedef struct gsp_file_header
   uint32_t sample_interval_us;
   uint32_t wall_interval_us;
   char exe[256];              /* resolved executable path */
+  /* Optional v1 header suffix. Absent in original 312-byte headers. */
+  uint32_t thread_state_interval_us; /* 0 = not recorded; nominal poll cadence */
+  uint32_t reserved;
 } gsp_file_header;
+
+#define GSP_FILE_HEADER_V1_SIZE 312u
 
 enum
 {
@@ -85,6 +90,7 @@ enum gsp_record_type
   GSP_REC_MARK = 20,        /* aux = GSP_MARK_*; payload = optional text */
   GSP_REC_IO = 21,          /* aux = GSP_IO_*; gsp_io_payload (time = start) */
   GSP_REC_DIAGNOSTIC = 22,  /* aux = GSP_DIAGNOSTIC_*; NUL-terminated text */
+  GSP_REC_THREAD_STATE = 23, /* aux = proc state character, or GSP_STATE_* */
   GSP_REC_TYPE_COUNT
 };
 
@@ -93,6 +99,19 @@ enum
   GSP_DIAGNOSTIC_LEAK_SCAN_UNAVAILABLE = 1,
   GSP_DIAGNOSTIC_UNWIND_LIMITED = 2
 };
+
+/* State observations are batches of actual polls, never elapsed-time weights.
+   time = last poll, first_ns = first poll in this batch. Change records are
+   immediate; unchanged polls are flushed at least once a second and at stop.
+   Missing proc data is '?' (included in the denominator); exited is 'X',
+   with zero polls. R means running OR runnable, not measured CPU time. */
+enum { GSP_STATE_UNKNOWN = '?', GSP_STATE_EXITED = 'X' };
+typedef struct gsp_thread_state_payload
+{
+  uint64_t first_ns;
+  uint32_t polls;
+  uint32_t reserved;
+} gsp_thread_state_payload;
 
 enum { GSP_THREAD_MAIN = 1, GSP_THREAD_INTERNAL = 2 };
 

@@ -1852,4 +1852,37 @@ child(GSPCallTreeNode *n, NSString *name)
   XCTAssertEqualObjects([out objectForKey: @"HOME"], @"kept");
 }
 
+- (void) testThreadStatesKeepPollCountsAndLegacyHeader
+{
+  TraceBuilder *b = [[TraceBuilder alloc] initWithPID: 42];
+  uint64_t t = b.start;
+  [b thread: 42 name: "worker" main: YES at: t];
+  /* Deliberately out of file order, plus a malformed backwards batch. */
+  [b stateAt: t + 100 first: t + 90 tid: 42 state: 'S' polls: 7];
+  [b stateAt: t + 20 first: t + 10 tid: 42 state: 'R' polls: 2];
+  [b stateAt: t + 110 first: t + 120 tid: 42 state: 'D' polls: 99];
+  [b stateAt: t + 130 first: t + 130 tid: 42 state: 'X' polls: 0];
+  [b end: t + 140];
+  NSError *error = nil;
+  NSString *path = [b writeBundleNamed: @"thread-states" instruments: @[]];
+  GSPTrace *trace = [GSPTrace traceWithPath: path error: &error];
+  XCTAssertNotNil(trace, @"%@", error);
+  GSPProcess *process = trace.targetProcess;
+  XCTAssertEqual(process.threadStateIntervalMicroseconds, (uint32_t)10000);
+  XCTAssertEqual(process.threadStateCount, (NSUInteger)3);
+  XCTAssertEqual(process.threadStates[0].state, (uint32_t)'R');
+  XCTAssertEqual(process.threadStates[1].polls, (uint32_t)7);
+  XCTAssertEqual(process.threadStates[2].polls, (uint32_t)0);
+
+  TraceBuilder *legacy = [[TraceBuilder alloc] initWithPID: 43];
+  [legacy legacyHeader];
+  [legacy thread: 43 name: "old" main: YES at: legacy.start];
+  [legacy end: legacy.start + 10];
+  path = [legacy writeBundleNamed: @"legacy-thread-states" instruments: @[]];
+  trace = [GSPTrace traceWithPath: path error: &error];
+  XCTAssertNotNil(trace, @"%@", error);
+  XCTAssertEqual(trace.targetProcess.threadStateIntervalMicroseconds, (uint32_t)0);
+  XCTAssertEqual(trace.targetProcess.threadStateCount, (NSUInteger)0);
+}
+
 @end

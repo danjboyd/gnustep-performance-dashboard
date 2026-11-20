@@ -27,6 +27,8 @@
                name: (uint32_t)nameID category: (uint32_t)catID message: (const char *)msg;
 - (void) leakSnapshot: (uint32_t)ordinal at: (uint64_t)t leaks: (NSArray *)leaks; /* @[@[addr,size,stack,class]] */
 - (void) ioAt: (uint64_t)time duration: (uint64_t)duration tid: (uint32_t)tid;
+- (void) stateAt: (uint64_t)t first: (uint64_t)first tid: (uint32_t)tid state: (uint32_t)state polls: (uint32_t)polls;
+- (void) legacyHeader;
 - (void) end: (uint64_t)t;
 - (void) diagnosticAt: (uint64_t)t message: (const char *)message;
 - (void) dropped: (uint64_t)count;

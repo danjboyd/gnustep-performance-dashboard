@@ -48,6 +48,7 @@ usage(void)
       @"Recording\n"
       @"  record [options] --launch <executable> [arguments...]\n"
       @"  record [options] --attach <pid>\n"
+      @"    --thread-states          record Linux thread states (10 ms polls)\n"
       @"    --template <name>        template (default \"Time Profiler\"; see `list templates`)\n"
       @"    --instrument <id>        add an instrument (repeatable; replaces the template's)\n"
       @"    --output <path>          trace bundle to create (.gstrace)\n"
@@ -185,6 +186,14 @@ cmd_record(NSArray *args)
       NSString *v = i < n ? [args objectAtIndex: i] : nil;
 #define NEED_VALUE() if (v == nil) { err([NSString stringWithFormat: @"%@ needs a value", a]); return 2; } i++
       if ([a isEqual: @"--template"]) { NEED_VALUE(); templateName = v; explicitTemplate = YES; }
+      else if ([a isEqual: @"--thread-states"])
+        {
+#if defined(__linux__)
+          [env setObject: @"1" forKey: @"GSP_THREAD_STATES"];
+#else
+          err(@"--thread-states requires Linux"); return 2;
+#endif
+        }
       else if ([a isEqual: @"--instrument"]) { NEED_VALUE(); [instruments addObject: v]; }
       else if ([a isEqual: @"--output"] || [a isEqual: @"-o"]) { NEED_VALUE(); opts.outputPath = v; }
       else if ([a isEqual: @"--time-limit"])
@@ -556,6 +565,31 @@ cmd_info(NSArray *args)
       out([NSString stringWithFormat: @"  threads: %lu  images: %lu  stacks: %lu\n",
            (unsigned long)[p.threads count], (unsigned long)[p.images count],
            (unsigned long)[p.stacks count]]);
+      if (!p.threadStateIntervalMicroseconds)
+        out(@"  thread states: not recorded\n");
+      else
+        {
+          out([NSString stringWithFormat:
+            @"  thread states: %u us nominal polls; share of polls (not elapsed time)\n",
+            p.threadStateIntervalMicroseconds]);
+          for (GSPThreadInfo *thread in [p sortedThreads])
+            {
+              uint64_t counts[128] = { 0 }, total = 0;
+              for (NSUInteger j = 0; j < p.threadStateCount; j++)
+                {
+                  const GSPThreadStateEvent *s = &p.threadStates[j];
+                  if (s->tid == thread.tid && s->state < 128)
+                    { counts[s->state] += s->polls; total += s->polls; }
+                }
+              out([NSString stringWithFormat:
+                @"    %u %@: %llu polls; R (running or runnable) %.1f%%; S %.1f%%; D %.1f%%; other/unknown %.1f%%\n",
+                thread.tid, thread.displayName, (unsigned long long)total,
+                total ? 100.0 * counts['R'] / total : 0,
+                total ? 100.0 * counts['S'] / total : 0,
+                total ? 100.0 * counts['D'] / total : 0,
+                total ? 100.0 * (total - counts['R'] - counts['S'] - counts['D']) / total : 0]);
+            }
+        }
       NSUInteger recordedIDs = 0, invalidIDs = 0;
       for (GSPImage *image in p.images)
         {

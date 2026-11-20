@@ -31,6 +31,7 @@
 #include <sys/types.h>
 
 #include "GSPerformance/gsp_format.h"
+#include "gsp_thread_states.h"
 #include "gsp_arch.h"
 
 #define GSP_EXPORT __attribute__((visibility("default")))
@@ -48,6 +49,7 @@ typedef struct gsp_config
 {
   char output[1024];          /* trace bundle directory */
   bool cpu_sampling;
+  bool thread_states;          /* opt-in Linux proc-state track */
   bool wall_sampling_main;    /* main-thread wall clock samples (Hangs) */
   bool allocations;
   bool refcounts;
@@ -106,6 +108,7 @@ enum
 typedef struct gsp_thread
 {
   atomic_int state;
+  gsp_state_polls state_polls; /* writer owned while ACTIVE/EXITED */
   pid_t tid;
   unsigned flags;              /* GSP_THREAD_* */
   gsp_ring ring_signal;

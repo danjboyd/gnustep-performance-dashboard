@@ -118,6 +118,9 @@ typedef struct pending_ref
   uint32_t *_agentStacks;          /* agent stack id -> local index */
   uint32_t _agentStackCap;
 
+  GSPThreadStateEvent *_threadStates;
+  NSUInteger _threadStateCount, _threadStateCap;
+  uint32_t _stateInterval;
   GSPSample *_samples;
   NSUInteger _sampleCount, _sampleCap;
   GSPAllocationEvent *_allocs;
@@ -174,6 +177,7 @@ typedef struct pending_ref
 {
   free(_agentStacks);
   free(_samples);
+  free(_threadStates);
   free(_allocs);
   free(_tags);
   free(_refs);
@@ -191,6 +195,9 @@ typedef struct pending_ref
 - (BOOL) finishedCleanly { return _clean; }
 - (BOOL) fromPerf { return _fromPerf; }
 - (uint32_t) sampleIntervalMicroseconds { return _interval; }
+- (uint32_t) threadStateIntervalMicroseconds { return _stateInterval; }
+- (const GSPThreadStateEvent *) threadStates { return _threadStates; }
+- (NSUInteger) threadStateCount { return _threadStateCount; }
 - (uint32_t) wallIntervalMicroseconds { return _wallInterval; }
 - (uint64_t) droppedSamples { return _dropped; }
 - (NSArray *) diagnostics { return [_diagnostics copy]; }
@@ -318,6 +325,21 @@ payload_string(const uint8_t *p, size_t max)
     case GSP_REC_STRING:
       [_strings setObject: payload_string(p, plen)
                    forKey: [NSNumber numberWithUnsignedInt: r->aux]];
+      break;
+
+    case GSP_REC_THREAD_STATE:
+      if (plen >= sizeof(gsp_thread_state_payload))
+        {
+          gsp_thread_state_payload state;
+          memcpy(&state, p, sizeof(state));
+          if (state.first_ns > r->time || state.reserved != 0
+              || r->aux > 127 || (r->aux == GSP_STATE_EXITED && state.polls))
+            break;
+          GROW(_threadStates, _threadStateCount, _threadStateCap, GSPThreadStateEvent);
+          _threadStates[_threadStateCount++] = (GSPThreadStateEvent){
+            r->time, state.first_ns, r->tid, state.polls, r->aux };
+          [self threadFor: r->tid time: state.first_ns];
+        }
       break;
 
     case GSP_REC_THREAD:
@@ -644,6 +666,14 @@ payload_string(const uint8_t *p, size_t max)
 }
 
 static int
+compare_states(const void *a, const void *b)
+{
+  const GSPThreadStateEvent *x = a, *y = b;
+  if (x->time != y->time) return x->time < y->time ? -1 : 1;
+  return (x->tid > y->tid) - (x->tid < y->tid);
+}
+
+static int
 compare_samples(const void *a, const void *b)
 {
   const GSPSample *x = a, *y = b;
@@ -781,6 +811,8 @@ compare_refs(const void *a, const void *b)
   if (!_samplesSorted && _sampleCount > 1)
     qsort(_samples, _sampleCount, sizeof(GSPSample), compare_samples);
   _samplesSorted = YES;
+  if (_threadStateCount > 1)
+    qsort(_threadStates, _threadStateCount, sizeof(GSPThreadStateEvent), compare_states);
 
   /* leaks */
   NSMutableArray *stillPending = [NSMutableArray array];
@@ -970,7 +1002,7 @@ compare_raw_signposts(const void *a, const void *b)
       return nil;
     }
   GSPProcess *process = self;
-  if (_haveHeader && length >= sizeof(gsp_file_header))
+  if (_haveHeader && length >= GSP_FILE_HEADER_V1_SIZE)
     {
       const gsp_file_header *header = (const gsp_file_header *)bytes;
       if (memcmp(header->magic, GSP_MAGIC, 8) == 0
@@ -992,7 +1024,8 @@ compare_raw_signposts(const void *a, const void *b)
   if (!_haveHeader)
     {
       const gsp_file_header *h = (const gsp_file_header *)bytes;
-      if (length < sizeof(gsp_file_header) || memcmp(h->magic, GSP_MAGIC, 8) != 0
+      if (length < GSP_FILE_HEADER_V1_SIZE || h->header_size < GSP_FILE_HEADER_V1_SIZE
+          || h->header_size > length || memcmp(h->magic, GSP_MAGIC, 8) != 0
           || h->version != GSP_FORMAT_VERSION)
         {
           if (error)
@@ -1009,6 +1042,8 @@ compare_raw_signposts(const void *a, const void *b)
       _end = h->start_ns;
       _interval = h->sample_interval_us;
       _wallInterval = h->wall_interval_us;
+      _stateInterval = h->header_size >= sizeof(gsp_file_header)
+        ? h->thread_state_interval_us : 0;
       _fromPerf = (h->flags & GSP_STREAM_FROM_PERF) != 0;
       _exe = payload_string((const uint8_t *)h->exe, sizeof(h->exe));
       _offset = h->header_size;
