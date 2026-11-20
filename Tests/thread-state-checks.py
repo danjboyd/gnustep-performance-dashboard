@@ -21,9 +21,15 @@ static ssize_t failed_read(int fd, void *data, size_t length)
 { (void)fd; (void)data; (void)length; errno = fake_error; return -1; }
 static int changed_errno_close(int fd) { (void)fd; errno = EBADF; return 0; }
 int main(void) {
-  assert(gsp_read_proc_state(3, failed_read, changed_errno_close) == GSP_STATE_EXITED);
+  int error;
+  assert(gsp_read_proc_state(3, failed_read, changed_errno_close, &error) == GSP_STATE_EXITED);
+  assert(error == ESRCH);
   fake_error = EIO;
-  assert(gsp_read_proc_state(3, failed_read, changed_errno_close) == GSP_STATE_UNKNOWN);
+  assert(gsp_read_proc_state(3, failed_read, changed_errno_close, &error) == GSP_STATE_UNKNOWN);
+  assert(error == EIO);
+  errno = EMFILE;
+  assert(gsp_read_proc_state(-1, failed_read, changed_errno_close, &error) == GSP_STATE_UNKNOWN);
+  assert(error == EMFILE);
   assert(gsp_proc_state("12 (wait) worker) S 1 2") == 'S');
   assert(gsp_proc_state("12 (gone) X 1 2") == GSP_STATE_EXITED);
   assert(gsp_proc_state("12 (cut) ") == GSP_STATE_UNKNOWN);
@@ -122,7 +128,7 @@ int main(int argc, char **argv) {
         data = next(no_proc.glob('events-*.bin')).read_bytes()
         assert observations(data)[1] == [], 'unavailable proc must not invent states/exits'
         info = subprocess.check_output([str(ROOT / 'Tools/gstrace/obj/gstrace'), 'info', str(no_proc)], text=True)
-        assert 'thread states: unavailable (no /proc)' in info, info
+        assert 'thread states: unavailable; disabled at' in info and 'errno 2 (' in info, info
     else:
         print('SKIP absent-proc namespace fixture: bwrap not installed')
     # Explicit opt-in: a regular recording keeps the header interval zero.

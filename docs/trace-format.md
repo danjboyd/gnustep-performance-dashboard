@@ -96,8 +96,9 @@ readers will not display these diagnostics and should not be used to assess
 recording quality for v0.1.0. `aux=3` means thread states are unavailable:
 `/proc/self/task` did not expose the writer's own TID, was unreadable, or
 became unavailable later. The header retains the requested nominal interval,
-but later state polling is disabled. `info` reports
-`thread states: unavailable (no /proc)` rather than inventing thread exits.
+but later state polling is disabled. `info` reports the disable time and actual
+diagnostic errno rather than inventing thread exits. Observations before the
+disable remain visible in its poll-share summary.
 This diagnostic is independent of CPU/wall samples and capture completion.
 
 Record 23's timestamp is the last actual observation in its batch;

@@ -20,8 +20,10 @@ The v1 stream keeps its original 312-byte prefix and appends an optional
 Old streams have no suffix and show `thread states: not recorded`. The
 writer probes its own TID's proc stat before polling. If unavailable, it
 disables the track and emits diagnostic 3. `info` then says
-`thread states: unavailable (no /proc)`, while the header retains the requested
-nominal interval. No user-thread exit is inferred from this failure.
+`thread states: unavailable` with the disable time and actual diagnostic errno.
+The header retains the requested nominal interval. Earlier observations stay
+visible in the poll-share summary; no user-thread exit is inferred from this
+failure.
 `GSP_REC_THREAD_STATE` (23) uses aux for the proc state character (`?` for
 unavailable, `X` for exited). Its 16-byte payload contains `first_ns` (u64),
 `polls` (u32), and reserved zero (u32). The record timestamp is the last poll

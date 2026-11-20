@@ -530,7 +530,8 @@ probe_thread_states(void)
   char path[80];
   snprintf(path, sizeof(path), "/proc/self/task/%d/stat", gsp_gettid());
   int fd = gsp_sys_open(path, O_RDONLY | O_CLOEXEC, 0);
-  unsigned char state = gsp_read_proc_state(fd, gsp_sys_read, gsp_sys_close);
+  int read_error;
+  unsigned char state = gsp_read_proc_state(fd, gsp_sys_read, gsp_sys_close, &read_error);
   if (state != GSP_STATE_UNKNOWN && state != GSP_STATE_EXITED) return true;
   for (int i = 0, n = atomic_load(&gsp_thread_count); i < n; i++)
     {
@@ -540,9 +541,12 @@ probe_thread_states(void)
         flush_state(t);
     }
   gsp_cfg.thread_states = false;
-  const char message[] = "Thread states unavailable (no /proc): this process's task stats are not readable.";
+  char message[256];
+  int error = read_error ? read_error : ESRCH;
+  snprintf(message, sizeof(message), "Thread-state polling disabled: errno %d (%s).",
+           error, strerror(error));
   gsp_writer_emit(GSP_REC_DIAGNOSTIC, GSP_DIAGNOSTIC_THREAD_STATES_UNAVAILABLE,
-                  gsp_now(), (uint32_t)traced_pid, message, sizeof(message), NULL, 0);
+                  gsp_now(), (uint32_t)traced_pid, message, strlen(message) + 1, NULL, 0);
   return false;
 }
 
@@ -566,7 +570,8 @@ poll_thread_states(uint64_t now)
           exit_state(t, gsp_now());
           continue;
         }
-      unsigned char state = gsp_read_proc_state(fd, gsp_sys_read, gsp_sys_close);
+      int read_error;
+      unsigned char state = gsp_read_proc_state(fd, gsp_sys_read, gsp_sys_close, &read_error);
       now = gsp_now(); /* Timestamp this read, not the beginning of a large pass. */
       if (state == GSP_STATE_EXITED)
         { exit_state(t, now); continue; }

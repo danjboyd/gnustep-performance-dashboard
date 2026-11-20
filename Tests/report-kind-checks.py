@@ -43,4 +43,16 @@ with tempfile.TemporaryDirectory(prefix='pd-report-kind-') as tmp:
     run('report', trace, 'top', '--thread', 'all', '--thread', '43', code=2)
     info = run('info', trace)
     assert 'cpu 3; wall 0;' in info and 'cpu 0; wall 7;' in info and 'thread states: not recorded' in info, info
+    prefix = struct.pack('<8sIIIIQQIIII256sII', b'GSPTRACE', 1, 320, 42, 0, 1000000000, 0, 8, 1, 1000, 10000, b'/synthetic', 10000, 0)
+    records = []
+    emit(2, 43, payload=b'worker\0')
+    emit(23, 43, ord('S'), struct.pack('<QII', 1000000000, 80, 0))
+    emit(23, 43, ord('R'), struct.pack('<QII', 1000000000, 20, 0))
+    emit(22, 42, 3, b'Thread-state polling disabled: errno 24 (Too many open files).\0')
+    emit(18, 42)
+    (trace / 'events-42.bin').write_bytes(prefix + b''.join(records))
+    info = run('info', trace)
+    assert 'disabled at 0.001s' in info and 'errno 24 (Too many open files)' in info, info
+    assert '100 polls' in info and 'S 80.0%' in info and 'runnable) 20.0%' in info, info
+    assert 'no /proc' not in info, info
 print('Report kind/thread checks passed (mixed legacy trace, weights, names, flags absent)')

@@ -569,10 +569,11 @@ cmd_info(NSArray *args)
            (unsigned long)[p.threads count], (unsigned long)[p.images count],
            (unsigned long)[p.stacks count]]);
       if (p.threadStatesUnavailable)
-        out(@"  thread states: unavailable (no /proc)\n");
-      else if (!p.threadStateIntervalMicroseconds)
+        out([NSString stringWithFormat: @"  thread states: unavailable; disabled at %.3fs: %@\n",
+          (p.threadStatesDisabledTime - p.startTime) / 1e9, p.threadStatesDisableReason]);
+      else if (!p.threadStateIntervalMicroseconds && !p.threadStateCount)
         out(@"  thread states: not recorded\n");
-      else
+      if (p.threadStateCount || (p.threadStateIntervalMicroseconds && !p.threadStatesUnavailable))
         {
           out([NSString stringWithFormat:
             @"  thread states: %u us nominal polls; share of polls (not elapsed time)\n",
