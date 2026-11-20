@@ -25,7 +25,7 @@ int main(void) {
 ''')
     subprocess.run(['cc', '-std=gnu11', '-Wall', '-Wextra', '-Werror', '-I' + str(ROOT / 'Runtime/include'), '-I' + str(ROOT / 'Runtime'), str(parser), '-o', str(tmp / 'parser')], check=True)
     subprocess.run([str(tmp / 'parser')], check=True)
-    source = tmp / 'worker.c' 
+    source = tmp / 'worker.c'
     source.write_text('''#define _GNU_SOURCE
 #include <pthread.h>
 #include <sys/prctl.h>
