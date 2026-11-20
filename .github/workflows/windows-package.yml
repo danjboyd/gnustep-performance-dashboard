@@ -9,7 +9,6 @@ on:
       version:
         description: Unpublished prerelease version (for example 0.1.2-qualification.1)
         required: true
-        default: 0.1.2-qualification.1
 permissions:
   contents: read
 concurrency:
@@ -34,8 +33,12 @@ jobs:
       - name: Produce unsigned MSI, ZIP, feed, provenance and corresponding sources
         shell: pwsh
         env:
-          PD_PACKAGE_VERSION: ${{ inputs.version || '0.1.2-hosted.1' }}
+          PD_PACKAGE_VERSION: ${{ inputs.version }}
         run: |
+          if ([string]::IsNullOrWhiteSpace($env:PD_PACKAGE_VERSION)) {
+            if ($env:GITHUB_EVENT_NAME -ne 'push') { throw 'An explicit version is required' }
+            $env:PD_PACKAGE_VERSION = (Get-Content package.version -Raw).Trim() + '-hosted.' + $env:GITHUB_RUN_ID
+          }
           # Git for Windows provides OpenSSL for manifest authentication.
           $env:PATH = 'C:\Program Files\Git\usr\bin;' + $env:PATH
           ./scripts/package-windows.ps1 -Version $env:PD_PACKAGE_VERSION -Release

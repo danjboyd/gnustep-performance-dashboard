@@ -5,6 +5,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -35,9 +36,9 @@ class HostedChecks(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.work = Path(self.temp.name)
 
-    def fixture(self, version):
-        names, feed = verify.filenames(version)
-        staged = self.work / ('stage-' + version)
+    def fixture(self, version, arch='x86_64'):
+        names, feed = verify.filenames(version, arch)
+        staged = self.work / ('stage-' + version + '-' + arch)
         staged.mkdir()
         for name in names - {'SHA256SUMS'}:
             (staged / name).write_bytes(('synthetic ' + name).encode())
@@ -46,11 +47,11 @@ class HostedChecks(unittest.TestCase):
         sums = ''.join(verify.sha(staged / n) + '  ' + n + '\n' for n in sorted(names - {'SHA256SUMS'}))
         (staged / 'SHA256SUMS').write_text(sums)
         record = dict(files={n: verify.sha(staged / n) for n in names}, sizes={n: (staged / n).stat().st_size for n in names})
-        record_path = self.work / ('record-' + version)
+        record_path = self.work / ('record-' + version + '-' + arch)
         record_path.write_text(json.dumps(record))
         notes = self.work / 'notes.md'
         notes.write_bytes(b'exact reviewed body\n')
-        args = SimpleNamespace(version=version, repo='owner/project', evidence=self.work / ('evidence-' + version),
+        args = SimpleNamespace(version=version, arch=arch, repo='owner/project', evidence=self.work / ('evidence-' + version + '-' + arch),
             notes=notes, notes_sha256=verify.sha(notes), anchor=self.work / 'public.json', feed_url='https://example.invalid/stable.json')
         release = dict(id=1, tag_name='v'+version, name='Performance Dashboard v'+version, draft=False, prerelease=False,
             html_url='https://example.invalid/release', body=notes.read_text(), assets=[dict(name=n, size=record['sizes'][n]) for n in names])
@@ -79,6 +80,17 @@ class HostedChecks(unittest.TestCase):
                  patch.object(verify.urllib.request, 'urlopen', return_value=io.BytesIO((staged/feed).read_bytes())):
                 self.assertEqual(verify.live_feed(args, record, feed)['SHA256'], record['files'][feed])
                 self.assertEqual(signed.call_args_list[0].args[0].name, feed)
+
+    def test_aarch64_inventory_assets_and_feed_are_arch_bound(self):
+        args, record, feed, staged, release, path = self.fixture('0.2.0', 'aarch64')
+        self.assertEqual(verify.inventory(path, args.version, args.arch), (record, feed))
+        self.assertIn('-aarch64.update-feed.json', feed)
+        with self.assertRaises(ValueError): verify.inventory(path, args.version)
+        self.publish_checks(args, record, feed, staged, release)
+        with patch.object(verify, 'signature'), patch.object(verify.urllib.request, 'urlopen', return_value=io.BytesIO((staged/feed).read_bytes())):
+            self.assertEqual(verify.live_feed(args, record, feed)['arch'], 'aarch64')
+        for unsafe in ('../aarch64', 'arm64', 'x86_64/../../bad'):
+            with self.assertRaises(ValueError): verify.filenames(args.version, unsafe)
 
     def test_stale_inventory_and_unsafe_versions_fail_closed(self):
         args, record, feed, staged, release, path = self.fixture('0.1.8')
@@ -142,6 +154,27 @@ class HostedChecks(unittest.TestCase):
 
 
 class GateChecks(unittest.TestCase):
+    def test_dependency_pin_is_shared_and_part_of_sdk_cache_identity(self):
+        pins = ROOT / 'docs/ci-source-pins.env'
+        install = (ROOT / '.github/scripts/install-gnustep.sh').read_text()
+        workflow = (ROOT / '.github/workflows/ci.yml').read_text()
+        self.assertIn('XCTEST_TAG=', pins.read_text())
+        self.assertIn('docs/ci-source-pins.env', install)
+        self.assertIn('. docs/ci-source-pins.env', workflow)
+        self.assertEqual(workflow.count("hashFiles('.github/scripts/install-gnustep.sh', 'docs/ci-source-pins.env')"), 3)
+        self.assertIn('--branch "$XCTEST_TAG"', workflow)
+
+    def test_dispatch_versions_are_explicit_and_required(self):
+        for name in ('csd-review.yml', 'assemble-candidate.yml', 'windows-package.yml'):
+            body = (ROOT / '.github/workflows' / name).read_text()
+            block = re.search(r'^      version:\n((?:        .*\n)*)', body, re.M).group(1)
+            self.assertIn('required: true', block)
+            self.assertNotIn('default:', block)
+        windows = (ROOT / '.github/workflows/windows-package.yml').read_text()
+        self.assertNotIn('inputs.version ||', windows)
+        self.assertIn("$env:GITHUB_EVENT_NAME -ne 'push'", windows)
+        self.assertIn('(Get-Content package.version -Raw).Trim()', windows)
+
     def test_real_tree_and_mutations(self):
         gate.check(ROOT)
         with tempfile.TemporaryDirectory(prefix='pd-literal-gate-') as temp:
@@ -149,7 +182,7 @@ class GateChecks(unittest.TestCase):
             for directory in ('.github/scripts', '.github/workflows', 'docs'): (root/directory).mkdir(parents=True)
             allow = root/'docs/ci-version-literals.allowlist.json'; allow.write_text('[]')
             target = root/'.github/scripts/test.py'
-            for literal in ('v0.1.9', 'v019', 'PerformanceDashboard-0.1.8-x86_64.update-feed.json'):
+            for literal in ('v0.1.9', 'v0.2.0', 'v0.15.42', 'v019', 'PerformanceDashboard-0.1.8-x86_64.update-feed.json', 'PerformanceDashboard-0.15.42-aarch64.AppImage'):
                 target.write_text('file="'+literal+'"\n')
                 with self.assertRaises(ValueError): gate.check(root)
             target.write_text('file="docs/v019-baseline.json"\n')

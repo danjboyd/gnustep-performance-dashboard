@@ -6,7 +6,7 @@ from pathlib import Path
 import re
 
 # Also catch the unprefixed asset spelling that escaped an earlier tag edit.
-PATTERN = re.compile(r'v0\.1\.[0-9]+|v0[0-9]{2,}|PerformanceDashboard-0\.1\.[0-9]+')
+PATTERN = re.compile(r'v0\.[0-9]+\.[0-9]+|v0[0-9]{2,}|PerformanceDashboard-0\.[0-9]+\.[0-9]+')
 
 
 def check(root):

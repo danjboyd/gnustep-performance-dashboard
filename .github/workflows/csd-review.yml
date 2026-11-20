@@ -6,7 +6,6 @@ on:
       version:
         description: Exact package.version for production; -review or -review.N for review
         required: true
-        default: 0.1.8-review
       mode:
         description: Explicit unsigned producer mode; production must equal package.version
         type: choice

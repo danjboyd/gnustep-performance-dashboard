@@ -16,7 +16,8 @@ MAKE_TAG=make-2_9_3
 BASE_TAG=base-1_31_1
 GUI_TAG=gui-0_32_0
 BACK_TAG=back-0_32_0
-XCTEST_TAG=v0.5.1
+pd_source_root=$(cd "$(dirname "$0")/../.." && pwd)
+. "$pd_source_root/docs/ci-source-pins.env"
 
 export CC=clang CXX=clang++
 mkdir -p "$SRC"

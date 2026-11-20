@@ -52,7 +52,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.PREFIX }}
-          key: gnustep-${{ runner.os }}-ubuntu-24.04-${{ hashFiles('.github/scripts/install-gnustep.sh') }}
+          key: gnustep-${{ runner.os }}-ubuntu-24.04-${{ hashFiles('.github/scripts/install-gnustep.sh', 'docs/ci-source-pins.env') }}
 
       - name: Build GNUstep and tools-xctest
         if: steps.cache.outputs.cache-hit != 'true'
@@ -175,7 +175,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.PREFIX }}
-          key: gnustep-${{ runner.os }}-${{ runner.arch }}-ubuntu-24.04-${{ hashFiles('.github/scripts/install-gnustep.sh') }}
+          key: gnustep-${{ runner.os }}-${{ runner.arch }}-ubuntu-24.04-${{ hashFiles('.github/scripts/install-gnustep.sh', 'docs/ci-source-pins.env') }}
       - name: Build GNUstep and tools-xctest
         if: steps.cache.outputs.cache-hit != 'true'
         run: .github/scripts/install-gnustep.sh
@@ -236,7 +236,8 @@ jobs:
         run: |
           . /clang64/share/GNUstep/Makefiles/GNUstep.sh
           export ADDITIONAL_CPPFLAGS=-DHAVE_MODE_T
-          git clone -q --depth 1 --branch v0.5.1 https://github.com/danjboyd/tools-xctest.git "$RUNNER_TEMP/tools-xctest"
+          . docs/ci-source-pins.env
+          git clone -q --depth 1 --branch "$XCTEST_TAG" https://github.com/danjboyd/tools-xctest.git "$RUNNER_TEMP/tools-xctest"
           make -C "$RUNNER_TEMP/tools-xctest"
           make -C "$RUNNER_TEMP/tools-xctest" install
 
@@ -309,7 +310,7 @@ jobs:
       - uses: actions/cache/restore@v4
         with:
           path: ${{ env.PREFIX }}
-          key: gnustep-${{ runner.os }}-ubuntu-24.04-${{ hashFiles('.github/scripts/install-gnustep.sh') }}
+          key: gnustep-${{ runner.os }}-ubuntu-24.04-${{ hashFiles('.github/scripts/install-gnustep.sh', 'docs/ci-source-pins.env') }}
           fail-on-cache-miss: true
       - uses: actions/download-artifact@v4
         with:

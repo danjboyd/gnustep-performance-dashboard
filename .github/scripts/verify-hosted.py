@@ -23,18 +23,19 @@ def sha(path):
         return hashlib.file_digest(stream, 'sha256').hexdigest()
 
 
-def filenames(version):
+def filenames(version, arch='x86_64'):
     require(re.fullmatch(r'\d+\.\d+\.\d+', version), 'Stable numeric version required')
+    require(arch in ('x86_64', 'aarch64'), 'Unsupported Linux architecture')
     stem = f'PerformanceDashboard-{version}'
-    feed = stem + '-x86_64.update-feed.json'
-    return {stem + '-sources.tar.gz', stem + '-x86_64.AppImage',
-            stem + '-x86_64.AppImage.zsync', stem + '-x86_64.provenance.json',
+    feed = stem + f'-{arch}.update-feed.json'
+    return {stem + '-sources.tar.gz', stem + f'-{arch}.AppImage',
+            stem + f'-{arch}.AppImage.zsync', stem + f'-{arch}.provenance.json',
             feed, 'SHA256SUMS', 'assembly.json'}, feed
 
 
-def inventory(path, version):
+def inventory(path, version, arch='x86_64'):
     record = json.loads(Path(path).read_text())
-    names, feed = filenames(version)
+    names, feed = filenames(version, arch)
     require(set(record['files']) == set(record['sizes']) == names,
             'Reviewed inventory must contain exactly the seven version-derived names')
     require(all(re.fullmatch('[0-9a-f]{64}', h) for h in record['files'].values()), 'Invalid reviewed hash')
@@ -54,8 +55,8 @@ def signature(feed, directory, anchor):
                     '--verify', str(feed), str(directory)], env=env, check=True)
 
 
-def local_assets(directory, record, version, anchor):
-    _, feed = filenames(version)
+def local_assets(directory, record, version, anchor, arch='x86_64'):
+    _, feed = filenames(version, arch)
     directory = Path(directory)
     require({p.name for p in directory.iterdir()} == set(record['files']), 'Unexpected/missing downloaded files')
     for name, digest in record['files'].items():
@@ -92,8 +93,8 @@ def assets(args, record, feed):
     for name in sorted(record['files']):
         command.extend(['--pattern', name])
     subprocess.run(command, check=True)  # No clobber; one download, no retry.
-    local_assets(dest, record, args.version, args.anchor)
-    result = dict(status='PASS', version=args.version, repo=args.repo,
+    local_assets(dest, record, args.version, args.anchor, args.arch)
+    result = dict(status='PASS', version=args.version, arch=args.arch, repo=args.repo,
                   releaseURL=release['html_url'], files=record['files'], sizes=record['sizes'],
                   notesSHA256=args.notes_sha256)
     (args.evidence / 'assets-PASS.json').write_text(json.dumps(result, indent=2) + '\n')
@@ -103,11 +104,12 @@ def assets(args, record, feed):
 def live_feed(args, record, feed):
     saved = json.loads((args.evidence / 'assets-PASS.json').read_text())
     require(saved['status'] == 'PASS' and saved['version'] == args.version and saved['repo'] == args.repo
+            and saved.get('arch', 'x86_64') == args.arch
             and saved['files'] == record['files'] and saved['sizes'] == record['sizes']
             and saved['notesSHA256'] == args.notes_sha256, 'Matching hosted asset PASS required first')
     require(sha(args.notes) == args.notes_sha256, 'Reviewed notes hash differs')
     # Recheck retained bytes/signatures so a stale PASS cannot mask local changes.
-    local_assets(args.evidence / 'assets', record, args.version, args.anchor)
+    local_assets(args.evidence / 'assets', record, args.version, args.anchor, args.arch)
     require(not (args.evidence / 'feed-PASS.json').exists(), 'Feed already verified; use explicit new evidence')
     request = urllib.request.Request(args.feed_url, headers={'Cache-Control': 'no-cache'})
     with urllib.request.urlopen(request, timeout=30) as response:
@@ -117,7 +119,7 @@ def live_feed(args, record, feed):
     with live.open('xb') as stream:
         stream.write(data)
     signature(live, args.evidence / 'assets', args.anchor)
-    result = dict(status='PASS', version=args.version, url=args.feed_url, SHA256=record['files'][feed])
+    result = dict(status='PASS', version=args.version, arch=args.arch, url=args.feed_url, SHA256=record['files'][feed])
     (args.evidence / 'feed-PASS.json').write_text(json.dumps(result, indent=2) + '\n')
     return result
 
@@ -126,6 +128,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('phase', choices=['assets', 'feed'])
     parser.add_argument('--version', required=True)
+    parser.add_argument('--arch', choices=['x86_64', 'aarch64'], default='x86_64')
     parser.add_argument('--record', required=True, type=Path, help='Reviewed files/sizes JSON')
     parser.add_argument('--notes', required=True, type=Path)
     parser.add_argument('--notes-sha256', required=True)
@@ -135,7 +138,7 @@ def main():
     parser.add_argument('--feed-url', default='https://danjboyd.github.io/gnustep-performance-dashboard/updates/linux/stable.json')
     args = parser.parse_args()
     try:
-        record, feed = inventory(args.record, args.version)
+        record, feed = inventory(args.record, args.version, args.arch)
         require(re.fullmatch('[0-9a-f]{64}', args.notes_sha256), 'Invalid notes SHA256')
         result = assets(args, record, feed) if args.phase == 'assets' else live_feed(args, record, feed)
     except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as error:
